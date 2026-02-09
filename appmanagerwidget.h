@@ -2,7 +2,7 @@
 #define APPMANAGERWIDGET_H
 
 #include <QWidget>
-#include <QListWidget>
+#include <QListView>
 #include <QPushButton>
 #include <QLabel>
 #include <QVBoxLayout>
@@ -18,6 +18,7 @@
 #include <QInputDialog>
 #include <QStyledItemDelegate>
 #include <QPainter>
+#include <QStandardItemModel>
 #include "database.h"
 
 class AppIconDelegate : public QStyledItemDelegate
@@ -39,7 +40,7 @@ private slots:
     void onAddApp();
     void onDeleteApp();
     void onLaunchApp();
-    void onAppItemDoubleClicked(QListWidgetItem *item);
+    void onAppItemDoubleClicked(const QModelIndex &index);
     void onShowContextMenu(const QPoint &pos);
     void onRenameApp();
     void onChangeIcon();
@@ -48,7 +49,8 @@ private slots:
     void refreshAppList();
     void onIconViewMode();
     void onListViewMode();
-    void onRowsMoved(const QModelIndex &parent, int start, int end, const QModelIndex &destination, int row);
+    void onMoveUp();
+    void onMoveDown();
 
 private:
     void setupUI();
@@ -57,11 +59,14 @@ private:
     void saveAppOrder();
     
     Database *db;
-    QListWidget *appListWidget;
+    QListView *appListView;
+    QStandardItemModel *appModel;
     QPushButton *addButton;
     QPushButton *deleteButton;
     QPushButton *launchButton;
     QPushButton *refreshButton;
+    QPushButton *moveUpButton;
+    QPushButton *moveDownButton;
     QPushButton *iconViewButton;
     QPushButton *listViewButton;
     QFileIconProvider iconProvider;

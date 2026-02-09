@@ -2,7 +2,7 @@
 #include <QApplication>
 #include <QStyle>
 #include <QFileInfo>
-#include <QListWidgetItem>
+#include <QStandardItem>
 #include <QStandardPaths>
 #include <QColor>
 #include <QLinearGradient>
@@ -86,6 +86,7 @@ AppManagerWidget::AppManagerWidget(Database *db, QWidget *parent)
     : QWidget(parent), db(db)
 {
     iconDelegate = new AppIconDelegate(this);
+    appModel = new QStandardItemModel(this);
     setupUI();
     refreshAppList();
 }
@@ -128,6 +129,21 @@ void AppManagerWidget::setupUI()
     buttonLayout->addWidget(deleteButton);
     buttonLayout->addWidget(launchButton);
     buttonLayout->addWidget(refreshButton);
+    
+    moveUpButton = new QPushButton("上移", this);
+    moveUpButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_ArrowUp));
+    moveUpButton->setStyleSheet("QPushButton { background-color: #9c27b0; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
+                               "QPushButton:hover { background-color: #7b1fa2; }");
+    connect(moveUpButton, &QPushButton::clicked, this, &AppManagerWidget::onMoveUp);
+    
+    moveDownButton = new QPushButton("下移", this);
+    moveDownButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_ArrowDown));
+    moveDownButton->setStyleSheet("QPushButton { background-color: #9c27b0; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
+                                "QPushButton:hover { background-color: #7b1fa2; }");
+    connect(moveDownButton, &QPushButton::clicked, this, &AppManagerWidget::onMoveDown);
+    
+    buttonLayout->addWidget(moveUpButton);
+    buttonLayout->addWidget(moveDownButton);
     buttonLayout->addStretch();
     
     iconViewButton = new QPushButton("大图标", this);
@@ -148,60 +164,101 @@ void AppManagerWidget::setupUI()
     
     mainLayout->addLayout(buttonLayout);
     
-    appListWidget = new QListWidget(this);
-    appListWidget->setViewMode(QListWidget::IconMode);
-    appListWidget->setIconSize(QSize(72, 72));
-    appListWidget->setResizeMode(QListWidget::Adjust);
-    appListWidget->setSpacing(15);
-    appListWidget->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    appListWidget->setDragDropMode(QAbstractItemView::InternalMove);
-    appListWidget->setDefaultDropAction(Qt::MoveAction);
-    appListWidget->setMovement(QListView::Snap);
-    appListWidget->setItemDelegate(iconDelegate);
-    appListWidget->setContextMenuPolicy(Qt::CustomContextMenu);
-    appListWidget->setStyleSheet("QListWidget { background-color: #fafafa; border: none; }");
+    appListView = new QListView(this);
+    appListView->setViewMode(QListView::IconMode);
+    appListView->setIconSize(QSize(72, 72));
+    appListView->setResizeMode(QListView::Adjust);
+    appListView->setSpacing(15);
+    appListView->setSelectionMode(QAbstractItemView::SingleSelection);
+    appListView->setDragDropMode(QAbstractItemView::NoDragDrop);
+    appListView->setMovement(QListView::Static);
+    appListView->setItemDelegate(iconDelegate);
+    appListView->setContextMenuPolicy(Qt::CustomContextMenu);
+    appListView->setStyleSheet("QListView { background-color: #fafafa; border: none; }");
+    appListView->setModel(appModel);
     
-    connect(appListWidget, &QListWidget::customContextMenuRequested, this, &AppManagerWidget::onShowContextMenu);
-    connect(appListWidget, &QListWidget::itemDoubleClicked, this, &AppManagerWidget::onAppItemDoubleClicked);
-    connect(appListWidget->model(), &QAbstractItemModel::rowsMoved, this, &AppManagerWidget::onRowsMoved);
+    connect(appListView, &QListView::customContextMenuRequested, this, &AppManagerWidget::onShowContextMenu);
+    connect(appListView, &QListView::doubleClicked, this, &AppManagerWidget::onAppItemDoubleClicked);
     
-    mainLayout->addWidget(appListWidget);
+    mainLayout->addWidget(appListView);
 }
 
 void AppManagerWidget::onIconViewMode()
 {
-    appListWidget->setViewMode(QListWidget::IconMode);
-    appListWidget->setItemDelegate(iconDelegate);
-    appListWidget->setIconSize(QSize(72, 72));
-    appListWidget->setSpacing(15);
+    appListView->setViewMode(QListView::IconMode);
+    appListView->setItemDelegate(iconDelegate);
+    appListView->setIconSize(QSize(72, 72));
+    appListView->setSpacing(15);
     iconViewButton->setChecked(true);
     listViewButton->setChecked(false);
 }
 
 void AppManagerWidget::onListViewMode()
 {
-    appListWidget->setViewMode(QListWidget::ListMode);
-    appListWidget->setItemDelegate(nullptr);
-    appListWidget->setIconSize(QSize(32, 32));
-    appListWidget->setSpacing(5);
+    appListView->setViewMode(QListView::ListMode);
+    appListView->setItemDelegate(nullptr);
+    appListView->setIconSize(QSize(32, 32));
+    appListView->setSpacing(5);
     iconViewButton->setChecked(false);
     listViewButton->setChecked(true);
 }
 
-void AppManagerWidget::onRowsMoved(const QModelIndex &parent, int start, int end, const QModelIndex &destination, int row)
+void AppManagerWidget::onMoveUp()
 {
-    Q_UNUSED(parent);
-    Q_UNUSED(start);
-    Q_UNUSED(end);
-    Q_UNUSED(destination);
-    Q_UNUSED(row);
-    saveAppOrder();
+    QModelIndex current = appListView->currentIndex();
+    if (!current.isValid() || current.row() <= 0) return;
+    
+    int row = current.row();
+    QList<AppInfo> apps = db->getAllApps();
+    
+    if (row > 0 && row < apps.size()) {
+        AppInfo currentApp = apps[row];
+        AppInfo prevApp = apps[row - 1];
+        
+        int tempOrder = currentApp.sortOrder;
+        currentApp.sortOrder = prevApp.sortOrder;
+        prevApp.sortOrder = tempOrder;
+        
+        db->updateApp(currentApp);
+        db->updateApp(prevApp);
+        
+        refreshAppList();
+        
+        QModelIndex newIndex = appModel->index(row - 1, 0);
+        appListView->setCurrentIndex(newIndex);
+    }
+}
+
+void AppManagerWidget::onMoveDown()
+{
+    QModelIndex current = appListView->currentIndex();
+    if (!current.isValid()) return;
+    
+    int row = current.row();
+    QList<AppInfo> apps = db->getAllApps();
+    
+    if (row >= 0 && row < apps.size() - 1) {
+        AppInfo currentApp = apps[row];
+        AppInfo nextApp = apps[row + 1];
+        
+        int tempOrder = currentApp.sortOrder;
+        currentApp.sortOrder = nextApp.sortOrder;
+        nextApp.sortOrder = tempOrder;
+        
+        db->updateApp(currentApp);
+        db->updateApp(nextApp);
+        
+        refreshAppList();
+        
+        QModelIndex newIndex = appModel->index(row + 1, 0);
+        appListView->setCurrentIndex(newIndex);
+    }
 }
 
 void AppManagerWidget::saveAppOrder()
 {
-    for (int i = 0; i < appListWidget->count(); ++i) {
-        QListWidgetItem *item = appListWidget->item(i);
+    for (int i = 0; i < appModel->rowCount(); ++i) {
+        QStandardItem *item = appModel->item(i);
         int appId = item->data(Qt::UserRole).toInt();
         AppInfo app = db->getAppById(appId);
         app.sortOrder = i;
@@ -211,20 +268,20 @@ void AppManagerWidget::saveAppOrder()
 
 void AppManagerWidget::refreshAppList()
 {
-    appListWidget->clear();
+    appModel->clear();
     
     QList<AppInfo> apps = db->getAllApps();
     
     for (const AppInfo &app : apps) {
-        QListWidgetItem *item = new QListWidgetItem(app.name);
-        item->setData(Qt::UserRole, app.id);
+        QStandardItem *item = new QStandardItem(app.name);
+        item->setData(app.id, Qt::UserRole);
         item->setIcon(getAppIcon(app));
         
         if (app.isFavorite) {
             item->setBackground(QColor(255, 249, 196));
         }
         
-        appListWidget->addItem(item);
+        appModel->appendRow(item);
     }
 }
 
@@ -237,83 +294,212 @@ QIcon AppManagerWidget::getAppIcon(const AppInfo &app)
         }
     }
     
-    QFileInfo fileInfo(app.path);
-    if (fileInfo.exists()) {
+    if (QFile::exists(app.path)) {
+        QFileInfo fileInfo(app.path);
         return iconProvider.icon(fileInfo);
     }
     
-    return QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
+    return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
 }
 
 void AppManagerWidget::onAddApp()
 {
-    QString filePath = QFileDialog::getOpenFileName(this, "选择应用程序", "", "可执行文件 (*.exe);;所有文件 (*.*)");
-    
-    if (filePath.isEmpty()) {
-        return;
-    }
+    QString filePath = QFileDialog::getOpenFileName(this, "选择应用程序", "", 
+                                                    "可执行文件 (*.exe *.bat *.cmd);;所有文件 (*.*)");
+    if (filePath.isEmpty()) return;
     
     QFileInfo fileInfo(filePath);
-    QString appName = fileInfo.baseName();
+    QString appName = fileInfo.completeBaseName();
     
-    QList<AppInfo> currentApps = db->getAllApps();
-    int maxSortOrder = 0;
-    for (const AppInfo &app : currentApps) {
-        if (app.sortOrder > maxSortOrder) {
-            maxSortOrder = app.sortOrder;
+    AppInfo app;
+    app.name = appName;
+    app.path = filePath;
+    app.arguments = "";
+    app.iconPath = "";
+    app.category = "自定义";
+    app.useCount = 0;
+    app.isFavorite = false;
+    
+    int maxOrder = 0;
+    QList<AppInfo> existingApps = db->getAllApps();
+    for (const AppInfo &existing : existingApps) {
+        if (existing.sortOrder > maxOrder) {
+            maxOrder = existing.sortOrder;
         }
     }
+    app.sortOrder = maxOrder + 1;
     
-    AppInfo newApp;
-    newApp.name = appName;
-    newApp.path = filePath;
-    newApp.category = "自定义应用";
-    newApp.isFavorite = false;
-    newApp.useCount = 0;
-    newApp.sortOrder = maxSortOrder + 1;
-    
-    if (db->addApp(newApp)) {
-        QMessageBox::information(this, "成功", "应用添加成功！");
-        refreshAppList();
-    } else {
-        QMessageBox::warning(this, "错误", "添加应用失败！");
-    }
+    db->addApp(app);
+    refreshAppList();
 }
 
 void AppManagerWidget::onDeleteApp()
 {
-    QList<QListWidgetItem *> selectedItems = appListWidget->selectedItems();
-    if (selectedItems.isEmpty()) {
-        QMessageBox::warning(this, "提示", "请先选择要删除的应用！");
+    QModelIndexList selected = appListView->selectionModel()->selectedIndexes();
+    if (selected.isEmpty()) {
+        QMessageBox::warning(this, "提示", "请先选择要删除的应用");
         return;
     }
     
-    auto reply = QMessageBox::question(this, "确认", 
-                                      QString("确定要删除选中的 %1 个应用吗？").arg(selectedItems.size()), 
-                                      QMessageBox::Yes | QMessageBox::No);
-    
-    if (reply == QMessageBox::Yes) {
-        for (QListWidgetItem *item : selectedItems) {
-            int appId = item->data(Qt::UserRole).toInt();
-            db->deleteApp(appId);
+    QList<int> idsToDelete;
+    for (const QModelIndex &index : selected) {
+        QStandardItem *item = appModel->itemFromIndex(index);
+        if (item) {
+            idsToDelete.append(item->data(Qt::UserRole).toInt());
         }
-        QMessageBox::information(this, "成功", "应用已删除！");
-        refreshAppList();
     }
+    
+    for (int id : idsToDelete) {
+        db->deleteApp(id);
+    }
+    
+    refreshAppList();
 }
 
 void AppManagerWidget::onLaunchApp()
 {
-    QList<QListWidgetItem *> selectedItems = appListWidget->selectedItems();
-    if (selectedItems.isEmpty()) {
-        QMessageBox::warning(this, "提示", "请先选择要启动的应用！");
+    QModelIndexList selected = appListView->selectionModel()->selectedIndexes();
+    if (selected.isEmpty()) {
+        QMessageBox::warning(this, "提示", "请先选择要启动的应用");
         return;
     }
     
-    for (QListWidgetItem *item : selectedItems) {
-        int appId = item->data(Qt::UserRole).toInt();
-        AppInfo app = db->getAppById(appId);
+    for (const QModelIndex &index : selected) {
+        QStandardItem *item = appModel->itemFromIndex(index);
+        if (item) {
+            int appId = item->data(Qt::UserRole).toInt();
+            AppInfo app = db->getAppById(appId);
+            if (app.id > 0) {
+                launchApp(app);
+            }
+        }
+    }
+}
+
+void AppManagerWidget::onAppItemDoubleClicked(const QModelIndex &index)
+{
+    if (!index.isValid()) return;
+    
+    QStandardItem *item = appModel->itemFromIndex(index);
+    if (!item) return;
+    
+    int appId = item->data(Qt::UserRole).toInt();
+    AppInfo app = db->getAppById(appId);
+    if (app.id > 0) {
         launchApp(app);
+    }
+}
+
+void AppManagerWidget::onShowContextMenu(const QPoint &pos)
+{
+    QModelIndex index = appListView->indexAt(pos);
+    if (!index.isValid()) return;
+    
+    QMenu menu(this);
+    
+    QAction *renameAction = menu.addAction("重命名");
+    QAction *changeIconAction = menu.addAction("修改图标");
+    QAction *changePathAction = menu.addAction("修改路径");
+    QAction *changeArgsAction = menu.addAction("修改参数");
+    menu.addSeparator();
+    QAction *launchAction = menu.addAction("启动");
+    
+    QAction *selected = menu.exec(appListView->mapToGlobal(pos));
+    
+    if (selected == renameAction) {
+        onRenameApp();
+    } else if (selected == changeIconAction) {
+        onChangeIcon();
+    } else if (selected == changePathAction) {
+        onChangePath();
+    } else if (selected == changeArgsAction) {
+        onChangeArguments();
+    } else if (selected == launchAction) {
+        onLaunchApp();
+    }
+}
+
+void AppManagerWidget::onRenameApp()
+{
+    QModelIndex index = appListView->currentIndex();
+    if (!index.isValid()) return;
+    
+    QStandardItem *item = appModel->itemFromIndex(index);
+    if (!item) return;
+    
+    int appId = item->data(Qt::UserRole).toInt();
+    AppInfo app = db->getAppById(appId);
+    if (app.id <= 0) return;
+    
+    bool ok;
+    QString newName = QInputDialog::getText(this, "重命名", "新名称:", QLineEdit::Normal, app.name, &ok);
+    if (ok && !newName.isEmpty()) {
+        app.name = newName;
+        db->updateApp(app);
+        refreshAppList();
+    }
+}
+
+void AppManagerWidget::onChangeIcon()
+{
+    QModelIndex index = appListView->currentIndex();
+    if (!index.isValid()) return;
+    
+    QStandardItem *item = appModel->itemFromIndex(index);
+    if (!item) return;
+    
+    int appId = item->data(Qt::UserRole).toInt();
+    AppInfo app = db->getAppById(appId);
+    if (app.id <= 0) return;
+    
+    QString iconPath = QFileDialog::getOpenFileName(this, "选择图标", "", 
+                                                   "图标文件 (*.ico *.png *.jpg *.bmp);;所有文件 (*.*)");
+    if (!iconPath.isEmpty()) {
+        app.iconPath = iconPath;
+        db->updateApp(app);
+        refreshAppList();
+    }
+}
+
+void AppManagerWidget::onChangePath()
+{
+    QModelIndex index = appListView->currentIndex();
+    if (!index.isValid()) return;
+    
+    QStandardItem *item = appModel->itemFromIndex(index);
+    if (!item) return;
+    
+    int appId = item->data(Qt::UserRole).toInt();
+    AppInfo app = db->getAppById(appId);
+    if (app.id <= 0) return;
+    
+    QString newPath = QFileDialog::getOpenFileName(this, "选择应用程序", "", 
+                                                    "可执行文件 (*.exe *.bat *.cmd);;所有文件 (*.*)");
+    if (!newPath.isEmpty()) {
+        app.path = newPath;
+        db->updateApp(app);
+        refreshAppList();
+    }
+}
+
+void AppManagerWidget::onChangeArguments()
+{
+    QModelIndex index = appListView->currentIndex();
+    if (!index.isValid()) return;
+    
+    QStandardItem *item = appModel->itemFromIndex(index);
+    if (!item) return;
+    
+    int appId = item->data(Qt::UserRole).toInt();
+    AppInfo app = db->getAppById(appId);
+    if (app.id <= 0) return;
+    
+    bool ok;
+    QString newArgs = QInputDialog::getText(this, "修改启动参数", "启动参数:", QLineEdit::Normal, app.arguments, &ok);
+    if (ok) {
+        app.arguments = newArgs;
+        db->updateApp(app);
+        refreshAppList();
     }
 }
 
@@ -333,153 +519,4 @@ void AppManagerWidget::launchApp(const AppInfo &app)
     db->updateApp(updatedApp);
     
     refreshAppList();
-}
-
-void AppManagerWidget::onAppItemDoubleClicked(QListWidgetItem *item)
-{
-    if (!item) return;
-    
-    int appId = item->data(Qt::UserRole).toInt();
-    AppInfo app = db->getAppById(appId);
-    launchApp(app);
-}
-
-void AppManagerWidget::onShowContextMenu(const QPoint &pos)
-{
-    QListWidgetItem *item = appListWidget->itemAt(pos);
-    if (!item) return;
-    
-    int appId = item->data(Qt::UserRole).toInt();
-    AppInfo app = db->getAppById(appId);
-    
-    QMenu menu(this);
-    menu.setStyleSheet("QMenu { background-color: white; border: 1px solid #ccc; } "
-                      "QMenu::item { padding: 8px 20px; } "
-                      "QMenu::item:selected { background-color: #1976d2; color: white; }");
-    
-    QAction *launchAction = menu.addAction("启动");
-    connect(launchAction, &QAction::triggered, [this, app]() {
-        launchApp(app);
-    });
-    
-    QAction *toggleFavoriteAction = menu.addAction(app.isFavorite ? "取消常用" : "设为常用");
-    connect(toggleFavoriteAction, &QAction::triggered, [this, app]() {
-        AppInfo updatedApp = app;
-        updatedApp.isFavorite = !updatedApp.isFavorite;
-        db->updateApp(updatedApp);
-        refreshAppList();
-    });
-    
-    menu.addSeparator();
-    
-    QAction *renameAction = menu.addAction("修改名称");
-    connect(renameAction, &QAction::triggered, this, &AppManagerWidget::onRenameApp);
-    
-    QAction *changeIconAction = menu.addAction("修改图标");
-    connect(changeIconAction, &QAction::triggered, this, &AppManagerWidget::onChangeIcon);
-    
-    QAction *changePathAction = menu.addAction("修改启动路径");
-    connect(changePathAction, &QAction::triggered, this, &AppManagerWidget::onChangePath);
-    
-    QAction *changeArgsAction = menu.addAction("修改启动参数");
-    connect(changeArgsAction, &QAction::triggered, this, &AppManagerWidget::onChangeArguments);
-    
-    menu.addSeparator();
-    
-    QAction *deleteAction = menu.addAction("删除");
-    connect(deleteAction, &QAction::triggered, [this, app]() {
-        auto reply = QMessageBox::question(this, "确认", "确定要删除这个应用吗？", 
-                                            QMessageBox::Yes | QMessageBox::No);
-        if (reply == QMessageBox::Yes) {
-            db->deleteApp(app.id);
-            refreshAppList();
-        }
-    });
-    
-    menu.exec(appListWidget->mapToGlobal(pos));
-}
-
-void AppManagerWidget::onRenameApp()
-{
-    QListWidgetItem *currentItem = appListWidget->currentItem();
-    if (!currentItem) return;
-    
-    int appId = currentItem->data(Qt::UserRole).toInt();
-    AppInfo app = db->getAppById(appId);
-    
-    bool ok;
-    QString newName = QInputDialog::getText(this, "修改名称", "请输入新名称:", QLineEdit::Normal, app.name, &ok);
-    
-    if (ok && !newName.isEmpty()) {
-        AppInfo updatedApp = app;
-        updatedApp.name = newName;
-        db->updateApp(updatedApp);
-        refreshAppList();
-        QMessageBox::information(this, "成功", "名称已修改！");
-    }
-}
-
-void AppManagerWidget::onChangeIcon()
-{
-    QListWidgetItem *currentItem = appListWidget->currentItem();
-    if (!currentItem) return;
-    
-    int appId = currentItem->data(Qt::UserRole).toInt();
-    AppInfo app = db->getAppById(appId);
-    
-    QString filePath = QFileDialog::getOpenFileName(this, "选择图标文件", "", 
-                                                    "图标文件 (*.png *.jpg *.jpeg *.bmp *.ico);;所有文件 (*.*)");
-    
-    if (!filePath.isEmpty()) {
-        AppInfo updatedApp = app;
-        updatedApp.iconPath = filePath;
-        db->updateApp(updatedApp);
-        refreshAppList();
-        QMessageBox::information(this, "成功", "图标已更换！");
-    }
-}
-
-void AppManagerWidget::onChangePath()
-{
-    QListWidgetItem *currentItem = appListWidget->currentItem();
-    if (!currentItem) return;
-    
-    int appId = currentItem->data(Qt::UserRole).toInt();
-    AppInfo app = db->getAppById(appId);
-    
-    QFileInfo fileInfo(app.path);
-    QString defaultDir = fileInfo.exists() ? fileInfo.absolutePath() : "";
-    QString defaultFile = fileInfo.exists() ? fileInfo.fileName() : "";
-    
-    QString filePath = QFileDialog::getOpenFileName(this, "选择应用程序", 
-                                                     defaultDir + "/" + defaultFile, 
-                                                     "可执行文件 (*.exe);;所有文件 (*.*)");
-    
-    if (!filePath.isEmpty()) {
-        AppInfo updatedApp = app;
-        updatedApp.path = filePath;
-        db->updateApp(updatedApp);
-        refreshAppList();
-        QMessageBox::information(this, "成功", "启动路径已修改！");
-    }
-}
-
-void AppManagerWidget::onChangeArguments()
-{
-    QListWidgetItem *currentItem = appListWidget->currentItem();
-    if (!currentItem) return;
-    
-    int appId = currentItem->data(Qt::UserRole).toInt();
-    AppInfo app = db->getAppById(appId);
-    
-    bool ok;
-    QString newArgs = QInputDialog::getText(this, "修改启动参数", "请输入启动参数:", QLineEdit::Normal, app.arguments, &ok);
-    
-    if (ok) {
-        AppInfo updatedApp = app;
-        updatedApp.arguments = newArgs;
-        db->updateApp(updatedApp);
-        refreshAppList();
-        QMessageBox::information(this, "成功", "启动参数已修改！");
-    }
 }
