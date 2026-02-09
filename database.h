@@ -23,6 +23,7 @@ struct AppInfo {
 struct AppCollection {
     int id;
     QString name;
+    QString description;
     QList<int> appIds;
 };
 
@@ -46,6 +47,7 @@ public:
     bool updateCollection(const AppCollection &collection);
     bool deleteCollection(int id);
     QList<AppCollection> getAllCollections();
+    AppCollection getCollectionById(int id);
     
     bool setAutoStart(bool enabled);
     bool getAutoStart();

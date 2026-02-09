@@ -11,14 +11,16 @@ SOURCES += main.cpp \
            appmanagerwidget.cpp \
            fishmodewidget.cpp \
            shutdownwidget.cpp \
-           settingswidget.cpp
+           settingswidget.cpp \
+           collectionmanagerwidget.cpp
 
 HEADERS  += mainwindow.h \
             database.h \
             appmanagerwidget.h \
             fishmodewidget.h \
             shutdownwidget.h \
-            settingswidget.h
+            settingswidget.h \
+            collectionmanagerwidget.h
 
 FORMS += ui/appmanagerwidget.ui \
          ui/fishmodewidget.ui \

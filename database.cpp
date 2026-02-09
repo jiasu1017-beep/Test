@@ -114,6 +114,7 @@ QJsonObject Database::collectionToJson(const AppCollection &collection)
     QJsonObject obj;
     obj["id"] = collection.id;
     obj["name"] = collection.name;
+    obj["description"] = collection.description;
     
     QJsonArray idArray;
     for (int id : collection.appIds) {
@@ -128,6 +129,7 @@ AppCollection Database::jsonToCollection(const QJsonObject &obj)
     AppCollection col;
     col.id = obj["id"].toInt();
     col.name = obj["name"].toString();
+    col.description = obj["description"].toString();
     
     QJsonArray idArray = obj["appIds"].toArray();
     for (const QJsonValue &val : idArray) {
@@ -301,6 +303,24 @@ QList<AppCollection> Database::getAllCollections()
     }
     
     return cols;
+}
+
+AppCollection Database::getCollectionById(int id)
+{
+    AppCollection col;
+    col.id = -1;
+    
+    QJsonArray colsArray = rootObject["collections"].toArray();
+    
+    for (const QJsonValue &val : colsArray) {
+        QJsonObject obj = val.toObject();
+        if (obj["id"].toInt() == id) {
+            col = jsonToCollection(obj);
+            break;
+        }
+    }
+    
+    return col;
 }
 
 bool Database::setAutoStart(bool enabled)

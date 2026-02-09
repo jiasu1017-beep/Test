@@ -3,6 +3,7 @@
 #include "fishmodewidget.h"
 #include "shutdownwidget.h"
 #include "settingswidget.h"
+#include "collectionmanagerwidget.h"
 #include <QApplication>
 #include <QStyle>
 #include <QStandardPaths>
@@ -38,11 +39,13 @@ void MainWindow::setupUI()
     tabWidget = new QTabWidget(this);
     
     appManagerWidget = new AppManagerWidget(db, this);
+    collectionManagerWidget = new CollectionManagerWidget(db, this);
     fishModeWidget = new FishModeWidget(this);
     shutdownWidget = new ShutdownWidget(this);
     settingsWidget = new SettingsWidget(db, this);
     
     tabWidget->addTab(appManagerWidget, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "应用管理");
+    tabWidget->addTab(collectionManagerWidget, QApplication::style()->standardIcon(QStyle::SP_DirHomeIcon), "集合管理");
     tabWidget->addTab(fishModeWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView), "摸鱼模式");
     tabWidget->addTab(shutdownWidget, QApplication::style()->standardIcon(QStyle::SP_BrowserStop), "定时关机");
     tabWidget->addTab(settingsWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogInfoView), "设置");

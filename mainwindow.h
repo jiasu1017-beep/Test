@@ -10,6 +10,7 @@ class AppManagerWidget;
 class FishModeWidget;
 class ShutdownWidget;
 class SettingsWidget;
+class CollectionManagerWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -29,6 +30,7 @@ private:
     FishModeWidget *fishModeWidget;
     ShutdownWidget *shutdownWidget;
     SettingsWidget *settingsWidget;
+    CollectionManagerWidget *collectionManagerWidget;
 };
 
 #endif
