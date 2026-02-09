@@ -1,0 +1,14 @@
+release/main.o
+release/mainwindow.o
+release/database.o
+release/appmanagerwidget.o
+release/fishmodewidget.o
+release/shutdownwidget.o
+release/settingswidget.o
+release/qrc_resources.o
+release/moc_mainwindow.o
+release/moc_database.o
+release/moc_appmanagerwidget.o
+release/moc_fishmodewidget.o
+release/moc_shutdownwidget.o
+release/moc_settingswidget.o
