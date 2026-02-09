@@ -5,6 +5,7 @@
 #include "settingswidget.h"
 #include <QApplication>
 #include <QStyle>
+#include <QStandardPaths>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -56,11 +57,14 @@ void MainWindow::initPresetApps()
         return;
     }
     
+    QString winDir = qgetenv("WINDIR");
+    QString systemDir = winDir + "/System32";
+    
     QList<AppInfo> presetApps;
     
     AppInfo notepad;
     notepad.name = "记事本";
-    notepad.path = "notepad.exe";
+    notepad.path = systemDir + "/notepad.exe";
     notepad.category = "系统工具";
     notepad.isFavorite = true;
     notepad.sortOrder = 0;
@@ -68,7 +72,7 @@ void MainWindow::initPresetApps()
     
     AppInfo calc;
     calc.name = "计算器";
-    calc.path = "calc.exe";
+    calc.path = systemDir + "/calc.exe";
     calc.category = "系统工具";
     calc.isFavorite = true;
     calc.sortOrder = 1;
@@ -76,21 +80,21 @@ void MainWindow::initPresetApps()
     
     AppInfo cmd;
     cmd.name = "命令提示符";
-    cmd.path = "cmd.exe";
+    cmd.path = systemDir + "/cmd.exe";
     cmd.category = "系统工具";
     cmd.sortOrder = 2;
     presetApps.append(cmd);
     
     AppInfo mspaint;
     mspaint.name = "画图";
-    mspaint.path = "mspaint.exe";
+    mspaint.path = systemDir + "/mspaint.exe";
     mspaint.category = "系统工具";
     mspaint.sortOrder = 3;
     presetApps.append(mspaint);
     
     AppInfo taskmgr;
     taskmgr.name = "任务管理器";
-    taskmgr.path = "taskmgr.exe";
+    taskmgr.path = systemDir + "/taskmgr.exe";
     taskmgr.category = "系统工具";
     taskmgr.sortOrder = 4;
     presetApps.append(taskmgr);

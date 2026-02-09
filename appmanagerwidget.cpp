@@ -7,6 +7,8 @@
 #include <QColor>
 #include <QLinearGradient>
 #include <QPainterPath>
+#include <windows.h>
+#include <shellapi.h>
 
 void AppIconDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
@@ -317,12 +319,13 @@ void AppManagerWidget::onLaunchApp()
 
 void AppManagerWidget::launchApp(const AppInfo &app)
 {
-    if (app.arguments.isEmpty()) {
-        QProcess::startDetached(app.path, QStringList());
+    QString fullPath = app.path;
+    QString args = app.arguments;
+    
+    if (args.trimmed().isEmpty()) {
+        QProcess::startDetached(fullPath, QStringList());
     } else {
-        QString program = app.path;
-        QStringList args = QProcess::splitCommand(app.arguments);
-        QProcess::startDetached(program, args);
+        QProcess::startDetached(fullPath, QProcess::splitCommand(args));
     }
     
     AppInfo updatedApp = app;

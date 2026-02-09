@@ -3,151 +3,201 @@
 #include <QStandardPaths>
 #include <QSettings>
 #include <QCoreApplication>
+#include <QDebug>
+#include <algorithm>
 
 Database::Database(QObject *parent) : QObject(parent)
 {
+    nextAppId = 1;
+    nextCollectionId = 1;
 }
 
 Database::~Database()
 {
-    if (db.isOpen()) {
-        db.close();
-    }
 }
 
 bool Database::init()
 {
-    QString dbPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir dir(dbPath);
+    QString dataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir dir(dataPath);
     if (!dir.exists()) {
         dir.mkpath(".");
     }
     
-    db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName(dbPath + "/officeassistant.db");
+    dataFilePath = dataPath + "/data.json";
     
-    if (!db.open()) {
-        qWarning("Cannot open database: %s", qPrintable(db.lastError().text()));
-        return false;
-    }
-    
-    return createTables();
-}
-
-bool Database::createTables()
-{
-    QSqlQuery query;
-    
-    if (!query.exec("CREATE TABLE IF NOT EXISTS apps ("
-                   "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                   "name TEXT NOT NULL,"
-                   "path TEXT NOT NULL,"
-                   "arguments TEXT,"
-                   "icon_path TEXT,"
-                   "category TEXT,"
-                   "use_count INTEGER DEFAULT 0,"
-                   "is_favorite INTEGER DEFAULT 0,"
-                   "sort_order INTEGER DEFAULT 0)")) {
-        qWarning("Error creating apps table: %s", qPrintable(query.lastError().text()));
-        return false;
-    }
-    
-    query.exec("PRAGMA table_info(apps)");
-    bool hasArgumentsColumn = false;
-    bool hasSortOrderColumn = false;
-    while (query.next()) {
-        if (query.value(1).toString() == "arguments") {
-            hasArgumentsColumn = true;
-        }
-        if (query.value(1).toString() == "sort_order") {
-            hasSortOrderColumn = true;
-        }
-    }
-    if (!hasArgumentsColumn) {
-        query.exec("ALTER TABLE apps ADD COLUMN arguments TEXT");
-    }
-    if (!hasSortOrderColumn) {
-        query.exec("ALTER TABLE apps ADD COLUMN sort_order INTEGER DEFAULT 0");
-    }
-    
-    if (!query.exec("CREATE TABLE IF NOT EXISTS collections ("
-                   "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                   "name TEXT NOT NULL,"
-                   "app_ids TEXT)")) {
-        qWarning("Error creating collections table: %s", qPrintable(query.lastError().text()));
-        return false;
-    }
-    
-    if (!query.exec("CREATE TABLE IF NOT EXISTS settings ("
-                   "key TEXT PRIMARY KEY,"
-                   "value TEXT)")) {
-        qWarning("Error creating settings table: %s", qPrintable(query.lastError().text()));
-        return false;
+    if (!loadData()) {
+        rootObject = QJsonObject();
+        rootObject["apps"] = QJsonArray();
+        rootObject["collections"] = QJsonArray();
+        rootObject["settings"] = QJsonObject();
+        rootObject["nextAppId"] = 1;
+        rootObject["nextCollectionId"] = 1;
+        saveData();
     }
     
     return true;
 }
 
+bool Database::loadData()
+{
+    QFile file(dataFilePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return false;
+    }
+    
+    QByteArray data = file.readAll();
+    file.close();
+    
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isObject()) {
+        return false;
+    }
+    
+    rootObject = doc.object();
+    nextAppId = rootObject["nextAppId"].toInt(1);
+    nextCollectionId = rootObject["nextCollectionId"].toInt(1);
+    
+    return true;
+}
+
+bool Database::saveData()
+{
+    rootObject["nextAppId"] = nextAppId;
+    rootObject["nextCollectionId"] = nextCollectionId;
+    
+    QJsonDocument doc(rootObject);
+    QFile file(dataFilePath);
+    if (!file.open(QIODevice::WriteOnly)) {
+        qWarning("Cannot save data file: %s", qPrintable(file.errorString()));
+        return false;
+    }
+    
+    file.write(doc.toJson(QJsonDocument::Indented));
+    file.close();
+    
+    return true;
+}
+
+QJsonObject Database::appToJson(const AppInfo &app)
+{
+    QJsonObject obj;
+    obj["id"] = app.id;
+    obj["name"] = app.name;
+    obj["path"] = app.path;
+    obj["arguments"] = app.arguments;
+    obj["iconPath"] = app.iconPath;
+    obj["category"] = app.category;
+    obj["useCount"] = app.useCount;
+    obj["isFavorite"] = app.isFavorite;
+    obj["sortOrder"] = app.sortOrder;
+    return obj;
+}
+
+AppInfo Database::jsonToApp(const QJsonObject &obj)
+{
+    AppInfo app;
+    app.id = obj["id"].toInt();
+    app.name = obj["name"].toString();
+    app.path = obj["path"].toString();
+    app.arguments = obj["arguments"].toString();
+    app.iconPath = obj["iconPath"].toString();
+    app.category = obj["category"].toString();
+    app.useCount = obj["useCount"].toInt();
+    app.isFavorite = obj["isFavorite"].toBool();
+    app.sortOrder = obj["sortOrder"].toInt();
+    return app;
+}
+
+QJsonObject Database::collectionToJson(const AppCollection &collection)
+{
+    QJsonObject obj;
+    obj["id"] = collection.id;
+    obj["name"] = collection.name;
+    
+    QJsonArray idArray;
+    for (int id : collection.appIds) {
+        idArray.append(id);
+    }
+    obj["appIds"] = idArray;
+    return obj;
+}
+
+AppCollection Database::jsonToCollection(const QJsonObject &obj)
+{
+    AppCollection col;
+    col.id = obj["id"].toInt();
+    col.name = obj["name"].toString();
+    
+    QJsonArray idArray = obj["appIds"].toArray();
+    for (const QJsonValue &val : idArray) {
+        col.appIds.append(val.toInt());
+    }
+    return col;
+}
+
 bool Database::addApp(const AppInfo &app)
 {
-    QSqlQuery query;
-    query.prepare("INSERT INTO apps (name, path, arguments, icon_path, category, use_count, is_favorite, sort_order) "
-                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-    query.addBindValue(app.name);
-    query.addBindValue(app.path);
-    query.addBindValue(app.arguments);
-    query.addBindValue(app.iconPath);
-    query.addBindValue(app.category);
-    query.addBindValue(app.useCount);
-    query.addBindValue(app.isFavorite ? 1 : 0);
-    query.addBindValue(app.sortOrder);
+    AppInfo newApp = app;
+    newApp.id = nextAppId++;
     
-    return query.exec();
+    QJsonArray appsArray = rootObject["apps"].toArray();
+    appsArray.append(appToJson(newApp));
+    rootObject["apps"] = appsArray;
+    
+    return saveData();
 }
 
 bool Database::updateApp(const AppInfo &app)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE apps SET name=?, path=?, arguments=?, icon_path=?, category=?, use_count=?, is_favorite=?, sort_order=? "
-                  "WHERE id=?");
-    query.addBindValue(app.name);
-    query.addBindValue(app.path);
-    query.addBindValue(app.arguments);
-    query.addBindValue(app.iconPath);
-    query.addBindValue(app.category);
-    query.addBindValue(app.useCount);
-    query.addBindValue(app.isFavorite ? 1 : 0);
-    query.addBindValue(app.sortOrder);
-    query.addBindValue(app.id);
+    QJsonArray appsArray = rootObject["apps"].toArray();
     
-    return query.exec();
+    for (int i = 0; i < appsArray.size(); ++i) {
+        QJsonObject obj = appsArray[i].toObject();
+        if (obj["id"].toInt() == app.id) {
+            appsArray[i] = appToJson(app);
+            break;
+        }
+    }
+    
+    rootObject["apps"] = appsArray;
+    
+    return saveData();
 }
 
 bool Database::deleteApp(int id)
 {
-    QSqlQuery query;
-    query.prepare("DELETE FROM apps WHERE id=?");
-    query.addBindValue(id);
-    return query.exec();
+    QJsonArray appsArray = rootObject["apps"].toArray();
+    
+    for (int i = 0; i < appsArray.size(); ++i) {
+        QJsonObject obj = appsArray[i].toObject();
+        if (obj["id"].toInt() == id) {
+            appsArray.removeAt(i);
+            break;
+        }
+    }
+    
+    rootObject["apps"] = appsArray;
+    
+    return saveData();
 }
 
 QList<AppInfo> Database::getAllApps()
 {
     QList<AppInfo> apps;
-    QSqlQuery query("SELECT * FROM apps ORDER BY sort_order ASC, id ASC");
+    QJsonArray appsArray = rootObject["apps"].toArray();
     
-    while (query.next()) {
-        AppInfo app;
-        app.id = query.value(0).toInt();
-        app.name = query.value(1).toString();
-        app.path = query.value(2).toString();
-        app.arguments = query.value(3).toString();
-        app.iconPath = query.value(4).toString();
-        app.category = query.value(5).toString();
-        app.useCount = query.value(6).toInt();
-        app.isFavorite = query.value(7).toInt() == 1;
-        app.sortOrder = query.value(8).toInt();
-        apps.append(app);
+    QList<QJsonObject> appObjects;
+    for (const QJsonValue &val : appsArray) {
+        appObjects.append(val.toObject());
+    }
+    
+    std::sort(appObjects.begin(), appObjects.end(), [](const QJsonObject &a, const QJsonObject &b) {
+        return a["sortOrder"].toInt() < b["sortOrder"].toInt();
+    });
+    
+    for (const QJsonObject &obj : appObjects) {
+        apps.append(jsonToApp(obj));
     }
     
     return apps;
@@ -156,20 +206,22 @@ QList<AppInfo> Database::getAllApps()
 QList<AppInfo> Database::getFavoriteApps()
 {
     QList<AppInfo> apps;
-    QSqlQuery query("SELECT * FROM apps WHERE is_favorite=1 ORDER BY sort_order ASC, id ASC");
+    QJsonArray appsArray = rootObject["apps"].toArray();
     
-    while (query.next()) {
-        AppInfo app;
-        app.id = query.value(0).toInt();
-        app.name = query.value(1).toString();
-        app.path = query.value(2).toString();
-        app.arguments = query.value(3).toString();
-        app.iconPath = query.value(4).toString();
-        app.category = query.value(5).toString();
-        app.useCount = query.value(6).toInt();
-        app.isFavorite = query.value(7).toInt() == 1;
-        app.sortOrder = query.value(8).toInt();
-        apps.append(app);
+    QList<QJsonObject> appObjects;
+    for (const QJsonValue &val : appsArray) {
+        QJsonObject obj = val.toObject();
+        if (obj["isFavorite"].toBool()) {
+            appObjects.append(obj);
+        }
+    }
+    
+    std::sort(appObjects.begin(), appObjects.end(), [](const QJsonObject &a, const QJsonObject &b) {
+        return a["sortOrder"].toInt() < b["sortOrder"].toInt();
+    });
+    
+    for (const QJsonObject &obj : appObjects) {
+        apps.append(jsonToApp(obj));
     }
     
     return apps;
@@ -178,20 +230,16 @@ QList<AppInfo> Database::getFavoriteApps()
 AppInfo Database::getAppById(int id)
 {
     AppInfo app;
-    QSqlQuery query;
-    query.prepare("SELECT * FROM apps WHERE id=?");
-    query.addBindValue(id);
+    app.id = -1;
     
-    if (query.exec() && query.next()) {
-        app.id = query.value(0).toInt();
-        app.name = query.value(1).toString();
-        app.path = query.value(2).toString();
-        app.arguments = query.value(3).toString();
-        app.iconPath = query.value(4).toString();
-        app.category = query.value(5).toString();
-        app.useCount = query.value(6).toInt();
-        app.isFavorite = query.value(7).toInt() == 1;
-        app.sortOrder = query.value(8).toInt();
+    QJsonArray appsArray = rootObject["apps"].toArray();
+    
+    for (const QJsonValue &val : appsArray) {
+        QJsonObject obj = val.toObject();
+        if (obj["id"].toInt() == id) {
+            app = jsonToApp(obj);
+            break;
+        }
     }
     
     return app;
@@ -199,69 +247,60 @@ AppInfo Database::getAppById(int id)
 
 bool Database::addCollection(const AppCollection &collection)
 {
-    QSqlQuery query;
-    QString appIdsStr;
-    for (int id : collection.appIds) {
-        appIdsStr += QString::number(id) + ",";
-    }
-    if (!appIdsStr.isEmpty()) {
-        appIdsStr.chop(1);
-    }
+    AppCollection newCol = collection;
+    newCol.id = nextCollectionId++;
     
-    query.prepare("INSERT INTO collections (name, app_ids) VALUES (?, ?)");
-    query.addBindValue(collection.name);
-    query.addBindValue(appIdsStr);
+    QJsonArray colsArray = rootObject["collections"].toArray();
+    colsArray.append(collectionToJson(newCol));
+    rootObject["collections"] = colsArray;
     
-    return query.exec();
+    return saveData();
 }
 
 bool Database::updateCollection(const AppCollection &collection)
 {
-    QSqlQuery query;
-    QString appIdsStr;
-    for (int id : collection.appIds) {
-        appIdsStr += QString::number(id) + ",";
-    }
-    if (!appIdsStr.isEmpty()) {
-        appIdsStr.chop(1);
+    QJsonArray colsArray = rootObject["collections"].toArray();
+    
+    for (int i = 0; i < colsArray.size(); ++i) {
+        QJsonObject obj = colsArray[i].toObject();
+        if (obj["id"].toInt() == collection.id) {
+            colsArray[i] = collectionToJson(collection);
+            break;
+        }
     }
     
-    query.prepare("UPDATE collections SET name=?, app_ids=? WHERE id=?");
-    query.addBindValue(collection.name);
-    query.addBindValue(appIdsStr);
-    query.addBindValue(collection.id);
+    rootObject["collections"] = colsArray;
     
-    return query.exec();
+    return saveData();
 }
 
 bool Database::deleteCollection(int id)
 {
-    QSqlQuery query;
-    query.prepare("DELETE FROM collections WHERE id=?");
-    query.addBindValue(id);
-    return query.exec();
+    QJsonArray colsArray = rootObject["collections"].toArray();
+    
+    for (int i = 0; i < colsArray.size(); ++i) {
+        QJsonObject obj = colsArray[i].toObject();
+        if (obj["id"].toInt() == id) {
+            colsArray.removeAt(i);
+            break;
+        }
+    }
+    
+    rootObject["collections"] = colsArray;
+    
+    return saveData();
 }
 
 QList<AppCollection> Database::getAllCollections()
 {
-    QList<AppCollection> collections;
-    QSqlQuery query("SELECT * FROM collections");
+    QList<AppCollection> cols;
+    QJsonArray colsArray = rootObject["collections"].toArray();
     
-    while (query.next()) {
-        AppCollection col;
-        col.id = query.value(0).toInt();
-        col.name = query.value(1).toString();
-        QString appIdsStr = query.value(2).toString();
-        if (!appIdsStr.isEmpty()) {
-            QStringList idList = appIdsStr.split(",");
-            for (QString idStr : idList) {
-                col.appIds.append(idStr.toInt());
-            }
-        }
-        collections.append(col);
+    for (const QJsonValue &val : colsArray) {
+        cols.append(jsonToCollection(val.toObject()));
     }
     
-    return collections;
+    return cols;
 }
 
 bool Database::setAutoStart(bool enabled)
@@ -275,11 +314,11 @@ bool Database::setAutoStart(bool enabled)
         settings.remove("OfficeAssistant");
     }
     
-    QSqlQuery query;
-    query.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
-    query.addBindValue("auto_start");
-    query.addBindValue(enabled ? "1" : "0");
-    query.exec();
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    settingsObj["auto_start"] = enabled ? "1" : "0";
+    rootObject["settings"] = settingsObj;
+    
+    saveData();
     
     return true;
 }

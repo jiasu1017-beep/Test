@@ -2,10 +2,11 @@
 #define DATABASE_H
 
 #include <QObject>
-#include <QSqlDatabase>
-#include <QSqlQuery>
-#include <QSqlError>
 #include <QVariant>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QFile>
 
 struct AppInfo {
     int id;
@@ -50,8 +51,17 @@ public:
     bool getAutoStart();
 
 private:
-    QSqlDatabase db;
-    bool createTables();
+    QString dataFilePath;
+    QJsonObject rootObject;
+    int nextAppId;
+    int nextCollectionId;
+    
+    bool loadData();
+    bool saveData();
+    QJsonObject appToJson(const AppInfo &app);
+    AppInfo jsonToApp(const QJsonObject &obj);
+    QJsonObject collectionToJson(const AppCollection &collection);
+    AppCollection jsonToCollection(const QJsonObject &obj);
 };
 
 #endif

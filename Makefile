@@ -251,7 +251,6 @@ Makefile: OfficeAssistant.pro D:/Qt/5.15.2/mingw81_64/mkspecs/win32-g++/qmake.co
 		OfficeAssistant.pro \
 		D:/Qt/5.15.2/mingw81_64/lib/Qt5Widgets.prl \
 		D:/Qt/5.15.2/mingw81_64/lib/Qt5Gui.prl \
-		D:/Qt/5.15.2/mingw81_64/lib/Qt5Sql.prl \
 		D:/Qt/5.15.2/mingw81_64/lib/Qt5Core.prl \
 		D:/Qt/5.15.2/mingw81_64/lib/qtmain.prl \
 		D:/Qt/5.15.2/mingw81_64/mkspecs/features/build_pass.prf \
@@ -438,7 +437,6 @@ D:/Qt/5.15.2/mingw81_64/mkspecs/features/lex.prf:
 OfficeAssistant.pro:
 D:/Qt/5.15.2/mingw81_64/lib/Qt5Widgets.prl:
 D:/Qt/5.15.2/mingw81_64/lib/Qt5Gui.prl:
-D:/Qt/5.15.2/mingw81_64/lib/Qt5Sql.prl:
 D:/Qt/5.15.2/mingw81_64/lib/Qt5Core.prl:
 D:/Qt/5.15.2/mingw81_64/lib/qtmain.prl:
 D:/Qt/5.15.2/mingw81_64/mkspecs/features/build_pass.prf:
