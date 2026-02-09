@@ -1,6 +1,13 @@
 #include "settingswidget.h"
 #include <QApplication>
 #include <QStyle>
+#include <QDialog>
+#include <QLabel>
+#include <QPushButton>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QFrame>
+#include <QPixmap>
 
 SettingsWidget::SettingsWidget(Database *db, QWidget *parent)
     : QWidget(parent), db(db)
@@ -90,17 +97,128 @@ void SettingsWidget::onAutoStartToggled(int state)
 
 void SettingsWidget::onAboutClicked()
 {
-    QMessageBox::about(this, "关于办公助手",
-                      "办公助手 v1.0\n\n"
-                      "一个功能完善的桌面办公助手应用\n\n"
-                      "主要功能:\n"
-                      "• 应用管理 - 管理和快速启动常用应用\n"
-                      "• 摸鱼模式 - 老板键和状态切换\n"
-                      "• 定时关机 - 定时关机/重启/休眠\n"
-                      "• 开机启动 - 设置开机自动运行\n\n"
-                      "技术栈:\n"
-                      "• Qt 5.15.2\n"
-                      "• SQLite 数据库\n"
-                      "• MinGW 编译器\n\n"
-                      "© 2024 办公助手");
+    QDialog aboutDialog(this);
+    aboutDialog.setWindowTitle("关于办公助手");
+    aboutDialog.setMinimumWidth(450);
+    
+    QVBoxLayout *mainLayout = new QVBoxLayout(&aboutDialog);
+    
+    QLabel *titleLabel = new QLabel("办公助手 v1.0", &aboutDialog);
+    titleLabel->setStyleSheet("font-size: 24px; font-weight: bold; color: #6200ea; padding: 10px;");
+    titleLabel->setAlignment(Qt::AlignCenter);
+    mainLayout->addWidget(titleLabel);
+    
+    QLabel *descLabel = new QLabel("一个功能完善的桌面办公助手应用", &aboutDialog);
+    descLabel->setStyleSheet("font-size: 14px; color: #666; padding: 5px;");
+    descLabel->setAlignment(Qt::AlignCenter);
+    mainLayout->addWidget(descLabel);
+    
+    QFrame *line1 = new QFrame(&aboutDialog);
+    line1->setFrameShape(QFrame::HLine);
+    line1->setFrameShadow(QFrame::Sunken);
+    line1->setStyleSheet("color: #e0e0e0;");
+    mainLayout->addWidget(line1);
+    
+    QLabel *featuresLabel = new QLabel("<b>主要功能:</b>", &aboutDialog);
+    featuresLabel->setStyleSheet("font-size: 14px; padding: 10px 5px 5px;");
+    mainLayout->addWidget(featuresLabel);
+    
+    QLabel *featuresContent = new QLabel(
+        "• 应用管理 - 管理和快速启动常用应用<br>"
+        "• 集合管理 - 自定义应用分组和批量启动<br>"
+        "• 摸鱼模式 - 老板键和状态切换<br>"
+        "• 定时关机 - 定时关机/重启/休眠<br>"
+        "• 开机启动 - 设置开机自动运行", &aboutDialog);
+    featuresContent->setStyleSheet("font-size: 13px; padding: 5px 20px; color: #555; line-height: 1.8;");
+    mainLayout->addWidget(featuresContent);
+    
+    QFrame *line2 = new QFrame(&aboutDialog);
+    line2->setFrameShape(QFrame::HLine);
+    line2->setFrameShadow(QFrame::Sunken);
+    line2->setStyleSheet("color: #e0e0e0;");
+    mainLayout->addWidget(line2);
+    
+    QWidget *promoWidget = new QWidget(&aboutDialog);
+    promoWidget->setStyleSheet(
+        "background-color: #fff8e1; "
+        "border: 2px solid #ffc107; "
+        "border-radius: 10px; "
+        "padding: 15px;"
+    );
+    QVBoxLayout *promoLayout = new QVBoxLayout(promoWidget);
+    
+    QLabel *promoTitle = new QLabel("📢 关注我们", &aboutDialog);
+    promoTitle->setStyleSheet("font-size: 18px; font-weight: bold; color: #e65100;");
+    promoTitle->setAlignment(Qt::AlignCenter);
+    promoLayout->addWidget(promoTitle);
+    
+    QLabel *promoDesc = new QLabel(
+        "欢迎关注微信公众号<br>"
+        "<span style='font-size: 20px; font-weight: bold; color: #d32f2f;'>梁柱墙笔记</span><br><br>"
+        "📚 获取更多办公效率技巧<br>"
+        "💡 学习实用软件开发知识<br>"
+        "🎁 不定期分享优质资源", &aboutDialog);
+    promoDesc->setStyleSheet("font-size: 14px; color: #5d4037; line-height: 1.8;");
+    promoDesc->setAlignment(Qt::AlignCenter);
+    promoDesc->setWordWrap(true);
+    promoLayout->addWidget(promoDesc);
+    
+    QLabel *qrLabel = new QLabel(&aboutDialog);
+    qrLabel->setAlignment(Qt::AlignCenter);
+    QPixmap qrPixmap(":/img/wechater.jpg");
+    if (!qrPixmap.isNull()) {
+        qrPixmap = qrPixmap.scaled(180, 180, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        qrLabel->setPixmap(qrPixmap);
+    } else {
+        qrLabel->setText("[二维码加载失败]");
+        qrLabel->setStyleSheet(
+            "background-color: #fff; "
+            "border: 2px dashed #ffc107; "
+            "border-radius: 8px; "
+            "padding: 30px; "
+            "color: #999; "
+            "font-size: 12px;"
+        );
+    }
+    qrLabel->setMinimumHeight(180);
+    promoLayout->addWidget(qrLabel);
+    
+    mainLayout->addWidget(promoWidget);
+    
+    QFrame *line3 = new QFrame(&aboutDialog);
+    line3->setFrameShape(QFrame::HLine);
+    line3->setFrameShadow(QFrame::Sunken);
+    line3->setStyleSheet("color: #e0e0e0;");
+    mainLayout->addWidget(line3);
+    
+    QLabel *techLabel = new QLabel("<b>技术栈:</b>", &aboutDialog);
+    techLabel->setStyleSheet("font-size: 14px; padding: 10px 5px 5px;");
+    mainLayout->addWidget(techLabel);
+    
+    QLabel *techContent = new QLabel(
+        "• Qt 5.15.2<br>"
+        "• JSON 数据存储<br>"
+        "• MinGW 8.1.0 编译器", &aboutDialog);
+    techContent->setStyleSheet("font-size: 13px; padding: 5px 20px; color: #555; line-height: 1.8;");
+    mainLayout->addWidget(techContent);
+    
+    QLabel *copyrightLabel = new QLabel("© 2024 办公助手. All rights reserved.", &aboutDialog);
+    copyrightLabel->setStyleSheet("color: #999; padding: 15px; font-size: 12px;");
+    copyrightLabel->setAlignment(Qt::AlignCenter);
+    mainLayout->addWidget(copyrightLabel);
+    
+    QPushButton *closeButton = new QPushButton("关闭", &aboutDialog);
+    closeButton->setStyleSheet(
+        "QPushButton { background-color: #6200ea; color: white; padding: 10px 30px; border-radius: 5px; font-weight: bold; } "
+        "QPushButton:hover { background-color: #7c43bd; }"
+    );
+    connect(closeButton, &QPushButton::clicked, &aboutDialog, &QDialog::accept);
+    
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(closeButton);
+    buttonLayout->addStretch();
+    mainLayout->addLayout(buttonLayout);
+    
+    aboutDialog.exec();
 }
