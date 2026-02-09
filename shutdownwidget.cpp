@@ -53,24 +53,72 @@ void ShutdownWidget::setupUI()
     timeRadio = new QRadioButton("指定时间", this);
     countdownRadio->setChecked(true);
     
-    QHBoxLayout *countdownLayout = new QHBoxLayout();
-    countdownLayout->addWidget(new QLabel("小时:", this));
+    QHBoxLayout *presetLayout = new QHBoxLayout();
+    presetLayout->addWidget(new QLabel("预设时间:", this));
+    
+    QPushButton *thirtyMinBtn = new QPushButton("30分钟", this);
+    QPushButton *oneHourBtn = new QPushButton("1小时", this);
+    QPushButton *twoHoursBtn = new QPushButton("2小时", this);
+    QPushButton *fourHoursBtn = new QPushButton("4小时", this);
+    QPushButton *sixHoursBtn = new QPushButton("6小时", this);
+    
+    presetLayout->addWidget(thirtyMinBtn);
+    presetLayout->addWidget(oneHourBtn);
+    presetLayout->addWidget(twoHoursBtn);
+    presetLayout->addWidget(fourHoursBtn);
+    presetLayout->addWidget(sixHoursBtn);
+    
+    QHBoxLayout *customLayout = new QHBoxLayout();
+    customLayout->addWidget(new QLabel("自定义:", this));
+    
     hourSpin = new QSpinBox(this);
     hourSpin->setRange(0, 23);
     hourSpin->setValue(0);
+    customLayout->addWidget(hourSpin);
+    customLayout->addWidget(new QLabel("小时", this));
     
-    countdownLayout->addWidget(hourSpin);
-    countdownLayout->addWidget(new QLabel("分钟:", this));
     minuteSpin = new QSpinBox(this);
     minuteSpin->setRange(0, 59);
     minuteSpin->setValue(30);
+    customLayout->addWidget(minuteSpin);
+    customLayout->addWidget(new QLabel("分钟", this));
     
-    countdownLayout->addWidget(minuteSpin);
-    countdownLayout->addWidget(new QLabel("秒:", this));
     secondSpin = new QSpinBox(this);
     secondSpin->setRange(0, 59);
     secondSpin->setValue(0);
-    countdownLayout->addWidget(secondSpin);
+    customLayout->addWidget(secondSpin);
+    customLayout->addWidget(new QLabel("秒", this));
+    
+    // Connect preset buttons
+    connect(thirtyMinBtn, &QPushButton::clicked, [this]() {
+        hourSpin->setValue(0);
+        minuteSpin->setValue(30);
+        secondSpin->setValue(0);
+    });
+    
+    connect(oneHourBtn, &QPushButton::clicked, [this]() {
+        hourSpin->setValue(1);
+        minuteSpin->setValue(0);
+        secondSpin->setValue(0);
+    });
+    
+    connect(twoHoursBtn, &QPushButton::clicked, [this]() {
+        hourSpin->setValue(2);
+        minuteSpin->setValue(0);
+        secondSpin->setValue(0);
+    });
+    
+    connect(fourHoursBtn, &QPushButton::clicked, [this]() {
+        hourSpin->setValue(4);
+        minuteSpin->setValue(0);
+        secondSpin->setValue(0);
+    });
+    
+    connect(sixHoursBtn, &QPushButton::clicked, [this]() {
+        hourSpin->setValue(6);
+        minuteSpin->setValue(0);
+        secondSpin->setValue(0);
+    });
     
     QHBoxLayout *timeEditLayout = new QHBoxLayout();
     timeEditLayout->addWidget(new QLabel("时间:", this));
@@ -79,7 +127,8 @@ void ShutdownWidget::setupUI()
     timeEditLayout->addWidget(timeEdit);
     
     timeLayout->addWidget(countdownRadio);
-    timeLayout->addLayout(countdownLayout);
+    timeLayout->addLayout(presetLayout);
+    timeLayout->addLayout(customLayout);
     timeLayout->addWidget(timeRadio);
     timeLayout->addLayout(timeEditLayout);
     timeGroup->setLayout(timeLayout);
@@ -196,25 +245,19 @@ void ShutdownWidget::onTimerTick()
 
 void ShutdownWidget::executeAction(int action)
 {
-    QString actionText = "关机";
     QString command;
     
     switch (action) {
-        case 0:
-            actionText = "关机";
+        case 0: // 关机
             command = "shutdown /s /t 0";
             break;
-        case 1:
-            actionText = "重启";
+        case 1: // 重启
             command = "shutdown /r /t 0";
             break;
-        case 2:
-            actionText = "休眠";
+        case 2: // 休眠
             command = "rundll32.exe powrprof.dll,SetSuspendState 0,1,0";
             break;
     }
-    
-    QMessageBox::information(this, "执行", QString("即将执行%1操作！").arg(actionText));
     
     QProcess process;
     process.setProgram("cmd.exe");
@@ -224,33 +267,24 @@ void ShutdownWidget::executeAction(int action)
 
 void ShutdownWidget::onShutdownNow()
 {
-    auto reply = QMessageBox::question(this, "确认", "确定要立即关机吗？", QMessageBox::Yes | QMessageBox::No);
-    if (reply == QMessageBox::Yes) {
-        QProcess process;
-        process.setProgram("cmd.exe");
-        process.setArguments(QStringList() << "/c" << "shutdown /s /t 0");
-        process.startDetached();
-    }
+    QProcess process;
+    process.setProgram("cmd.exe");
+    process.setArguments(QStringList() << "/c" << "shutdown /s /t 0");
+    process.startDetached();
 }
 
 void ShutdownWidget::onRestartNow()
 {
-    auto reply = QMessageBox::question(this, "确认", "确定要立即重启吗？", QMessageBox::Yes | QMessageBox::No);
-    if (reply == QMessageBox::Yes) {
-        QProcess process;
-        process.setProgram("cmd.exe");
-        process.setArguments(QStringList() << "/c" << "shutdown /r /t 0");
-        process.startDetached();
-    }
+    QProcess process;
+    process.setProgram("cmd.exe");
+    process.setArguments(QStringList() << "/c" << "shutdown /r /t 0");
+    process.startDetached();
 }
 
 void ShutdownWidget::onSleepNow()
 {
-    auto reply = QMessageBox::question(this, "确认", "确定要立即休眠吗？", QMessageBox::Yes | QMessageBox::No);
-    if (reply == QMessageBox::Yes) {
-        QProcess process;
-        process.setProgram("cmd.exe");
-        process.setArguments(QStringList() << "/c" << "rundll32.exe powrprof.dll,SetSuspendState 0,1,0");
-        process.startDetached();
-    }
+    QProcess process;
+    process.setProgram("cmd.exe");
+    process.setArguments(QStringList() << "/c" << "rundll32.exe powrprof.dll,SetSuspendState 0,1,0");
+    process.startDetached();
 }
