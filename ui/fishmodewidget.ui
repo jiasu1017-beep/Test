@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>FishModeWidget</class>
+ <widget class="QWidget" name="FishModeWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>600</width>
+    <height>500</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <item>
+    <widget class="QLabel" name="titleLabel">
+     <property name="styleSheet">
+      <string notr="true">font-size: 20px; font-weight: bold; padding: 10px;</string>
+     </property>
+     <property name="text">
+      <string>摸鱼模式</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="statusLabel">
+     <property name="styleSheet">
+      <string notr="true">font-size: 14px; padding: 10px; background-color: #e8f5e9; border-radius: 5px;</string>
+     </property>
+     <property name="text">
+      <string>当前状态: 工作模式</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="hintLabel">
+     <property name="styleSheet">
+      <string notr="true">color: #666; padding: 5px;</string>
+     </property>
+     <property name="text">
+      <string>快捷键: F12 - 老板键</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QVBoxLayout" name="buttonLayout">
+     <item>
+      <widget class="QPushButton" name="bossKeyButton">
+       <property name="text">
+        <string>老板键 (F12)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="toggleButton">
+       <property name="text">
+        <string>切换摸鱼/工作模式</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="fakeWindowButton">
+       <property name="text">
+        <string>打开伪装窗口</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item>
+    <widget class="QLabel" name="infoLabel">
+     <property name="styleSheet">
+      <string notr="true">color: #666; padding: 10px; background-color: #f5f5f5; border-radius: 5px;</string>
+     </property>
+     <property name="text">
+      <string>功能说明:
+• 老板键(F12): 快速隐藏所有窗口
+• 摸鱼模式: 切换工作/休闲状态
+• 伪装窗口: 打开系统工具伪装工作状态</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

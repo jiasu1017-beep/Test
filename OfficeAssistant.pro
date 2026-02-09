@@ -20,4 +20,10 @@ HEADERS  += mainwindow.h \
             shutdownwidget.h \
             settingswidget.h
 
+FORMS += ui/appmanagerwidget.ui \
+         ui/fishmodewidget.ui \
+         ui/shutdownwidget.ui \
+         ui/settingswidget.ui \
+         ui/mainwindow.ui
+
 RESOURCES += resources.qrc

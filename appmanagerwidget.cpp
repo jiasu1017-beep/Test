@@ -1,4 +1,5 @@
 #include "appmanagerwidget.h"
+#include "ui_appmanagerwidget.h"
 #include <QApplication>
 #include <QStyle>
 #include <QFileInfo>
@@ -83,129 +84,91 @@ QSize AppIconDelegate::sizeHint(const QStyleOptionViewItem &option, const QModel
 }
 
 AppManagerWidget::AppManagerWidget(Database *db, QWidget *parent)
-    : QWidget(parent), db(db)
+    : QWidget(parent), db(db), ui(new Ui::AppManagerWidget)
 {
+    ui->setupUi(this);
+    
     iconDelegate = new AppIconDelegate(this);
     appModel = new QStandardItemModel(this);
+    ui->appListView->setModel(appModel);
+    ui->appListView->setItemDelegate(iconDelegate);
+    
     setupUI();
     refreshAppList();
 }
 
+AppManagerWidget::~AppManagerWidget()
+{
+    delete ui;
+}
+
 void AppManagerWidget::setupUI()
 {
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    ui->addButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_FileDialogNewFolder));
+    ui->addButton->setStyleSheet("QPushButton { background-color: #4caf50; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
+                                "QPushButton:hover { background-color: #43a047; }");
+    connect(ui->addButton, &QPushButton::clicked, this, &AppManagerWidget::onAddApp);
     
-    QLabel *titleLabel = new QLabel("应用管理", this);
-    titleLabel->setStyleSheet("font-size: 22px; font-weight: bold; padding: 10px; color: #1976d2;");
-    mainLayout->addWidget(titleLabel);
+    ui->deleteButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_TrashIcon));
+    ui->deleteButton->setStyleSheet("QPushButton { background-color: #f44336; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
+                                  "QPushButton:hover { background-color: #d32f2f; }");
+    connect(ui->deleteButton, &QPushButton::clicked, this, &AppManagerWidget::onDeleteApp);
     
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    ui->launchButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_MediaPlay));
+    ui->launchButton->setStyleSheet("QPushButton { background-color: #2196f3; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
+                                  "QPushButton:hover { background-color: #1976d2; }");
+    connect(ui->launchButton, &QPushButton::clicked, this, &AppManagerWidget::onLaunchApp);
     
-    addButton = new QPushButton("添加应用", this);
-    addButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_FileDialogNewFolder));
-    addButton->setStyleSheet("QPushButton { background-color: #4caf50; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
-                            "QPushButton:hover { background-color: #43a047; }");
-    connect(addButton, &QPushButton::clicked, this, &AppManagerWidget::onAddApp);
+    ui->refreshButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_BrowserReload));
+    ui->refreshButton->setStyleSheet("QPushButton { background-color: #ff9800; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
+                                   "QPushButton:hover { background-color: #fb8c00; }");
+    connect(ui->refreshButton, &QPushButton::clicked, this, &AppManagerWidget::refreshAppList);
     
-    deleteButton = new QPushButton("删除应用", this);
-    deleteButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_TrashIcon));
-    deleteButton->setStyleSheet("QPushButton { background-color: #f44336; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
-                               "QPushButton:hover { background-color: #d32f2f; }");
-    connect(deleteButton, &QPushButton::clicked, this, &AppManagerWidget::onDeleteApp);
+    ui->moveUpButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_ArrowUp));
+    ui->moveUpButton->setStyleSheet("QPushButton { background-color: #9c27b0; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
+                                  "QPushButton:hover { background-color: #7b1fa2; }");
+    connect(ui->moveUpButton, &QPushButton::clicked, this, &AppManagerWidget::onMoveUp);
     
-    launchButton = new QPushButton("启动应用", this);
-    launchButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_MediaPlay));
-    launchButton->setStyleSheet("QPushButton { background-color: #2196f3; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
-                               "QPushButton:hover { background-color: #1976d2; }");
-    connect(launchButton, &QPushButton::clicked, this, &AppManagerWidget::onLaunchApp);
+    ui->moveDownButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_ArrowDown));
+    ui->moveDownButton->setStyleSheet("QPushButton { background-color: #9c27b0; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
+                                   "QPushButton:hover { background-color: #7b1fa2; }");
+    connect(ui->moveDownButton, &QPushButton::clicked, this, &AppManagerWidget::onMoveDown);
     
-    refreshButton = new QPushButton("刷新", this);
-    refreshButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_BrowserReload));
-    refreshButton->setStyleSheet("QPushButton { background-color: #ff9800; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
-                                "QPushButton:hover { background-color: #fb8c00; }");
-    connect(refreshButton, &QPushButton::clicked, this, &AppManagerWidget::refreshAppList);
+    ui->iconViewButton->setStyleSheet("QPushButton:checked { background-color: #1976d2; color: white; } "
+                                     "QPushButton { background-color: #e0e0e0; color: #333; }");
+    connect(ui->iconViewButton, &QPushButton::clicked, this, &AppManagerWidget::onIconViewMode);
     
-    buttonLayout->addWidget(addButton);
-    buttonLayout->addWidget(deleteButton);
-    buttonLayout->addWidget(launchButton);
-    buttonLayout->addWidget(refreshButton);
+    ui->listViewButton->setStyleSheet("QPushButton:checked { background-color: #1976d2; color: white; } "
+                                    "QPushButton { background-color: #e0e0e0; color: #333; }");
+    connect(ui->listViewButton, &QPushButton::clicked, this, &AppManagerWidget::onListViewMode);
     
-    moveUpButton = new QPushButton("上移", this);
-    moveUpButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_ArrowUp));
-    moveUpButton->setStyleSheet("QPushButton { background-color: #9c27b0; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
-                               "QPushButton:hover { background-color: #7b1fa2; }");
-    connect(moveUpButton, &QPushButton::clicked, this, &AppManagerWidget::onMoveUp);
-    
-    moveDownButton = new QPushButton("下移", this);
-    moveDownButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_ArrowDown));
-    moveDownButton->setStyleSheet("QPushButton { background-color: #9c27b0; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
-                                "QPushButton:hover { background-color: #7b1fa2; }");
-    connect(moveDownButton, &QPushButton::clicked, this, &AppManagerWidget::onMoveDown);
-    
-    buttonLayout->addWidget(moveUpButton);
-    buttonLayout->addWidget(moveDownButton);
-    buttonLayout->addStretch();
-    
-    iconViewButton = new QPushButton("大图标", this);
-    iconViewButton->setCheckable(true);
-    iconViewButton->setChecked(true);
-    iconViewButton->setStyleSheet("QPushButton:checked { background-color: #1976d2; color: white; } "
-                                  "QPushButton { background-color: #e0e0e0; color: #333; }");
-    connect(iconViewButton, &QPushButton::clicked, this, &AppManagerWidget::onIconViewMode);
-    
-    listViewButton = new QPushButton("列表", this);
-    listViewButton->setCheckable(true);
-    listViewButton->setStyleSheet("QPushButton:checked { background-color: #1976d2; color: white; } "
-                                 "QPushButton { background-color: #e0e0e0; color: #333; }");
-    connect(listViewButton, &QPushButton::clicked, this, &AppManagerWidget::onListViewMode);
-    
-    buttonLayout->addWidget(iconViewButton);
-    buttonLayout->addWidget(listViewButton);
-    
-    mainLayout->addLayout(buttonLayout);
-    
-    appListView = new QListView(this);
-    appListView->setViewMode(QListView::IconMode);
-    appListView->setIconSize(QSize(72, 72));
-    appListView->setResizeMode(QListView::Adjust);
-    appListView->setSpacing(15);
-    appListView->setSelectionMode(QAbstractItemView::SingleSelection);
-    appListView->setDragDropMode(QAbstractItemView::NoDragDrop);
-    appListView->setMovement(QListView::Static);
-    appListView->setItemDelegate(iconDelegate);
-    appListView->setContextMenuPolicy(Qt::CustomContextMenu);
-    appListView->setStyleSheet("QListView { background-color: #fafafa; border: none; }");
-    appListView->setModel(appModel);
-    
-    connect(appListView, &QListView::customContextMenuRequested, this, &AppManagerWidget::onShowContextMenu);
-    connect(appListView, &QListView::doubleClicked, this, &AppManagerWidget::onAppItemDoubleClicked);
-    
-    mainLayout->addWidget(appListView);
+    connect(ui->appListView, &QListView::customContextMenuRequested, this, &AppManagerWidget::onShowContextMenu);
+    connect(ui->appListView, &QListView::doubleClicked, this, &AppManagerWidget::onAppItemDoubleClicked);
 }
 
 void AppManagerWidget::onIconViewMode()
 {
-    appListView->setViewMode(QListView::IconMode);
-    appListView->setItemDelegate(iconDelegate);
-    appListView->setIconSize(QSize(72, 72));
-    appListView->setSpacing(15);
-    iconViewButton->setChecked(true);
-    listViewButton->setChecked(false);
+    ui->appListView->setViewMode(QListView::IconMode);
+    ui->appListView->setItemDelegate(iconDelegate);
+    ui->appListView->setIconSize(QSize(72, 72));
+    ui->appListView->setSpacing(15);
+    ui->iconViewButton->setChecked(true);
+    ui->listViewButton->setChecked(false);
 }
 
 void AppManagerWidget::onListViewMode()
 {
-    appListView->setViewMode(QListView::ListMode);
-    appListView->setItemDelegate(nullptr);
-    appListView->setIconSize(QSize(32, 32));
-    appListView->setSpacing(5);
-    iconViewButton->setChecked(false);
-    listViewButton->setChecked(true);
+    ui->appListView->setViewMode(QListView::ListMode);
+    ui->appListView->setItemDelegate(nullptr);
+    ui->appListView->setIconSize(QSize(32, 32));
+    ui->appListView->setSpacing(5);
+    ui->iconViewButton->setChecked(false);
+    ui->listViewButton->setChecked(true);
 }
 
 void AppManagerWidget::onMoveUp()
 {
-    QModelIndex current = appListView->currentIndex();
+    QModelIndex current = ui->appListView->currentIndex();
     if (!current.isValid() || current.row() <= 0) return;
     
     int row = current.row();
@@ -225,13 +188,13 @@ void AppManagerWidget::onMoveUp()
         refreshAppList();
         
         QModelIndex newIndex = appModel->index(row - 1, 0);
-        appListView->setCurrentIndex(newIndex);
+        ui->appListView->setCurrentIndex(newIndex);
     }
 }
 
 void AppManagerWidget::onMoveDown()
 {
-    QModelIndex current = appListView->currentIndex();
+    QModelIndex current = ui->appListView->currentIndex();
     if (!current.isValid()) return;
     
     int row = current.row();
@@ -251,7 +214,7 @@ void AppManagerWidget::onMoveDown()
         refreshAppList();
         
         QModelIndex newIndex = appModel->index(row + 1, 0);
-        appListView->setCurrentIndex(newIndex);
+        ui->appListView->setCurrentIndex(newIndex);
     }
 }
 
@@ -335,7 +298,7 @@ void AppManagerWidget::onAddApp()
 
 void AppManagerWidget::onDeleteApp()
 {
-    QModelIndexList selected = appListView->selectionModel()->selectedIndexes();
+    QModelIndexList selected = ui->appListView->selectionModel()->selectedIndexes();
     if (selected.isEmpty()) {
         QMessageBox::warning(this, "提示", "请先选择要删除的应用");
         return;
@@ -358,7 +321,7 @@ void AppManagerWidget::onDeleteApp()
 
 void AppManagerWidget::onLaunchApp()
 {
-    QModelIndexList selected = appListView->selectionModel()->selectedIndexes();
+    QModelIndexList selected = ui->appListView->selectionModel()->selectedIndexes();
     if (selected.isEmpty()) {
         QMessageBox::warning(this, "提示", "请先选择要启动的应用");
         return;
@@ -392,7 +355,7 @@ void AppManagerWidget::onAppItemDoubleClicked(const QModelIndex &index)
 
 void AppManagerWidget::onShowContextMenu(const QPoint &pos)
 {
-    QModelIndex index = appListView->indexAt(pos);
+    QModelIndex index = ui->appListView->indexAt(pos);
     if (!index.isValid()) return;
     
     QMenu menu(this);
@@ -404,7 +367,7 @@ void AppManagerWidget::onShowContextMenu(const QPoint &pos)
     menu.addSeparator();
     QAction *launchAction = menu.addAction("启动");
     
-    QAction *selected = menu.exec(appListView->mapToGlobal(pos));
+    QAction *selected = menu.exec(ui->appListView->mapToGlobal(pos));
     
     if (selected == renameAction) {
         onRenameApp();
@@ -421,7 +384,7 @@ void AppManagerWidget::onShowContextMenu(const QPoint &pos)
 
 void AppManagerWidget::onRenameApp()
 {
-    QModelIndex index = appListView->currentIndex();
+    QModelIndex index = ui->appListView->currentIndex();
     if (!index.isValid()) return;
     
     QStandardItem *item = appModel->itemFromIndex(index);
@@ -442,7 +405,7 @@ void AppManagerWidget::onRenameApp()
 
 void AppManagerWidget::onChangeIcon()
 {
-    QModelIndex index = appListView->currentIndex();
+    QModelIndex index = ui->appListView->currentIndex();
     if (!index.isValid()) return;
     
     QStandardItem *item = appModel->itemFromIndex(index);
@@ -463,7 +426,7 @@ void AppManagerWidget::onChangeIcon()
 
 void AppManagerWidget::onChangePath()
 {
-    QModelIndex index = appListView->currentIndex();
+    QModelIndex index = ui->appListView->currentIndex();
     if (!index.isValid()) return;
     
     QStandardItem *item = appModel->itemFromIndex(index);
@@ -484,7 +447,7 @@ void AppManagerWidget::onChangePath()
 
 void AppManagerWidget::onChangeArguments()
 {
-    QModelIndex index = appListView->currentIndex();
+    QModelIndex index = ui->appListView->currentIndex();
     if (!index.isValid()) return;
     
     QStandardItem *item = appModel->itemFromIndex(index);

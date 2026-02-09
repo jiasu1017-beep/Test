@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SettingsWidget</class>
+ <widget class="QWidget" name="SettingsWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>600</width>
+    <height>400</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <item>
+    <widget class="QLabel" name="titleLabel">
+     <property name="text">
+      <string>设置</string>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 20px; font-weight: bold; padding: 10px;</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="startupGroup">
+     <property name="title">
+      <string>开机启动</string>
+     </property>
+     <layout class="QVBoxLayout" name="startupLayout">
+      <item>
+       <widget class="QCheckBox" name="autoStartCheck">
+        <property name="text">
+         <string>开机自动启动</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="hintLabel">
+        <property name="text">
+         <string>勾选后，应用将随系统启动而自动运行</string>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">color: #666; padding: 5px;</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="statusLabel">
+     <property name="text">
+      <string>状态: 就绪</string>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 14px; padding: 10px; background-color: #e8f5e9; border-radius: 5px;</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="aboutGroup">
+     <property name="title">
+      <string>关于</string>
+     </property>
+     <layout class="QVBoxLayout" name="aboutLayout">
+      <item>
+       <widget class="QLabel" name="aboutLabel">
+        <property name="text">
+         <string>办公助手 v1.0
+一款简单易用的桌面办公助手应用
+
+功能特点：
+• 应用管理 - 快速启动常用应用
+• 摸鱼模式 - 快速隐藏和伪装
+• 定时关机 - 灵活的定时控制</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">padding: 10px;</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="aboutButton">
+        <property name="text">
+         <string>关于本软件</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ShutdownWidget</class>
+ <widget class="QWidget" name="ShutdownWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>700</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <item>
+    <widget class="QLabel" name="titleLabel">
+     <property name="text">
+      <string>定时关机</string>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 20px; font-weight: bold; padding: 10px;</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="actionGroup">
+     <property name="title">
+      <string>选择操作</string>
+     </property>
+     <layout class="QHBoxLayout" name="actionLayout">
+      <item>
+       <widget class="QRadioButton" name="shutdownRadio">
+        <property name="text">
+         <string>关机</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="restartRadio">
+        <property name="text">
+         <string>重启</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="sleepRadio">
+        <property name="text">
+         <string>睡眠</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="timeGroup">
+     <property name="title">
+      <string>定时方式</string>
+     </property>
+     <layout class="QVBoxLayout" name="timeLayout">
+      <item>
+       <widget class="QRadioButton" name="countdownRadio">
+        <property name="text">
+         <string>倒计时</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="countdownLayout">
+        <item>
+         <widget class="QLabel" name="hourLabel">
+          <property name="text">
+           <string>时:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="hourSpin">
+          <property name="maximum">
+           <number>99</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="minuteLabel">
+          <property name="text">
+           <string>分:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="minuteSpin">
+          <property name="maximum">
+           <number>59</number>
+          </property>
+          <property name="value">
+           <number>10</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="secondLabel">
+          <property name="text">
+           <string>秒:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="secondSpin">
+          <property name="maximum">
+           <number>59</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="timeRadio">
+        <property name="text">
+         <string>指定时间</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QTimeEdit" name="timeEdit">
+        <property name="displayFormat">
+         <string>HH:mm:ss</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="statusLabel">
+     <property name="text">
+      <string>状态: 等待操作</string>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 14px; padding: 10px; background-color: #e3f2fd; border-radius: 5px;</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="countdownLabel">
+     <property name="text">
+      <string>倒计时: --:--:--</string>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 24px; font-weight: bold; padding: 10px; text-align: center;</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttonLayout">
+     <item>
+      <widget class="QPushButton" name="startButton">
+       <property name="text">
+        <string>开始</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="cancelButton">
+       <property name="text">
+        <string>取消</string>
+       </property>
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="instantGroup">
+     <property name="title">
+      <string>立即执行</string>
+     </property>
+     <layout class="QHBoxLayout" name="instantLayout">
+      <item>
+       <widget class="QPushButton" name="shutdownNowButton">
+        <property name="text">
+         <string>立即关机</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="restartNowButton">
+        <property name="text">
+         <string>立即重启</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="sleepNowButton">
+        <property name="text">
+         <string>立即睡眠</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

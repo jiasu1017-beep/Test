@@ -21,6 +21,10 @@
 #include <QStandardItemModel>
 #include "database.h"
 
+QT_BEGIN_NAMESPACE
+namespace Ui { class AppManagerWidget; }
+QT_END_NAMESPACE
+
 class AppIconDelegate : public QStyledItemDelegate
 {
 public:
@@ -35,6 +39,7 @@ class AppManagerWidget : public QWidget
     Q_OBJECT
 public:
     explicit AppManagerWidget(Database *db, QWidget *parent = nullptr);
+    ~AppManagerWidget();
 
 private slots:
     void onAddApp();
@@ -59,16 +64,8 @@ private:
     void saveAppOrder();
     
     Database *db;
-    QListView *appListView;
+    Ui::AppManagerWidget *ui;
     QStandardItemModel *appModel;
-    QPushButton *addButton;
-    QPushButton *deleteButton;
-    QPushButton *launchButton;
-    QPushButton *refreshButton;
-    QPushButton *moveUpButton;
-    QPushButton *moveDownButton;
-    QPushButton *iconViewButton;
-    QPushButton *listViewButton;
     QFileIconProvider iconProvider;
     AppIconDelegate *iconDelegate;
 };
