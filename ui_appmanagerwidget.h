@@ -127,7 +127,7 @@ public:
     void retranslateUi(QWidget *AppManagerWidget)
     {
         AppManagerWidget->setWindowTitle(QCoreApplication::translate("AppManagerWidget", "Form", nullptr));
-        titleLabel->setText(QCoreApplication::translate("AppManagerWidget", "<html><head/><body><p>\360\237\232\200 \345\272\224\347\224\250\347\256\241\347\220\206</p></body></html>", nullptr));
+        titleLabel->setText(QCoreApplication::translate("AppManagerWidget", "<html><head/><body><p>\345\272\224\347\224\250\347\256\241\347\220\206</p></body></html>", nullptr));
         addButton->setText(QCoreApplication::translate("AppManagerWidget", "\346\267\273\345\212\240\345\272\224\347\224\250", nullptr));
         deleteButton->setText(QCoreApplication::translate("AppManagerWidget", "\345\210\240\351\231\244\345\272\224\347\224\250", nullptr));
         launchButton->setText(QCoreApplication::translate("AppManagerWidget", "\345\220\257\345\212\250\345\272\224\347\224\250", nullptr));

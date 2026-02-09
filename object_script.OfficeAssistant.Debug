@@ -5,6 +5,9 @@ debug/appmanagerwidget.o
 debug/fishmodewidget.o
 debug/shutdownwidget.o
 debug/settingswidget.o
+debug/collectionmanagerwidget.o
+debug/webscraper.o
+debug/webscraperdialog.o
 debug/qrc_resources.o
 debug/moc_mainwindow.o
 debug/moc_database.o
@@ -12,3 +15,6 @@ debug/moc_appmanagerwidget.o
 debug/moc_fishmodewidget.o
 debug/moc_shutdownwidget.o
 debug/moc_settingswidget.o
+debug/moc_collectionmanagerwidget.o
+debug/moc_webscraper.o
+debug/moc_webscraperdialog.o

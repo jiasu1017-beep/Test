@@ -225,6 +225,7 @@ Makefile: OfficeAssistant.pro D:/Qt/5.15.2/mingw81_64/mkspecs/win32-g++/qmake.co
 		D:/Qt/5.15.2/mingw81_64/mkspecs/features/qt_config.prf \
 		D:/Qt/5.15.2/mingw81_64/mkspecs/win32-g++/qmake.conf \
 		D:/Qt/5.15.2/mingw81_64/mkspecs/features/spec_post.prf \
+		.qmake.stash \
 		D:/Qt/5.15.2/mingw81_64/mkspecs/features/exclusive_builds.prf \
 		D:/Qt/5.15.2/mingw81_64/mkspecs/features/toolchain.prf \
 		D:/Qt/5.15.2/mingw81_64/mkspecs/features/default_pre.prf \
@@ -250,9 +251,9 @@ Makefile: OfficeAssistant.pro D:/Qt/5.15.2/mingw81_64/mkspecs/win32-g++/qmake.co
 		OfficeAssistant.pro \
 		D:/Qt/5.15.2/mingw81_64/lib/Qt5Widgets.prl \
 		D:/Qt/5.15.2/mingw81_64/lib/Qt5Gui.prl \
+		D:/Qt/5.15.2/mingw81_64/lib/Qt5Network.prl \
 		D:/Qt/5.15.2/mingw81_64/lib/Qt5Core.prl \
 		D:/Qt/5.15.2/mingw81_64/lib/qtmain.prl \
-		.qmake.stash \
 		D:/Qt/5.15.2/mingw81_64/mkspecs/features/build_pass.prf \
 		resources.qrc
 	$(QMAKE) -o Makefile OfficeAssistant.pro
@@ -411,6 +412,7 @@ D:/Qt/5.15.2/mingw81_64/mkspecs/features/qt_functions.prf:
 D:/Qt/5.15.2/mingw81_64/mkspecs/features/qt_config.prf:
 D:/Qt/5.15.2/mingw81_64/mkspecs/win32-g++/qmake.conf:
 D:/Qt/5.15.2/mingw81_64/mkspecs/features/spec_post.prf:
+.qmake.stash:
 D:/Qt/5.15.2/mingw81_64/mkspecs/features/exclusive_builds.prf:
 D:/Qt/5.15.2/mingw81_64/mkspecs/features/toolchain.prf:
 D:/Qt/5.15.2/mingw81_64/mkspecs/features/default_pre.prf:
@@ -436,9 +438,9 @@ D:/Qt/5.15.2/mingw81_64/mkspecs/features/lex.prf:
 OfficeAssistant.pro:
 D:/Qt/5.15.2/mingw81_64/lib/Qt5Widgets.prl:
 D:/Qt/5.15.2/mingw81_64/lib/Qt5Gui.prl:
+D:/Qt/5.15.2/mingw81_64/lib/Qt5Network.prl:
 D:/Qt/5.15.2/mingw81_64/lib/Qt5Core.prl:
 D:/Qt/5.15.2/mingw81_64/lib/qtmain.prl:
-.qmake.stash:
 D:/Qt/5.15.2/mingw81_64/mkspecs/features/build_pass.prf:
 resources.qrc:
 qmake: FORCE

@@ -12,7 +12,8 @@ SOURCES += main.cpp \
            fishmodewidget.cpp \
            shutdownwidget.cpp \
            settingswidget.cpp \
-           collectionmanagerwidget.cpp
+           collectionmanagerwidget.cpp \
+           recommendedappswidget.cpp
 
 HEADERS  += mainwindow.h \
             database.h \
@@ -20,7 +21,8 @@ HEADERS  += mainwindow.h \
             fishmodewidget.h \
             shutdownwidget.h \
             settingswidget.h \
-            collectionmanagerwidget.h
+            collectionmanagerwidget.h \
+            recommendedappswidget.h
 
 FORMS += ui/appmanagerwidget.ui \
          ui/fishmodewidget.ui \
