@@ -415,7 +415,8 @@ void AppManagerWidget::onChangeIcon()
     AppInfo app = db->getAppById(appId);
     if (app.id <= 0) return;
     
-    QString iconPath = QFileDialog::getOpenFileName(this, "选择图标", "", 
+    QString defaultPath = app.iconPath;
+    QString iconPath = QFileDialog::getOpenFileName(this, "选择图标", defaultPath, 
                                                    "图标文件 (*.ico *.png *.jpg *.bmp);;所有文件 (*.*)");
     if (!iconPath.isEmpty()) {
         app.iconPath = iconPath;
@@ -436,7 +437,8 @@ void AppManagerWidget::onChangePath()
     AppInfo app = db->getAppById(appId);
     if (app.id <= 0) return;
     
-    QString newPath = QFileDialog::getOpenFileName(this, "选择应用程序", "", 
+    QString defaultPath = app.path;
+    QString newPath = QFileDialog::getOpenFileName(this, "选择应用程序", defaultPath, 
                                                     "可执行文件 (*.exe *.bat *.cmd);;所有文件 (*.*)");
     if (!newPath.isEmpty()) {
         app.path = newPath;
