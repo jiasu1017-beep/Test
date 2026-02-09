@@ -43,6 +43,8 @@ private slots:
     void onShowContextMenu(const QPoint &pos);
     void onRenameApp();
     void onChangeIcon();
+    void onChangePath();
+    void onChangeArguments();
     void refreshAppList();
     void onIconViewMode();
     void onListViewMode();

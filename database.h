@@ -11,10 +11,12 @@ struct AppInfo {
     int id;
     QString name;
     QString path;
+    QString arguments;
     QString iconPath;
     QString category;
     int useCount;
     bool isFavorite;
+    int sortOrder;
 };
 
 struct AppCollection {

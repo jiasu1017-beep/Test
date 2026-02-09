@@ -42,12 +42,32 @@ bool Database::createTables()
                    "id INTEGER PRIMARY KEY AUTOINCREMENT,"
                    "name TEXT NOT NULL,"
                    "path TEXT NOT NULL,"
+                   "arguments TEXT,"
                    "icon_path TEXT,"
                    "category TEXT,"
                    "use_count INTEGER DEFAULT 0,"
-                   "is_favorite INTEGER DEFAULT 0)")) {
+                   "is_favorite INTEGER DEFAULT 0,"
+                   "sort_order INTEGER DEFAULT 0)")) {
         qWarning("Error creating apps table: %s", qPrintable(query.lastError().text()));
         return false;
+    }
+    
+    query.exec("PRAGMA table_info(apps)");
+    bool hasArgumentsColumn = false;
+    bool hasSortOrderColumn = false;
+    while (query.next()) {
+        if (query.value(1).toString() == "arguments") {
+            hasArgumentsColumn = true;
+        }
+        if (query.value(1).toString() == "sort_order") {
+            hasSortOrderColumn = true;
+        }
+    }
+    if (!hasArgumentsColumn) {
+        query.exec("ALTER TABLE apps ADD COLUMN arguments TEXT");
+    }
+    if (!hasSortOrderColumn) {
+        query.exec("ALTER TABLE apps ADD COLUMN sort_order INTEGER DEFAULT 0");
     }
     
     if (!query.exec("CREATE TABLE IF NOT EXISTS collections ("
@@ -71,14 +91,16 @@ bool Database::createTables()
 bool Database::addApp(const AppInfo &app)
 {
     QSqlQuery query;
-    query.prepare("INSERT INTO apps (name, path, icon_path, category, use_count, is_favorite) "
-                  "VALUES (?, ?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO apps (name, path, arguments, icon_path, category, use_count, is_favorite, sort_order) "
+                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
     query.addBindValue(app.name);
     query.addBindValue(app.path);
+    query.addBindValue(app.arguments);
     query.addBindValue(app.iconPath);
     query.addBindValue(app.category);
     query.addBindValue(app.useCount);
     query.addBindValue(app.isFavorite ? 1 : 0);
+    query.addBindValue(app.sortOrder);
     
     return query.exec();
 }
@@ -86,14 +108,16 @@ bool Database::addApp(const AppInfo &app)
 bool Database::updateApp(const AppInfo &app)
 {
     QSqlQuery query;
-    query.prepare("UPDATE apps SET name=?, path=?, icon_path=?, category=?, use_count=?, is_favorite=? "
+    query.prepare("UPDATE apps SET name=?, path=?, arguments=?, icon_path=?, category=?, use_count=?, is_favorite=?, sort_order=? "
                   "WHERE id=?");
     query.addBindValue(app.name);
     query.addBindValue(app.path);
+    query.addBindValue(app.arguments);
     query.addBindValue(app.iconPath);
     query.addBindValue(app.category);
     query.addBindValue(app.useCount);
     query.addBindValue(app.isFavorite ? 1 : 0);
+    query.addBindValue(app.sortOrder);
     query.addBindValue(app.id);
     
     return query.exec();
@@ -110,17 +134,19 @@ bool Database::deleteApp(int id)
 QList<AppInfo> Database::getAllApps()
 {
     QList<AppInfo> apps;
-    QSqlQuery query("SELECT * FROM apps ORDER BY use_count DESC");
+    QSqlQuery query("SELECT * FROM apps ORDER BY sort_order ASC, id ASC");
     
     while (query.next()) {
         AppInfo app;
         app.id = query.value(0).toInt();
         app.name = query.value(1).toString();
         app.path = query.value(2).toString();
-        app.iconPath = query.value(3).toString();
-        app.category = query.value(4).toString();
-        app.useCount = query.value(5).toInt();
-        app.isFavorite = query.value(6).toInt() == 1;
+        app.arguments = query.value(3).toString();
+        app.iconPath = query.value(4).toString();
+        app.category = query.value(5).toString();
+        app.useCount = query.value(6).toInt();
+        app.isFavorite = query.value(7).toInt() == 1;
+        app.sortOrder = query.value(8).toInt();
         apps.append(app);
     }
     
@@ -130,17 +156,19 @@ QList<AppInfo> Database::getAllApps()
 QList<AppInfo> Database::getFavoriteApps()
 {
     QList<AppInfo> apps;
-    QSqlQuery query("SELECT * FROM apps WHERE is_favorite=1 ORDER BY use_count DESC");
+    QSqlQuery query("SELECT * FROM apps WHERE is_favorite=1 ORDER BY sort_order ASC, id ASC");
     
     while (query.next()) {
         AppInfo app;
         app.id = query.value(0).toInt();
         app.name = query.value(1).toString();
         app.path = query.value(2).toString();
-        app.iconPath = query.value(3).toString();
-        app.category = query.value(4).toString();
-        app.useCount = query.value(5).toInt();
-        app.isFavorite = query.value(6).toInt() == 1;
+        app.arguments = query.value(3).toString();
+        app.iconPath = query.value(4).toString();
+        app.category = query.value(5).toString();
+        app.useCount = query.value(6).toInt();
+        app.isFavorite = query.value(7).toInt() == 1;
+        app.sortOrder = query.value(8).toInt();
         apps.append(app);
     }
     
@@ -158,10 +186,12 @@ AppInfo Database::getAppById(int id)
         app.id = query.value(0).toInt();
         app.name = query.value(1).toString();
         app.path = query.value(2).toString();
-        app.iconPath = query.value(3).toString();
-        app.category = query.value(4).toString();
-        app.useCount = query.value(5).toInt();
-        app.isFavorite = query.value(6).toInt() == 1;
+        app.arguments = query.value(3).toString();
+        app.iconPath = query.value(4).toString();
+        app.category = query.value(5).toString();
+        app.useCount = query.value(6).toInt();
+        app.isFavorite = query.value(7).toInt() == 1;
+        app.sortOrder = query.value(8).toInt();
     }
     
     return app;

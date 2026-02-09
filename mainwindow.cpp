@@ -63,6 +63,7 @@ void MainWindow::initPresetApps()
     notepad.path = "notepad.exe";
     notepad.category = "系统工具";
     notepad.isFavorite = true;
+    notepad.sortOrder = 0;
     presetApps.append(notepad);
     
     AppInfo calc;
@@ -70,24 +71,28 @@ void MainWindow::initPresetApps()
     calc.path = "calc.exe";
     calc.category = "系统工具";
     calc.isFavorite = true;
+    calc.sortOrder = 1;
     presetApps.append(calc);
     
     AppInfo cmd;
     cmd.name = "命令提示符";
     cmd.path = "cmd.exe";
     cmd.category = "系统工具";
+    cmd.sortOrder = 2;
     presetApps.append(cmd);
     
     AppInfo mspaint;
     mspaint.name = "画图";
     mspaint.path = "mspaint.exe";
     mspaint.category = "系统工具";
+    mspaint.sortOrder = 3;
     presetApps.append(mspaint);
     
     AppInfo taskmgr;
     taskmgr.name = "任务管理器";
     taskmgr.path = "taskmgr.exe";
     taskmgr.category = "系统工具";
+    taskmgr.sortOrder = 4;
     presetApps.append(taskmgr);
     
     for (const AppInfo &app : presetApps) {
