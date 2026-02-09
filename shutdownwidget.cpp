@@ -2,6 +2,9 @@
 #include <QApplication>
 #include <QStyle>
 #include <QDateTime>
+#include <windows.h>
+#include <shellapi.h>
+#include <QDebug>
 
 ShutdownWidget::ShutdownWidget(QWidget *parent)
     : QWidget(parent), remainingSeconds(0), currentAction(0)
@@ -198,28 +201,35 @@ void ShutdownWidget::executeAction(int action)
     
     switch (action) {
         case 0:
-            command = "shutdown /s /t 0";
             actionText = "关机";
+            command = "shutdown /s /t 0";
             break;
         case 1:
-            command = "shutdown /r /t 0";
             actionText = "重启";
+            command = "shutdown /r /t 0";
             break;
         case 2:
-            command = "rundll32.exe powrprof.dll,SetSuspendState 0,1,0";
             actionText = "休眠";
+            command = "rundll32.exe powrprof.dll,SetSuspendState 0,1,0";
             break;
     }
     
     QMessageBox::information(this, "执行", QString("即将执行%1操作！").arg(actionText));
-    QProcess::startDetached(command);
+    
+    QProcess process;
+    process.setProgram("cmd.exe");
+    process.setArguments(QStringList() << "/c" << command);
+    process.startDetached();
 }
 
 void ShutdownWidget::onShutdownNow()
 {
     auto reply = QMessageBox::question(this, "确认", "确定要立即关机吗？", QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::Yes) {
-        QProcess::startDetached("shutdown /s /t 0");
+        QProcess process;
+        process.setProgram("cmd.exe");
+        process.setArguments(QStringList() << "/c" << "shutdown /s /t 0");
+        process.startDetached();
     }
 }
 
@@ -227,7 +237,10 @@ void ShutdownWidget::onRestartNow()
 {
     auto reply = QMessageBox::question(this, "确认", "确定要立即重启吗？", QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::Yes) {
-        QProcess::startDetached("shutdown /r /t 0");
+        QProcess process;
+        process.setProgram("cmd.exe");
+        process.setArguments(QStringList() << "/c" << "shutdown /r /t 0");
+        process.startDetached();
     }
 }
 
@@ -235,6 +248,9 @@ void ShutdownWidget::onSleepNow()
 {
     auto reply = QMessageBox::question(this, "确认", "确定要立即休眠吗？", QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::Yes) {
-        QProcess::startDetached("rundll32.exe powrprof.dll,SetSuspendState 0,1,0");
+        QProcess process;
+        process.setProgram("cmd.exe");
+        process.setArguments(QStringList() << "/c" << "rundll32.exe powrprof.dll,SetSuspendState 0,1,0");
+        process.startDetached();
     }
 }
