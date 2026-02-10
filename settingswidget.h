@@ -9,13 +9,17 @@
 #include <QCheckBox>
 #include <QGroupBox>
 #include <QMessageBox>
+#include <QProgressDialog>
 #include "database.h"
+#include "updatemanager.h"
 
 class SettingsWidget : public QWidget
 {
     Q_OBJECT
 public:
     explicit SettingsWidget(Database *db, QWidget *parent = nullptr);
+    
+    void setUpdateManager(UpdateManager *manager);
 
 private slots:
     void onAutoStartToggled(int state);
@@ -23,16 +27,23 @@ private slots:
     void onShowClosePromptToggled(int state);
     void onAutoCheckUpdateToggled(int state);
     void onAboutClicked();
+    void onCheckUpdateClicked();
+    void onUpdateAvailable(const UpdateInfo &info);
+    void onNoUpdateAvailable();
+    void onUpdateCheckFailed(const QString &error);
 
 private:
     void setupUI();
     
     Database *db;
+    UpdateManager *updateManager;
     QCheckBox *autoStartCheck;
     QCheckBox *minimizeToTrayCheck;
     QCheckBox *showClosePromptCheck;
     QCheckBox *autoCheckUpdateCheck;
+    QPushButton *checkUpdateButton;
     QLabel *statusLabel;
+    QProgressDialog *progressDialog;
 };
 
 #endif

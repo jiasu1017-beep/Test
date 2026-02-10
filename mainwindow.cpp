@@ -25,8 +25,6 @@ MainWindow::MainWindow(QWidget *parent)
     }
     
     initPresetApps();
-    setupUI();
-    setupTrayIcon();
     
     updateManager = new UpdateManager(this);
     updateManager->setIgnoredVersion(db->getIgnoredVersion());
@@ -37,6 +35,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(updateManager, &UpdateManager::downloadProgress, this, &MainWindow::onDownloadProgress);
     connect(updateManager, &UpdateManager::downloadFinished, this, &MainWindow::onDownloadFinished);
     connect(updateManager, &UpdateManager::downloadFailed, this, &MainWindow::onDownloadFailed);
+    
+    setupUI();
+    setupTrayIcon();
     
     if (db->getAutoCheckUpdate()) {
         updateManager->startPeriodicChecks();
@@ -72,6 +73,7 @@ void MainWindow::setupUI()
     fishModeWidget = new FishModeWidget(this);
     shutdownWidget = new ShutdownWidget(this);
     settingsWidget = new SettingsWidget(db, this);
+    settingsWidget->setUpdateManager(updateManager);
     recommendedAppsWidget = new RecommendedAppsWidget(this);
     
     tabWidget->addTab(appManagerWidget, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "应用管理");

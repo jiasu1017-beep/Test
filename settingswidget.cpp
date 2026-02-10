@@ -9,11 +9,23 @@
 #include <QFrame>
 #include <QPixmap>
 #include <QScrollArea>
+#include "updatedialog.h"
 
 SettingsWidget::SettingsWidget(Database *db, QWidget *parent)
-    : QWidget(parent), db(db)
+    : QWidget(parent), db(db), updateManager(nullptr), progressDialog(nullptr)
 {
     setupUI();
+}
+
+void SettingsWidget::setUpdateManager(UpdateManager *manager)
+{
+    updateManager = manager;
+    
+    if (updateManager) {
+        connect(updateManager, &UpdateManager::updateAvailable, this, &SettingsWidget::onUpdateAvailable);
+        connect(updateManager, &UpdateManager::noUpdateAvailable, this, &SettingsWidget::onNoUpdateAvailable);
+        connect(updateManager, &UpdateManager::updateCheckFailed, this, &SettingsWidget::onUpdateCheckFailed);
+    }
 }
 
 void SettingsWidget::setupUI()
@@ -78,8 +90,23 @@ void SettingsWidget::setupUI()
     updateInfoLabel->setStyleSheet("padding: 5px; color: #666; font-size: 12px;");
     updateInfoLabel->setWordWrap(true);
     
+    checkUpdateButton = new QPushButton("检查更新", this);
+    checkUpdateButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_BrowserReload));
+    checkUpdateButton->setStyleSheet(
+        "QPushButton { background-color: #2196f3; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+        "QPushButton:hover { background-color: #1976d2; } "
+        "QPushButton:pressed { background-color: #1565c0; }"
+    );
+    connect(checkUpdateButton, &QPushButton::clicked, this, &SettingsWidget::onCheckUpdateClicked);
+    
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    buttonLayout->addWidget(checkUpdateButton);
+    buttonLayout->addStretch();
+    
     updateLayout->addWidget(autoCheckUpdateCheck);
     updateLayout->addWidget(updateInfoLabel);
+    updateLayout->addSpacing(10);
+    updateLayout->addLayout(buttonLayout);
     updateGroup->setLayout(updateLayout);
     mainLayout->addWidget(updateGroup);
     
@@ -335,5 +362,100 @@ void SettingsWidget::onShowClosePromptToggled(int state)
     } else {
         QMessageBox::warning(this, "错误", "设置失败！");
         showClosePromptCheck->setChecked(!show);
+    }
+}
+
+void SettingsWidget::onCheckUpdateClicked()
+{
+    if (!updateManager) {
+        QMessageBox::warning(this, "错误", "更新管理器未初始化！");
+        return;
+    }
+    
+    progressDialog = new QProgressDialog(this);
+    progressDialog->setWindowTitle("检查更新");
+    progressDialog->setLabelText("正在检查更新...");
+    progressDialog->setCancelButton(nullptr);
+    progressDialog->setRange(0, 0);
+    progressDialog->setWindowModality(Qt::WindowModal);
+    progressDialog->show();
+    
+    checkUpdateButton->setEnabled(false);
+    updateManager->checkForUpdates();
+}
+
+void SettingsWidget::onUpdateAvailable(const UpdateInfo &info)
+{
+    if (progressDialog) {
+        progressDialog->close();
+        progressDialog->deleteLater();
+        progressDialog = nullptr;
+    }
+    
+    checkUpdateButton->setEnabled(true);
+    
+    UpdateDialog *dialog = new UpdateDialog(info, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &UpdateDialog::updateNow, [this]() {
+        if (updateManager) {
+            updateManager->downloadUpdate();
+        }
+    });
+    connect(dialog, &UpdateDialog::remindLater, [this]() {
+        if (updateManager) {
+            updateManager->remindLater();
+        }
+    });
+    connect(dialog, &UpdateDialog::skipThisVersion, [this]() {
+        if (updateManager) {
+            updateManager->skipThisVersion();
+            db->setIgnoredVersion(updateManager->ignoredVersion());
+        }
+    });
+    dialog->show();
+}
+
+void SettingsWidget::onNoUpdateAvailable()
+{
+    if (progressDialog) {
+        progressDialog->close();
+        progressDialog->deleteLater();
+        progressDialog = nullptr;
+    }
+    
+    checkUpdateButton->setEnabled(true);
+    
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("检查更新");
+    msgBox.setText("当前已是最新版本！");
+    msgBox.setInformativeText(QString("当前版本: v%1").arg(qApp->applicationVersion()));
+    msgBox.setIcon(QMessageBox::Information);
+    msgBox.addButton("确定", QMessageBox::AcceptRole);
+    msgBox.exec();
+}
+
+void SettingsWidget::onUpdateCheckFailed(const QString &error)
+{
+    if (progressDialog) {
+        progressDialog->close();
+        progressDialog->deleteLater();
+        progressDialog = nullptr;
+    }
+    
+    checkUpdateButton->setEnabled(true);
+    
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("检查更新失败");
+    msgBox.setText("无法检查更新");
+    msgBox.setInformativeText(QString("错误信息: %1\n\n请检查网络连接后重试。").arg(error));
+    msgBox.setIcon(QMessageBox::Warning);
+    QPushButton *retryButton = msgBox.addButton("重试", QMessageBox::ActionRole);
+    QPushButton *closeButton = msgBox.addButton("关闭", QMessageBox::RejectRole);
+    msgBox.setDefaultButton(retryButton);
+    
+    msgBox.exec();
+    
+    if (msgBox.clickedButton() == retryButton) {
+        onCheckUpdateClicked();
     }
 }

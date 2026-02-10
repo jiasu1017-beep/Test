@@ -8,6 +8,8 @@
 #include <QCoreApplication>
 #include <QMessageBox>
 #include <QProcess>
+#include <QSslSocket>
+#include <QSslConfiguration>
 
 UpdateManager::UpdateManager(QObject *parent)
     : QObject(parent)
@@ -114,7 +116,17 @@ void UpdateManager::skipThisVersion()
 void UpdateManager::onReleaseInfoReceived(QNetworkReply *reply)
 {
     if (reply->error() != QNetworkReply::NoError) {
-        emit updateCheckFailed(reply->errorString());
+        QString errorMsg = reply->errorString();
+        
+        if (errorMsg.contains("TLS") || errorMsg.contains("SSL")) {
+            errorMsg = "SSL/TLS 初始化失败\n\n"
+                       "可能原因：\n"
+                       "1. 缺少 OpenSSL 库文件\n"
+                       "2. 系统不支持 HTTPS 连接\n\n"
+                       "建议：请确保发布包包含 libssl-1_1-x64.dll 和 libcrypto-1_1-x64.dll";
+        }
+        
+        emit updateCheckFailed(errorMsg);
         reply->deleteLater();
         return;
     }
