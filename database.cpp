@@ -115,6 +115,8 @@ QJsonObject Database::collectionToJson(const AppCollection &collection)
     obj["id"] = collection.id;
     obj["name"] = collection.name;
     obj["description"] = collection.description;
+    obj["tag"] = collection.tag;
+    obj["sortPriority"] = collection.sortPriority;
     
     QJsonArray idArray;
     for (int id : collection.appIds) {
@@ -130,6 +132,13 @@ AppCollection Database::jsonToCollection(const QJsonObject &obj)
     col.id = obj["id"].toInt();
     col.name = obj["name"].toString();
     col.description = obj["description"].toString();
+    QString tag = obj["tag"].toString("未分类");
+    if (tag == "上班") {
+        col.tag = "工作";
+    } else {
+        col.tag = tag;
+    }
+    col.sortPriority = obj["sortPriority"].toInt(0);
     
     QJsonArray idArray = obj["appIds"].toArray();
     for (const QJsonValue &val : idArray) {

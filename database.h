@@ -25,6 +25,8 @@ struct AppCollection {
     QString name;
     QString description;
     QList<int> appIds;
+    QString tag;
+    int sortPriority;
 };
 
 class Database : public QObject

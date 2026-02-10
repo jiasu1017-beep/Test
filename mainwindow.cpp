@@ -20,6 +20,11 @@ MainWindow::MainWindow(QWidget *parent)
     initPresetApps();
     setupUI();
     
+    QList<AppCollection> collections = db->getAllCollections();
+    if (!collections.isEmpty()) {
+        tabWidget->setCurrentWidget(collectionManagerWidget);
+    }
+    
     setWindowTitle("办公助手 - Office Assistant");
     setMinimumSize(1000, 700);
     resize(1100, 750);

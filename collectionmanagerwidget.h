@@ -14,8 +14,33 @@
 #include <QFileIconProvider>
 #include <QStyledItemDelegate>
 #include <QPainter>
+#include <QComboBox>
+#include <QSpinBox>
 #include "database.h"
 #include "appmanagerwidget.h"
+
+struct TagInfo {
+    QString name;
+    QString color;
+    QString displayName;
+    QString iconSymbol;
+};
+
+class CollectionItemDelegate : public QStyledItemDelegate
+{
+    Q_OBJECT
+
+public:
+    explicit CollectionItemDelegate(QObject *parent = nullptr);
+    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+    
+    void setCollections(const QList<AppCollection> &cols) { collections = cols; }
+
+private:
+    QList<AppCollection> collections;
+    QMap<QString, TagInfo> tagColors;
+};
 
 class CollectionManagerWidget : public QWidget
 {
@@ -35,7 +60,11 @@ private slots:
     void onRunCollection();
     void onAppItemDoubleClicked(const QModelIndex &index);
     void onShowContextMenu(const QPoint &pos);
+    void onShowCollectionContextMenu(const QPoint &pos);
     void onLaunchAppFromCollection();
+    void onRenameCollection();
+    void onEditCollectionProperties();
+    void onExportCollection();
 
 private:
     void setupUI();
@@ -44,6 +73,9 @@ private:
     void runApp(const AppInfo &app);
     QIcon getAppIcon(const AppInfo &app);
     void launchApp(const AppInfo &app);
+    void initTagColors();
+    QMap<QString, TagInfo> getTagColors() const { return tagColors; }
+    void showCollectionPropertiesDialog(AppCollection &collection, bool isNew = false);
 
     Database *db;
     
@@ -60,12 +92,15 @@ private:
     
     QLabel *collectionNameLabel;
     QLabel *collectionDescLabel;
+    QLabel *collectionTagLabel;
     QLabel *collectionAppsLabel;
     
     AppIconDelegate *iconDelegate;
+    CollectionItemDelegate *collectionDelegate;
     QFileIconProvider iconProvider;
     
     int currentCollectionId;
+    QMap<QString, TagInfo> tagColors;
 };
 
 #endif
