@@ -109,7 +109,7 @@ public:
         appListView->setContextMenuPolicy(Qt::CustomContextMenu);
         appListView->setStyleSheet(QString::fromUtf8("QListView { background-color: #fafafa; border: none; }"));
         appListView->setDragDropMode(QAbstractItemView::NoDragDrop);
-        appListView->setSelectionMode(QAbstractItemView::SingleSelection);
+        appListView->setSelectionMode(QAbstractItemView::ExtendedSelection);
         appListView->setIconSize(QSize(72, 72));
         appListView->setMovement(QListView::Static);
         appListView->setResizeMode(QListView::Adjust);
