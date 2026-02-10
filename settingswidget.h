@@ -21,6 +21,7 @@ private slots:
     void onAutoStartToggled(int state);
     void onMinimizeToTrayToggled(int state);
     void onShowClosePromptToggled(int state);
+    void onAutoCheckUpdateToggled(int state);
     void onAboutClicked();
 
 private:
@@ -30,6 +31,7 @@ private:
     QCheckBox *autoStartCheck;
     QCheckBox *minimizeToTrayCheck;
     QCheckBox *showClosePromptCheck;
+    QCheckBox *autoCheckUpdateCheck;
     QLabel *statusLabel;
 };
 

@@ -5,12 +5,16 @@
 #include "settingswidget.h"
 #include "collectionmanagerwidget.h"
 #include "recommendedappswidget.h"
+#include "updatedialog.h"
 #include <QApplication>
 #include <QStyle>
 #include <QStandardPaths>
 #include <QIcon>
 #include <QMessageBox>
 #include <QPropertyAnimation>
+#include <QProgressDialog>
+#include <QDesktopServices>
+#include <QUrl>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -23,6 +27,20 @@ MainWindow::MainWindow(QWidget *parent)
     initPresetApps();
     setupUI();
     setupTrayIcon();
+    
+    updateManager = new UpdateManager(this);
+    updateManager->setIgnoredVersion(db->getIgnoredVersion());
+    
+    connect(updateManager, &UpdateManager::updateAvailable, this, &MainWindow::onUpdateAvailable);
+    connect(updateManager, &UpdateManager::noUpdateAvailable, this, &MainWindow::onNoUpdateAvailable);
+    connect(updateManager, &UpdateManager::updateCheckFailed, this, &MainWindow::onUpdateCheckFailed);
+    connect(updateManager, &UpdateManager::downloadProgress, this, &MainWindow::onDownloadProgress);
+    connect(updateManager, &UpdateManager::downloadFinished, this, &MainWindow::onDownloadFinished);
+    connect(updateManager, &UpdateManager::downloadFailed, this, &MainWindow::onDownloadFailed);
+    
+    if (db->getAutoCheckUpdate()) {
+        updateManager->startPeriodicChecks();
+    }
     
     QList<AppCollection> collections = db->getAllCollections();
     if (!collections.isEmpty()) {
@@ -253,4 +271,66 @@ void MainWindow::closeEvent(QCloseEvent *event)
             event->ignore();
         }
     }
+}
+
+void MainWindow::onUpdateAvailable(const UpdateInfo &info)
+{
+    updateDialog = new UpdateDialog(info, this);
+    connect(updateDialog, &UpdateDialog::updateNow, this, &MainWindow::onUpdateNow);
+    connect(updateDialog, &UpdateDialog::remindLater, this, &MainWindow::onRemindLater);
+    connect(updateDialog, &UpdateDialog::skipThisVersion, this, &MainWindow::onSkipThisVersion);
+    updateDialog->show();
+}
+
+void MainWindow::onNoUpdateAvailable()
+{
+}
+
+void MainWindow::onUpdateCheckFailed(const QString &error)
+{
+    qWarning() << "Update check failed:" << error;
+}
+
+void MainWindow::onUpdateNow()
+{
+    updateManager->downloadUpdate();
+}
+
+void MainWindow::onRemindLater()
+{
+}
+
+void MainWindow::onSkipThisVersion()
+{
+    updateManager->skipThisVersion();
+    db->setIgnoredVersion(updateManager->ignoredVersion());
+}
+
+void MainWindow::onDownloadProgress(qint64 bytesReceived, qint64 bytesTotal)
+{
+}
+
+void MainWindow::onDownloadFinished(const QString &filePath)
+{
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("下载完成");
+    msgBox.setText("更新包已下载完成！");
+    msgBox.setInformativeText(QString("文件位置: %1\n\n是否立即打开文件位置？").arg(filePath));
+    msgBox.setIcon(QMessageBox::Information);
+    
+    QPushButton *openButton = msgBox.addButton("打开文件位置", QMessageBox::ActionRole);
+    QPushButton *closeButton = msgBox.addButton("关闭", QMessageBox::RejectRole);
+    msgBox.setDefaultButton(openButton);
+    
+    msgBox.exec();
+    
+    if (msgBox.clickedButton() == openButton) {
+        QFileInfo info(filePath);
+        QDesktopServices::openUrl(QUrl::fromLocalFile(info.absolutePath()));
+    }
+}
+
+void MainWindow::onDownloadFailed(const QString &error)
+{
+    QMessageBox::warning(this, "下载失败", QString("更新下载失败:\n%1").arg(error));
 }

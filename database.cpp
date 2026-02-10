@@ -388,3 +388,33 @@ bool Database::getShowClosePrompt()
     QJsonObject settingsObj = rootObject["settings"].toObject();
     return settingsObj["show_close_prompt"].toString("1") == "1";
 }
+
+bool Database::setAutoCheckUpdate(bool enabled)
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    settingsObj["auto_check_update"] = enabled ? "1" : "0";
+    rootObject["settings"] = settingsObj;
+    
+    return saveData();
+}
+
+bool Database::getAutoCheckUpdate()
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    return settingsObj["auto_check_update"].toString("1") == "1";
+}
+
+bool Database::setIgnoredVersion(const QString &version)
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    settingsObj["ignored_version"] = version;
+    rootObject["settings"] = settingsObj;
+    
+    return saveData();
+}
+
+QString Database::getIgnoredVersion()
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    return settingsObj["ignored_version"].toString("");
+}

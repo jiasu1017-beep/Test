@@ -67,6 +67,22 @@ void SettingsWidget::setupUI()
     closeBehaviorGroup->setLayout(closeBehaviorLayout);
     mainLayout->addWidget(closeBehaviorGroup);
     
+    QGroupBox *updateGroup = new QGroupBox("自动更新", this);
+    QVBoxLayout *updateLayout = new QVBoxLayout();
+    
+    autoCheckUpdateCheck = new QCheckBox("自动检查更新", this);
+    autoCheckUpdateCheck->setChecked(db->getAutoCheckUpdate());
+    connect(autoCheckUpdateCheck, &QCheckBox::stateChanged, this, &SettingsWidget::onAutoCheckUpdateToggled);
+    
+    QLabel *updateInfoLabel = new QLabel("启用后，软件启动时和后台每24小时会自动检查更新。", this);
+    updateInfoLabel->setStyleSheet("padding: 5px; color: #666; font-size: 12px;");
+    updateInfoLabel->setWordWrap(true);
+    
+    updateLayout->addWidget(autoCheckUpdateCheck);
+    updateLayout->addWidget(updateInfoLabel);
+    updateGroup->setLayout(updateLayout);
+    mainLayout->addWidget(updateGroup);
+    
     QGroupBox *aboutGroup = new QGroupBox("关于", this);
     QVBoxLayout *aboutLayout = new QVBoxLayout();
     
@@ -280,6 +296,18 @@ void SettingsWidget::onAboutClicked()
     mainLayout->addLayout(buttonLayout);
     
     aboutDialog.exec();
+}
+
+void SettingsWidget::onAutoCheckUpdateToggled(int state)
+{
+    bool enabled = (state == Qt::Checked);
+    
+    if (db->setAutoCheckUpdate(enabled)) {
+        QMessageBox::information(this, "成功", QString("自动检查更新已%1！").arg(enabled ? "启用" : "禁用"));
+    } else {
+        QMessageBox::warning(this, "错误", "设置失败！");
+        autoCheckUpdateCheck->setChecked(!enabled);
+    }
 }
 
 void SettingsWidget::onMinimizeToTrayToggled(int state)

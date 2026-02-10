@@ -59,6 +59,12 @@ public:
     
     bool setShowClosePrompt(bool show);
     bool getShowClosePrompt();
+    
+    bool setAutoCheckUpdate(bool enabled);
+    bool getAutoCheckUpdate();
+    
+    bool setIgnoredVersion(const QString &version);
+    QString getIgnoredVersion();
 
 private:
     QString dataFilePath;

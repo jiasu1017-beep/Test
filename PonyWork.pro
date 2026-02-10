@@ -1,4 +1,4 @@
-QT       += core gui
+QT       += core gui network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -13,7 +13,9 @@ SOURCES += main.cpp \
            shutdownwidget.cpp \
            settingswidget.cpp \
            collectionmanagerwidget.cpp \
-           recommendedappswidget.cpp
+           recommendedappswidget.cpp \
+           updatemanager.cpp \
+           updatedialog.cpp
 
 HEADERS  += mainwindow.h \
             database.h \
@@ -22,7 +24,9 @@ HEADERS  += mainwindow.h \
             shutdownwidget.h \
             settingswidget.h \
             collectionmanagerwidget.h \
-            recommendedappswidget.h
+            recommendedappswidget.h \
+            updatemanager.h \
+            updatedialog.h
 
 FORMS += ui/appmanagerwidget.ui \
          ui/fishmodewidget.ui \

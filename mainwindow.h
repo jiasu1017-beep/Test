@@ -9,6 +9,7 @@
 #include <QAction>
 #include <QCloseEvent>
 #include "database.h"
+#include "updatemanager.h"
 
 class AppManagerWidget;
 class FishModeWidget;
@@ -16,6 +17,7 @@ class ShutdownWidget;
 class SettingsWidget;
 class CollectionManagerWidget;
 class RecommendedAppsWidget;
+class UpdateDialog;
 
 class MainWindow : public QMainWindow
 {
@@ -30,6 +32,15 @@ private slots:
     void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
     void onShowWindow();
     void onExitApp();
+    void onUpdateAvailable(const UpdateInfo &info);
+    void onNoUpdateAvailable();
+    void onUpdateCheckFailed(const QString &error);
+    void onUpdateNow();
+    void onRemindLater();
+    void onSkipThisVersion();
+    void onDownloadProgress(qint64 bytesReceived, qint64 bytesTotal);
+    void onDownloadFinished(const QString &filePath);
+    void onDownloadFailed(const QString &error);
     
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -51,6 +62,8 @@ private:
     QMenu *trayMenu;
     QAction *showWindowAction;
     QAction *exitAppAction;
+    UpdateManager *updateManager;
+    UpdateDialog *updateDialog;
 };
 
 #endif

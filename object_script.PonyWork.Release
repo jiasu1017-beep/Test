@@ -7,6 +7,8 @@ release/shutdownwidget.o
 release/settingswidget.o
 release/collectionmanagerwidget.o
 release/recommendedappswidget.o
+release/updatemanager.o
+release/updatedialog.o
 release/qrc_resources.o
 release/moc_mainwindow.o
 release/moc_database.o
@@ -16,3 +18,5 @@ release/moc_shutdownwidget.o
 release/moc_settingswidget.o
 release/moc_collectionmanagerwidget.o
 release/moc_recommendedappswidget.o
+release/moc_updatemanager.o
+release/moc_updatedialog.o
