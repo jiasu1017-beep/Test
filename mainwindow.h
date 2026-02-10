@@ -8,6 +8,7 @@
 #include <QMenu>
 #include <QAction>
 #include <QCloseEvent>
+#include <QEvent>
 #include "database.h"
 #include "updatemanager.h"
 
@@ -44,6 +45,7 @@ private slots:
     
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void changeEvent(QEvent *event) override;
     
 private:
     void setupUI();

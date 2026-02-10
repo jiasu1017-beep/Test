@@ -2432,6 +2432,7 @@ debug/appmanagerwidget.o: appmanagerwidget.cpp appmanagerwidget.h \
 		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/qdesktopwidget.h \
 		D:/Qt/5.15.2/mingw81_64/include/QtGui/qguiapplication.h \
 		D:/Qt/5.15.2/mingw81_64/include/QtGui/qinputmethod.h \
+		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/QSpacerItem \
 		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/QStyle \
 		D:/Qt/5.15.2/mingw81_64/include/QtGui/QStandardItem \
 		D:/Qt/5.15.2/mingw81_64/include/QtCore/QStandardPaths \

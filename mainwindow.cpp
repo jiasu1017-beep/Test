@@ -233,7 +233,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
         msgBox.setCheckBox(dontShowAgain);
         
         QPushButton *okButton = msgBox.addButton("确定", QMessageBox::AcceptRole);
-        QPushButton *cancelButton = msgBox.addButton("取消", QMessageBox::RejectRole);
+        msgBox.addButton("取消", QMessageBox::RejectRole);
         msgBox.setDefaultButton(okButton);
         
         msgBox.exec();
@@ -257,8 +257,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
         msgBox.setCheckBox(dontShowAgain);
         
         QPushButton *okButton = msgBox.addButton("退出", QMessageBox::AcceptRole);
-        QPushButton *cancelButton = msgBox.addButton("取消", QMessageBox::RejectRole);
-        msgBox.setDefaultButton(cancelButton);
+        msgBox.addButton("取消", QMessageBox::RejectRole);
+        msgBox.setDefaultButton(okButton);
         
         msgBox.exec();
         
@@ -333,4 +333,18 @@ void MainWindow::onDownloadFinished(const QString &filePath)
 void MainWindow::onDownloadFailed(const QString &error)
 {
     QMessageBox::warning(this, "下载失败", QString("更新下载失败:\n%1").arg(error));
+}
+
+void MainWindow::changeEvent(QEvent *event)
+{
+    QMainWindow::changeEvent(event);
+    
+    if (event->type() == QEvent::WindowStateChange) {
+        if (isMinimized()) {
+            bool minimizeToTray = db->getMinimizeToTray();
+            if (minimizeToTray) {
+                hide();
+            }
+        }
+    }
 }
