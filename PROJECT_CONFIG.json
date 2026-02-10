@@ -1,0 +1,23 @@
+{
+  "project_name": "OfficeAssistant",
+  "project_description": "办公助手应用程序",
+  "publishing_config": {
+    "automatic_publishing": "DISABLED",
+    "automatic_releases": "DISABLED",
+    "scheduled_publishing": "DISABLED",
+    "auto_deployment": "DISABLED",
+    "manual_publishing_only": true,
+    "explicit_authorization_required": true,
+    "last_verified": "2026-02-10",
+    "notes": "所有自动化发布功能已禁用。仅支持完全手动的发布流程，需要明确的用户授权。"
+  },
+  "technical_stack": {
+    "qt_version": "5.15.2",
+    "compiler": "MinGW 8.1.0 64-bit",
+    "build_system": "qmake"
+  },
+  "version_control": {
+    "auto_versioning": "DISABLED",
+    "manual_versioning_only": true
+  }
+}
