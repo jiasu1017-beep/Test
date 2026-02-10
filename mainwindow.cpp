@@ -25,7 +25,8 @@ MainWindow::MainWindow(QWidget *parent)
         tabWidget->setCurrentWidget(collectionManagerWidget);
     }
     
-    setWindowTitle("小马办公 - PonyWork");
+    QString version = qApp->applicationVersion();
+    setWindowTitle(QString("小马办公 - PonyWork v%1").arg(version));
     setMinimumSize(1000, 700);
     resize(1100, 750);
 }
