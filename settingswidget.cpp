@@ -70,7 +70,7 @@ void SettingsWidget::setupUI()
     
     mainLayout->addStretch();
     
-    QLabel *copyrightLabel = new QLabel("© 2024 小马办公. All rights reserved.", this);
+    QLabel *copyrightLabel = new QLabel("© 2026 小马办公. All rights reserved.", this);
     copyrightLabel->setStyleSheet("color: #999; padding: 10px; text-align: center;");
     copyrightLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(copyrightLabel);
