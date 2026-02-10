@@ -21,6 +21,9 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+private slots:
+    void onTabChanged(int index);
+    
 private:
     void setupUI();
     void initPresetApps();

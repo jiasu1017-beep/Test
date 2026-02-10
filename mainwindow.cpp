@@ -60,6 +60,8 @@ void MainWindow::setupUI()
     
     tabWidget->setIconSize(QSize(24, 24));
     
+    connect(tabWidget, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
+    
     mainLayout->addWidget(tabWidget);
 }
 
@@ -114,5 +116,12 @@ void MainWindow::initPresetApps()
     
     for (const AppInfo &app : presetApps) {
         db->addApp(app);
+    }
+}
+
+void MainWindow::onTabChanged(int index)
+{
+    if (tabWidget->widget(index) == collectionManagerWidget) {
+        collectionManagerWidget->selectFirstCollection();
     }
 }

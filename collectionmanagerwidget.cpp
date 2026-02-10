@@ -308,6 +308,14 @@ CollectionManagerWidget::~CollectionManagerWidget()
 {
 }
 
+void CollectionManagerWidget::selectFirstCollection()
+{
+    if (collectionListWidget->count() > 0 && currentCollectionId <= 0) {
+        collectionListWidget->setCurrentRow(0);
+        onCollectionSelected(collectionListWidget->item(0));
+    }
+}
+
 void CollectionManagerWidget::initTagColors()
 {
     tagColors["工作"] = {"工作", "#e74c3c", "工作", "briefcase"};
@@ -493,6 +501,11 @@ void CollectionManagerWidget::refreshCollectionList()
         QListWidgetItem *item = new QListWidgetItem(col.name);
         item->setData(Qt::UserRole, col.id);
         collectionListWidget->addItem(item);
+    }
+    
+    if (!collections.isEmpty()) {
+        collectionListWidget->setCurrentRow(0);
+        onCollectionSelected(collectionListWidget->item(0));
     }
 }
 

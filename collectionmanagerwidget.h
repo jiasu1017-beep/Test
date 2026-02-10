@@ -49,6 +49,8 @@ class CollectionManagerWidget : public QWidget
 public:
     explicit CollectionManagerWidget(Database *db, QWidget *parent = nullptr);
     ~CollectionManagerWidget();
+    
+    void selectFirstCollection();
 
 private slots:
     void onCreateCollection();
