@@ -4,6 +4,10 @@
 #include <QMainWindow>
 #include <QTabWidget>
 #include <QVBoxLayout>
+#include <QSystemTrayIcon>
+#include <QMenu>
+#include <QAction>
+#include <QCloseEvent>
 #include "database.h"
 
 class AppManagerWidget;
@@ -23,9 +27,16 @@ public:
 
 private slots:
     void onTabChanged(int index);
+    void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
+    void onShowWindow();
+    void onExitApp();
+    
+protected:
+    void closeEvent(QCloseEvent *event) override;
     
 private:
     void setupUI();
+    void setupTrayIcon();
     void initPresetApps();
     
     Database *db;
@@ -36,6 +47,10 @@ private:
     SettingsWidget *settingsWidget;
     CollectionManagerWidget *collectionManagerWidget;
     RecommendedAppsWidget *recommendedAppsWidget;
+    QSystemTrayIcon *trayIcon;
+    QMenu *trayMenu;
+    QAction *showWindowAction;
+    QAction *exitAppAction;
 };
 
 #endif

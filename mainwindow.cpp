@@ -8,6 +8,9 @@
 #include <QApplication>
 #include <QStyle>
 #include <QStandardPaths>
+#include <QIcon>
+#include <QMessageBox>
+#include <QPropertyAnimation>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -19,6 +22,7 @@ MainWindow::MainWindow(QWidget *parent)
     
     initPresetApps();
     setupUI();
+    setupTrayIcon();
     
     QList<AppCollection> collections = db->getAllCollections();
     if (!collections.isEmpty()) {
@@ -124,5 +128,129 @@ void MainWindow::onTabChanged(int index)
 {
     if (tabWidget->widget(index) == collectionManagerWidget) {
         collectionManagerWidget->selectFirstCollection();
+    }
+}
+
+void MainWindow::setupTrayIcon()
+{
+    trayIcon = new QSystemTrayIcon(this);
+    
+    QIcon appIcon(":/img/icon.ico");
+    if (appIcon.isNull()) {
+        appIcon = qApp->style()->standardIcon(QStyle::SP_ComputerIcon);
+    }
+    trayIcon->setIcon(appIcon);
+    
+    QString version = qApp->applicationVersion();
+    trayIcon->setToolTip(QString("小马办公 - PonyWork v%1\n正在运行中").arg(version));
+    
+    trayMenu = new QMenu(this);
+    
+    showWindowAction = new QAction("打开窗口", this);
+    connect(showWindowAction, &QAction::triggered, this, &MainWindow::onShowWindow);
+    trayMenu->addAction(showWindowAction);
+    
+    trayMenu->addSeparator();
+    
+    exitAppAction = new QAction("退出程序", this);
+    connect(exitAppAction, &QAction::triggered, this, &MainWindow::onExitApp);
+    trayMenu->addAction(exitAppAction);
+    
+    trayIcon->setContextMenu(trayMenu);
+    
+    connect(trayIcon, &QSystemTrayIcon::activated, this, &MainWindow::onTrayIconActivated);
+    
+    trayIcon->show();
+}
+
+void MainWindow::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason)
+{
+    if (reason == QSystemTrayIcon::DoubleClick) {
+        onShowWindow();
+    }
+}
+
+void MainWindow::onShowWindow()
+{
+    if (isHidden()) {
+        showNormal();
+        activateWindow();
+        raise();
+    } else {
+        showNormal();
+        activateWindow();
+        raise();
+    }
+}
+
+void MainWindow::onExitApp()
+{
+    QApplication::quit();
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    bool minimizeToTray = db->getMinimizeToTray();
+    bool showPrompt = db->getShowClosePrompt();
+    
+    if (!showPrompt) {
+        if (minimizeToTray) {
+            hide();
+            event->ignore();
+        } else {
+            event->accept();
+        }
+        return;
+    }
+    
+    QMessageBox msgBox(this);
+    
+    if (minimizeToTray) {
+        msgBox.setWindowTitle("关闭提示");
+        msgBox.setText("关闭窗口将最小化到系统托盘");
+        msgBox.setInformativeText("程序将在后台继续运行，您可以通过系统托盘图标重新打开窗口。\n\n勾选「不再显示此提示」可以跳过此确认。");
+        msgBox.setIcon(QMessageBox::Information);
+        
+        QCheckBox *dontShowAgain = new QCheckBox("不再显示此提示", &msgBox);
+        msgBox.setCheckBox(dontShowAgain);
+        
+        QPushButton *okButton = msgBox.addButton("确定", QMessageBox::AcceptRole);
+        QPushButton *cancelButton = msgBox.addButton("取消", QMessageBox::RejectRole);
+        msgBox.setDefaultButton(okButton);
+        
+        msgBox.exec();
+        
+        if (msgBox.clickedButton() == okButton) {
+            if (dontShowAgain->isChecked()) {
+                db->setShowClosePrompt(false);
+            }
+            hide();
+            event->ignore();
+        } else {
+            event->ignore();
+        }
+    } else {
+        msgBox.setWindowTitle("退出确认");
+        msgBox.setText("确定要完全退出应用吗？");
+        msgBox.setInformativeText("程序将完全退出，所有功能将停止运行。\n\n勾选「不再显示此提示」可以跳过此确认。");
+        msgBox.setIcon(QMessageBox::Warning);
+        
+        QCheckBox *dontShowAgain = new QCheckBox("不再显示此提示", &msgBox);
+        msgBox.setCheckBox(dontShowAgain);
+        
+        QPushButton *okButton = msgBox.addButton("退出", QMessageBox::AcceptRole);
+        QPushButton *cancelButton = msgBox.addButton("取消", QMessageBox::RejectRole);
+        msgBox.setDefaultButton(cancelButton);
+        
+        msgBox.exec();
+        
+        if (msgBox.clickedButton() == okButton) {
+            if (dontShowAgain->isChecked()) {
+                db->setShowClosePrompt(false);
+            }
+            event->accept();
+        } else {
+            event->ignore();
+        }
     }
 }

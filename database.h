@@ -53,6 +53,12 @@ public:
     
     bool setAutoStart(bool enabled);
     bool getAutoStart();
+    
+    bool setMinimizeToTray(bool enabled);
+    bool getMinimizeToTray();
+    
+    bool setShowClosePrompt(bool show);
+    bool getShowClosePrompt();
 
 private:
     QString dataFilePath;

@@ -358,3 +358,33 @@ bool Database::getAutoStart()
                        QSettings::NativeFormat);
     return settings.contains("PonyWork");
 }
+
+bool Database::setMinimizeToTray(bool enabled)
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    settingsObj["minimize_to_tray"] = enabled ? "1" : "0";
+    rootObject["settings"] = settingsObj;
+    
+    return saveData();
+}
+
+bool Database::getMinimizeToTray()
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    return settingsObj["minimize_to_tray"].toString("1") == "1";
+}
+
+bool Database::setShowClosePrompt(bool show)
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    settingsObj["show_close_prompt"] = show ? "1" : "0";
+    rootObject["settings"] = settingsObj;
+    
+    return saveData();
+}
+
+bool Database::getShowClosePrompt()
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    return settingsObj["show_close_prompt"].toString("1") == "1";
+}

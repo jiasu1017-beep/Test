@@ -46,6 +46,27 @@ void SettingsWidget::setupUI()
     startupGroup->setLayout(startupLayout);
     mainLayout->addWidget(startupGroup);
     
+    QGroupBox *closeBehaviorGroup = new QGroupBox("关闭行为", this);
+    QVBoxLayout *closeBehaviorLayout = new QVBoxLayout();
+    
+    minimizeToTrayCheck = new QCheckBox("启用最小化到系统托盘", this);
+    minimizeToTrayCheck->setChecked(db->getMinimizeToTray());
+    connect(minimizeToTrayCheck, &QCheckBox::stateChanged, this, &SettingsWidget::onMinimizeToTrayToggled);
+    
+    showClosePromptCheck = new QCheckBox("关闭窗口时显示提示", this);
+    showClosePromptCheck->setChecked(db->getShowClosePrompt());
+    connect(showClosePromptCheck, &QCheckBox::stateChanged, this, &SettingsWidget::onShowClosePromptToggled);
+    
+    QLabel *closeBehaviorLabel = new QLabel("当前关闭行为: " + QString(db->getMinimizeToTray() ? "最小化到系统托盘" : "直接退出程序"), this);
+    closeBehaviorLabel->setStyleSheet("padding: 5px; color: #2196f3;");
+    closeBehaviorLabel->setObjectName("closeBehaviorLabel");
+    
+    closeBehaviorLayout->addWidget(minimizeToTrayCheck);
+    closeBehaviorLayout->addWidget(showClosePromptCheck);
+    closeBehaviorLayout->addWidget(closeBehaviorLabel);
+    closeBehaviorGroup->setLayout(closeBehaviorLayout);
+    mainLayout->addWidget(closeBehaviorGroup);
+    
     QGroupBox *aboutGroup = new QGroupBox("关于", this);
     QVBoxLayout *aboutLayout = new QVBoxLayout();
     
@@ -259,4 +280,32 @@ void SettingsWidget::onAboutClicked()
     mainLayout->addLayout(buttonLayout);
     
     aboutDialog.exec();
+}
+
+void SettingsWidget::onMinimizeToTrayToggled(int state)
+{
+    bool enabled = (state == Qt::Checked);
+    
+    if (db->setMinimizeToTray(enabled)) {
+        QLabel *label = findChild<QLabel*>("closeBehaviorLabel");
+        if (label) {
+            label->setText("当前关闭行为: " + QString(enabled ? "最小化到系统托盘" : "直接退出程序"));
+        }
+        QMessageBox::information(this, "成功", QString("最小化到系统托盘已%1！").arg(enabled ? "启用" : "禁用"));
+    } else {
+        QMessageBox::warning(this, "错误", "设置失败！");
+        minimizeToTrayCheck->setChecked(!enabled);
+    }
+}
+
+void SettingsWidget::onShowClosePromptToggled(int state)
+{
+    bool show = (state == Qt::Checked);
+    
+    if (db->setShowClosePrompt(show)) {
+        QMessageBox::information(this, "成功", QString("关闭提示已%1！").arg(show ? "启用" : "禁用"));
+    } else {
+        QMessageBox::warning(this, "错误", "设置失败！");
+        showClosePromptCheck->setChecked(!show);
+    }
 }

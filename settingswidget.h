@@ -19,6 +19,8 @@ public:
 
 private slots:
     void onAutoStartToggled(int state);
+    void onMinimizeToTrayToggled(int state);
+    void onShowClosePromptToggled(int state);
     void onAboutClicked();
 
 private:
@@ -26,6 +28,8 @@ private:
     
     Database *db;
     QCheckBox *autoStartCheck;
+    QCheckBox *minimizeToTrayCheck;
+    QCheckBox *showClosePromptCheck;
     QLabel *statusLabel;
 };
 
