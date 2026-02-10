@@ -112,7 +112,7 @@ public:
         hintLabel->setText(QCoreApplication::translate("SettingsWidget", "\345\213\276\351\200\211\345\220\216\357\274\214\345\272\224\347\224\250\345\260\206\351\232\217\347\263\273\347\273\237\345\220\257\345\212\250\350\200\214\350\207\252\345\212\250\350\277\220\350\241\214", nullptr));
         statusLabel->setText(QCoreApplication::translate("SettingsWidget", "\347\212\266\346\200\201: \345\260\261\347\273\252", nullptr));
         aboutGroup->setTitle(QCoreApplication::translate("SettingsWidget", "\345\205\263\344\272\216", nullptr));
-        aboutLabel->setText(QCoreApplication::translate("SettingsWidget", "\345\212\236\345\205\254\345\212\251\346\211\213 v1.0\n"
+        aboutLabel->setText(QCoreApplication::translate("SettingsWidget", "\345\260\217\351\251\254\345\212\236\345\205\254 v1.0\n"
 "\344\270\200\346\254\276\347\256\200\345\215\225\346\230\223\347\224\250\347\232\204\346\241\214\351\235\242\345\212\236\345\205\254\345\212\251\346\211\213\345\272\224\347\224\250\n"
 "\n"
 "\345\212\237\350\203\275\347\211\271\347\202\271\357\274\232\n"

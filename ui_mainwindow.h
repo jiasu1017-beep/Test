@@ -52,7 +52,7 @@ public:
 
     void retranslateUi(QMainWindow *MainWindow)
     {
-        MainWindow->setWindowTitle(QCoreApplication::translate("MainWindow", "\345\212\236\345\205\254\345\212\251\346\211\213 - Office Assistant", nullptr));
+        MainWindow->setWindowTitle(QCoreApplication::translate("MainWindow", "\345\260\217\351\251\254\345\212\236\345\205\254 - PonyWork", nullptr));
     } // retranslateUi
 
 };
