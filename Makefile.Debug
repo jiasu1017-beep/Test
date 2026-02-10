@@ -19,7 +19,7 @@ CXXFLAGS      = -fno-keep-inline-dllexport -g -Wall -Wextra -Wextra -fexceptions
 INCPATH       = -I. -ID:\Qt\5.15.2\mingw81_64\include -ID:\Qt\5.15.2\mingw81_64\include\QtWidgets -ID:\Qt\5.15.2\mingw81_64\include\QtGui -ID:\Qt\5.15.2\mingw81_64\include\QtANGLE -ID:\Qt\5.15.2\mingw81_64\include\QtCore -Idebug -I. -I/include -ID:\Qt\5.15.2\mingw81_64\mkspecs\win32-g++ 
 LINKER      =        g++
 LFLAGS        =        -Wl,-subsystem,windows -mthreads
-LIBS        =        D:\Qt\5.15.2\mingw81_64\lib\libQt5Widgets.a D:\Qt\5.15.2\mingw81_64\lib\libQt5Gui.a D:\Qt\5.15.2\mingw81_64\lib\libQt5Core.a  -lmingw32 D:\Qt\5.15.2\mingw81_64\lib\libqtmain.a -LC:\openssl\lib -LC:\Utils\my_sql\mysql-5.7.25-winx64\lib -LC:\Utils\postgresql\pgsql\lib -lshell32 
+LIBS        =        D:\Qt\5.15.2\mingw81_64\lib\libQt5Widgets.a D:\Qt\5.15.2\mingw81_64\lib\libQt5Gui.a D:\Qt\5.15.2\mingw81_64\lib\libQt5Core.a debug\PonyWork_resource_res.o  -lmingw32 D:\Qt\5.15.2\mingw81_64\lib\libqtmain.a -LC:\openssl\lib -LC:\Utils\my_sql\mysql-5.7.25-winx64\lib -LC:\Utils\postgresql\pgsql\lib -lshell32 
 QMAKE         = D:\Qt\5.15.2\mingw81_64\bin\qmake.exe
 DEL_FILE      = del
 CHK_DIR_EXISTS= if not exist
@@ -40,7 +40,7 @@ IDC           = idc
 IDL           = midl
 ZIP           = zip -r -9
 DEF_FILE      = 
-RES_FILE      = 
+RES_FILE      = debug\PonyWork_resource_res.o
 SED           = $(QMAKE) -install sed
 MOVE          = move
 
@@ -112,8 +112,11 @@ DESTDIR_TARGET = debug\PonyWork.exe
 first: all
 all: Makefile.Debug  debug/PonyWork.exe
 
-debug/PonyWork.exe: D:/Qt/5.15.2/mingw81_64/lib/libQt5Widgets.a D:/Qt/5.15.2/mingw81_64/lib/libQt5Gui.a D:/Qt/5.15.2/mingw81_64/lib/libQt5Core.a D:/Qt/5.15.2/mingw81_64/lib/libqtmain.a ui_appmanagerwidget.h ui_fishmodewidget.h ui_shutdownwidget.h ui_settingswidget.h ui_mainwindow.h $(OBJECTS) 
+debug/PonyWork.exe: D:/Qt/5.15.2/mingw81_64/lib/libQt5Widgets.a D:/Qt/5.15.2/mingw81_64/lib/libQt5Gui.a D:/Qt/5.15.2/mingw81_64/lib/libQt5Core.a D:/Qt/5.15.2/mingw81_64/lib/libqtmain.a ui_appmanagerwidget.h ui_fishmodewidget.h ui_shutdownwidget.h ui_settingswidget.h ui_mainwindow.h $(OBJECTS) debug/PonyWork_resource_res.o
 	$(LINKER) $(LFLAGS) -o $(DESTDIR_TARGET) @object_script.PonyWork.Debug  $(LIBS)
+
+debug/PonyWork_resource_res.o: PonyWork_resource.rc
+	windres -i PonyWork_resource.rc -o debug\PonyWork_resource_res.o --include-dir=. $(DEFINES)
 
 qmake: FORCE
 	@$(QMAKE) -o Makefile.Debug PonyWork.pro
@@ -125,6 +128,7 @@ dist:
 
 clean: compiler_clean 
 	-$(DEL_FILE) debug\main.o debug\mainwindow.o debug\database.o debug\appmanagerwidget.o debug\fishmodewidget.o debug\shutdownwidget.o debug\settingswidget.o debug\collectionmanagerwidget.o debug\recommendedappswidget.o debug\qrc_resources.o debug\moc_mainwindow.o debug\moc_database.o debug\moc_appmanagerwidget.o debug\moc_fishmodewidget.o debug\moc_shutdownwidget.o debug\moc_settingswidget.o debug\moc_collectionmanagerwidget.o debug\moc_recommendedappswidget.o
+	-$(DEL_FILE) debug\PonyWork_resource_res.o
 
 distclean: clean 
 	-$(DEL_FILE) .qmake.stash

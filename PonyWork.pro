@@ -31,3 +31,5 @@ FORMS += ui/appmanagerwidget.ui \
          ui/mainwindow.ui
 
 RESOURCES += resources.qrc
+
+RC_ICONS = img/icon.ico
