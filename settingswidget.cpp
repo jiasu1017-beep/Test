@@ -108,6 +108,26 @@ void SettingsWidget::onAboutClicked()
     titleLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(titleLabel);
     
+    QLabel *picLabel = new QLabel(&aboutDialog);
+    picLabel->setAlignment(Qt::AlignCenter);
+    QPixmap picPixmap(":/img/pic.png");
+    if (!picPixmap.isNull()) {
+        picPixmap = picPixmap.scaled(250, 250, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        picLabel->setPixmap(picPixmap);
+    } else {
+        picLabel->setText("[插图加载失败]");
+        picLabel->setStyleSheet(
+            "background-color: #f5f5f5; "
+            "border: 2px dashed #ccc; "
+            "border-radius: 8px; "
+            "padding: 50px; "
+            "color: #999; "
+            "font-size: 12px;"
+        );
+    }
+    picLabel->setMinimumHeight(200);
+    mainLayout->addWidget(picLabel);
+    
     QLabel *descLabel = new QLabel("一个功能完善的桌面办公助手应用", &aboutDialog);
     descLabel->setStyleSheet("font-size: 14px; color: #666; padding: 5px;");
     descLabel->setAlignment(Qt::AlignCenter);

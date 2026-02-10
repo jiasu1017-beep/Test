@@ -1,5 +1,7 @@
 <RCC>
     <qresource prefix="/">
         <file>img/wechater.jpg</file>
+        <file>img/icon.png</file>
+        <file>img/pic.png</file>
     </qresource>
 </RCC>
