@@ -5,8 +5,8 @@
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
-    a.setApplicationName("办公助手");
-    a.setOrganizationName("OfficeAssistant");
+    a.setApplicationName("小马办公");
+    a.setOrganizationName("PonyWork");
     a.setApplicationVersion("1.0");
     
     MainWindow w;

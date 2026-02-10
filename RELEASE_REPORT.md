@@ -1,4 +1,4 @@
-# 办公助手 - Office Assistant v1.0.0 发布报告
+# 小马办公 - PonyWork v1.0.0 发布报告
 
 ---
 
@@ -6,7 +6,7 @@
 
 | 属性 | 值 |
 |------|-----|
-| **产品名称** | 办公助手 (Office Assistant) |
+| **产品名称** | 小马办公 (PonyWork) |
 | **版本号** | v1.0.0 |
 | **发布日期** | 2026-02-09 |
 | **发布类型** | 正式版 (GA) |
@@ -56,7 +56,7 @@
 
 ```
 release-v1.0.0/
-├── OfficeAssistant.exe          # 主程序
+├── PonyWork.exe          # 主程序
 ├── Qt5Core.dll                   # Qt核心库
 ├── Qt5Gui.dll                    # Qt GUI库
 ├── Qt5Svg.dll                    # Qt SVG支持
@@ -146,7 +146,7 @@ release-v1.0.0/
    ↓
 3. 执行 mingw32-make 编译
    ↓
-4. 复制 release/OfficeAssistant.exe 到发布目录
+4. 复制 release/PonyWork.exe 到发布目录
    ↓
 5. 运行 windeployqt 自动打包依赖
    ↓

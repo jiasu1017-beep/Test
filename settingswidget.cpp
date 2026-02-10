@@ -26,7 +26,7 @@ void SettingsWidget::setupUI()
     QGroupBox *startupGroup = new QGroupBox("开机启动", this);
     QVBoxLayout *startupLayout = new QVBoxLayout();
     
-    autoStartCheck = new QCheckBox("开机自动启动办公助手", this);
+    autoStartCheck = new QCheckBox("开机自动启动小马办公", this);
     autoStartCheck->setChecked(db->getAutoStart());
     connect(autoStartCheck, &QCheckBox::stateChanged, this, &SettingsWidget::onAutoStartToggled);
     
@@ -48,7 +48,7 @@ void SettingsWidget::setupUI()
     QGroupBox *aboutGroup = new QGroupBox("关于", this);
     QVBoxLayout *aboutLayout = new QVBoxLayout();
     
-    QLabel *aboutLabel = new QLabel("办公助手 v1.0\n\n"
+    QLabel *aboutLabel = new QLabel("小马办公 v1.0\n\n"
                                       "一个功能完善的桌面办公助手应用\n"
                                       "• 应用管理模块\n"
                                       "• 摸鱼模式模块\n"
@@ -69,7 +69,7 @@ void SettingsWidget::setupUI()
     
     mainLayout->addStretch();
     
-    QLabel *copyrightLabel = new QLabel("© 2024 办公助手. All rights reserved.", this);
+    QLabel *copyrightLabel = new QLabel("© 2024 小马办公. All rights reserved.", this);
     copyrightLabel->setStyleSheet("color: #999; padding: 10px; text-align: center;");
     copyrightLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(copyrightLabel);
@@ -98,12 +98,12 @@ void SettingsWidget::onAutoStartToggled(int state)
 void SettingsWidget::onAboutClicked()
 {
     QDialog aboutDialog(this);
-    aboutDialog.setWindowTitle("关于办公助手");
+    aboutDialog.setWindowTitle("关于小马办公");
     aboutDialog.setMinimumWidth(450);
     
     QVBoxLayout *mainLayout = new QVBoxLayout(&aboutDialog);
     
-    QLabel *titleLabel = new QLabel("办公助手 v1.0", &aboutDialog);
+    QLabel *titleLabel = new QLabel("小马办公 v1.0", &aboutDialog);
     titleLabel->setStyleSheet("font-size: 24px; font-weight: bold; color: #6200ea; padding: 10px;");
     titleLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(titleLabel);
@@ -202,7 +202,7 @@ void SettingsWidget::onAboutClicked()
     techContent->setStyleSheet("font-size: 13px; padding: 5px 20px; color: #555; line-height: 1.8;");
     mainLayout->addWidget(techContent);
     
-    QLabel *copyrightLabel = new QLabel("© 2024 办公助手. All rights reserved.", &aboutDialog);
+    QLabel *copyrightLabel = new QLabel("© 2024 小马办公. All rights reserved.", &aboutDialog);
     copyrightLabel->setStyleSheet("color: #999; padding: 15px; font-size: 12px;");
     copyrightLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(copyrightLabel);

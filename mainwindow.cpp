@@ -25,7 +25,7 @@ MainWindow::MainWindow(QWidget *parent)
         tabWidget->setCurrentWidget(collectionManagerWidget);
     }
     
-    setWindowTitle("办公助手 - Office Assistant");
+    setWindowTitle("小马办公 - PonyWork");
     setMinimumSize(1000, 700);
     resize(1100, 750);
 }

@@ -1,6 +1,6 @@
 {
-  "project_name": "OfficeAssistant",
-  "project_description": "办公助手应用程序",
+  "project_name": "PonyWork",
+  "project_description": "小马办公应用程序",
   "publishing_config": {
     "automatic_publishing": "DISABLED",
     "automatic_releases": "DISABLED",

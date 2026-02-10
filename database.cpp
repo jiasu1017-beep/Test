@@ -338,9 +338,9 @@ bool Database::setAutoStart(bool enabled)
                        QSettings::NativeFormat);
     
     if (enabled) {
-        settings.setValue("OfficeAssistant", QCoreApplication::applicationFilePath().replace("/", "\\"));
+        settings.setValue("PonyWork", QCoreApplication::applicationFilePath().replace("/", "\\"));
     } else {
-        settings.remove("OfficeAssistant");
+        settings.remove("PonyWork");
     }
     
     QJsonObject settingsObj = rootObject["settings"].toObject();
@@ -356,5 +356,5 @@ bool Database::getAutoStart()
 {
     QSettings settings("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", 
                        QSettings::NativeFormat);
-    return settings.contains("OfficeAssistant");
+    return settings.contains("PonyWork");
 }

@@ -64,7 +64,7 @@
 
 ```bash
 cd f:\00AI\Test\build
-D:\Qt\5.15.2\mingw81_64\bin\qmake.exe ..\OfficeAssistant.pro
+D:\Qt\5.15.2\mingw81_64\bin\qmake.exe ..\PonyWork.pro
 D:\Qt\Tools\mingw810_64\bin\mingw32-make.exe clean
 D:\Qt\Tools\mingw810_64\bin\mingw32-make.exe
 ```
@@ -80,10 +80,10 @@ mkdir f:\00AI\Test\release-vX.X.X
 
 ```bash
 # 复制可执行文件
-copy f:\00AI\Test\build\release\OfficeAssistant.exe f:\00AI\Test\release-vX.X.X\
+copy f:\00AI\Test\build\release\PonyWork.exe f:\00AI\Test\release-vX.X.X\
 
 # 使用 windeployqt 部署依赖
-D:\Qt\5.15.2\mingw81_64\bin\windeployqt.exe f:\00AI\Test\release-vX.X.X\OfficeAssistant.exe
+D:\Qt\5.15.2\mingw81_64\bin\windeployqt.exe f:\00AI\Test\release-vX.X.X\PonyWork.exe
 
 # 复制文档
 copy f:\00AI\Test\README.txt f:\00AI\Test\release-vX.X.X\
