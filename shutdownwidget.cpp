@@ -87,7 +87,7 @@ void ShutdownWidget::setupUI()
     secondSpin->setRange(0, 59);
     secondSpin->setValue(0);
     customLayout->addWidget(secondSpin);
-    customLayout->addWidget(new QLabel("秒", this));
+    customLayout->addWidget(new QLabel("秒:", this));
     
     // Connect preset buttons
     connect(thirtyMinBtn, &QPushButton::clicked, [this]() {
