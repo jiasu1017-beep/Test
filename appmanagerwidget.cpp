@@ -478,10 +478,26 @@ void AppManagerWidget::launchApp(const AppInfo &app)
     QString fullPath = app.path;
     QString args = app.arguments;
     
-    if (args.trimmed().isEmpty()) {
-        QProcess::startDetached(fullPath, QStringList());
+    QString fileName = QFileInfo(fullPath).fileName().toLower();
+    
+    if (fileName == "cmd.exe" || fileName == "cmd") {
+        if (args.trimmed().isEmpty()) {
+            QProcess::startDetached("cmd /c start cmd.exe");
+        } else {
+            QProcess::startDetached(QString("cmd /c start \"\" %1 %2").arg(fullPath, args));
+        }
+    } else if (fileName == "powershell.exe" || fileName == "powershell") {
+        if (args.trimmed().isEmpty()) {
+            QProcess::startDetached("cmd /c start powershell.exe");
+        } else {
+            QProcess::startDetached(QString("cmd /c start \"\" %1 %2").arg(fullPath, args));
+        }
     } else {
-        QProcess::startDetached(fullPath, QProcess::splitCommand(args));
+        if (args.trimmed().isEmpty()) {
+            QProcess::startDetached(fullPath, QStringList());
+        } else {
+            QProcess::startDetached(fullPath, QProcess::splitCommand(args));
+        }
     }
     
     AppInfo updatedApp = app;
