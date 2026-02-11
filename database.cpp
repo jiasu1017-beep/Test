@@ -96,6 +96,8 @@ QJsonObject Database::appToJson(const AppInfo &app)
     obj["useCount"] = app.useCount;
     obj["isFavorite"] = app.isFavorite;
     obj["sortOrder"] = app.sortOrder;
+    obj["isRemoteDesktop"] = app.isRemoteDesktop;
+    obj["remoteDesktopId"] = app.remoteDesktopId;
     return obj;
 }
 
@@ -111,6 +113,8 @@ AppInfo Database::jsonToApp(const QJsonObject &obj)
     app.useCount = obj["useCount"].toInt();
     app.isFavorite = obj["isFavorite"].toBool();
     app.sortOrder = obj["sortOrder"].toInt();
+    app.isRemoteDesktop = obj["isRemoteDesktop"].toBool(false);
+    app.remoteDesktopId = obj["remoteDesktopId"].toInt(-1);
     return app;
 }
 

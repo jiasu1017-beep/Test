@@ -25,6 +25,10 @@ class RemoteDesktopWidget : public QWidget
 public:
     explicit RemoteDesktopWidget(Database *db, QWidget *parent = nullptr);
 
+signals:
+    void collectionNeedsRefresh();
+    void appListNeedsRefresh();
+
 private slots:
     void refreshConnectionList();
     void onSearchTextChanged(const QString &text);
@@ -38,6 +42,8 @@ private slots:
     void onConnectionSelectionChanged();
     void onToggleFavorite();
     void onTableContextMenuRequested(const QPoint &pos);
+    void onAddToAppList();
+    void onAddToCollection();
 
 private:
     void setupUI();

@@ -8,6 +8,10 @@
 #include <QColor>
 #include <QLinearGradient>
 #include <QPainterPath>
+#include <QPainter>
+#include <QTextStream>
+#include <QProcess>
+#include <QTcpSocket>
 #include <windows.h>
 #include <shellapi.h>
 
@@ -255,6 +259,10 @@ void AppManagerWidget::refreshAppList()
 
 QIcon AppManagerWidget::getAppIcon(const AppInfo &app)
 {
+    if (app.isRemoteDesktop) {
+        return QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
+    }
+
     if (!app.iconPath.isEmpty() && QFile::exists(app.iconPath)) {
         QIcon icon(app.iconPath);
         if (!icon.isNull()) {
@@ -475,6 +483,76 @@ void AppManagerWidget::onChangeArguments()
 
 void AppManagerWidget::launchApp(const AppInfo &app)
 {
+    if (app.isRemoteDesktop && app.remoteDesktopId > 0) {
+        RemoteDesktopConnection conn = db->getRemoteDesktopById(app.remoteDesktopId);
+        if (conn.id != -1) {
+            QString targetName = "TERMSRV/" + conn.hostAddress;
+
+            if (!conn.username.isEmpty() && !conn.password.isEmpty()) {
+                QString username = conn.username;
+                if (!conn.domain.isEmpty()) {
+                    username = conn.domain + "\\" + username;
+                }
+
+                QStringList cmdkeyArgs;
+                cmdkeyArgs << "/generic:" + targetName << "/user:" + username << "/pass:" + conn.password;
+
+                QProcess::execute("cmdkey.exe", cmdkeyArgs);
+            }
+
+            QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+            QString rdpFilePath = tempDir + "/PonyWork_RDP_" + QString::number(conn.id) + ".rdp";
+
+            QFile rdpFile(rdpFilePath);
+            if (rdpFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream out(&rdpFile);
+                out.setCodec("UTF-8");
+
+                QString fullAddress = conn.hostAddress;
+                if (conn.port != 3389) {
+                    fullAddress += ":" + QString::number(conn.port);
+                }
+
+                out << "full address:s:" << fullAddress << "\n";
+                out << "screen mode id:i:" << (conn.fullScreen ? "2" : "1") << "\n";
+                out << "desktopwidth:i:" << conn.screenWidth << "\n";
+                out << "desktopheight:i:" << conn.screenHeight << "\n";
+                out << "use multimon:i:" << (conn.useAllMonitors ? "1" : "0") << "\n";
+                out << "audiomode:i:" << (conn.enableAudio ? "0" : "2") << "\n";
+                out << "redirectclipboard:i:" << (conn.enableClipboard ? "1" : "0") << "\n";
+                out << "redirectprinters:i:" << (conn.enablePrinter ? "1" : "0") << "\n";
+                out << "redirectdrives:i:" << (conn.enableDrive ? "1" : "0") << "\n";
+                out << "authentication level:i:2\n";
+                out << "prompt for credentials:i:0\n";
+                out << "administrative session:i:0\n";
+
+                if (!conn.username.isEmpty()) {
+                    QString username = conn.username;
+                    if (!conn.domain.isEmpty()) {
+                        username = conn.domain + "\\" + username;
+                    }
+                    out << "username:s:" << username << "\n";
+                }
+
+                rdpFile.close();
+            }
+
+            conn.lastUsedTime = QDateTime::currentDateTime();
+            db->updateRemoteDesktop(conn);
+
+            QStringList args;
+            args << rdpFilePath;
+
+            QProcess::startDetached("mstsc.exe", args);
+
+            AppInfo updatedApp = app;
+            updatedApp.useCount++;
+            db->updateApp(updatedApp);
+            refreshAppList();
+            return;
+        }
+    }
+
     QString fullPath = app.path;
     QString args = app.arguments;
     

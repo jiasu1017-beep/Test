@@ -52,6 +52,10 @@ public:
     
     void selectFirstCollection();
 
+public slots:
+    void refreshCollectionList();
+    void refreshCollectionApps();
+
 private slots:
     void onCreateCollection();
     void onEditCollection();
@@ -70,8 +74,6 @@ private slots:
 
 private:
     void setupUI();
-    void refreshCollectionList();
-    void refreshCollectionApps();
     void runApp(const AppInfo &app);
     QIcon getAppIcon(const AppInfo &app);
     void launchApp(const AppInfo &app);

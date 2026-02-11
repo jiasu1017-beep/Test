@@ -682,8 +682,103 @@ void RemoteDesktopWidget::onTableContextMenuRequested(const QPoint &pos)
     
     contextMenu.addSeparator();
     
+    QAction *addToAppListAction = contextMenu.addAction(QApplication::style()->standardIcon(QStyle::SP_FileDialogListView), "添加到应用列表");
+    addToAppListAction->setEnabled(hasSelection);
+    connect(addToAppListAction, &QAction::triggered, this, &RemoteDesktopWidget::onAddToAppList);
+    
+    QMenu *addToCollectionMenu = contextMenu.addMenu(QApplication::style()->standardIcon(QStyle::SP_DirIcon), "添加到集合");
+    addToCollectionMenu->setEnabled(hasSelection);
+    if (hasSelection) {
+        QList<AppCollection> collections = db->getAllCollections();
+        for (const AppCollection &col : collections) {
+            QAction *colAction = addToCollectionMenu->addAction(col.name);
+            colAction->setData(col.id);
+            connect(colAction, &QAction::triggered, this, [this, colAction]() {
+                int collectionId = colAction->data().toInt();
+                RemoteDesktopConnection conn = getSelectedConnection();
+                if (conn.id == -1) return;
+                
+                QList<AppInfo> allApps = db->getAllApps();
+                int maxSortOrder = 0;
+                for (const AppInfo &a : allApps) {
+                    if (a.sortOrder > maxSortOrder) {
+                        maxSortOrder = a.sortOrder;
+                    }
+                }
+                
+                AppInfo app;
+                app.name = conn.name;
+                app.path = "";
+                app.arguments = "";
+                app.iconPath = "";
+                app.category = conn.category;
+                app.useCount = 0;
+                app.isFavorite = false;
+                app.sortOrder = maxSortOrder + 1;
+                app.isRemoteDesktop = true;
+                app.remoteDesktopId = conn.id;
+                
+                if (db->addApp(app)) {
+                    AppInfo newApp = db->getAllApps().last();
+                    AppCollection col = db->getCollectionById(collectionId);
+                    if (col.id > 0 && !col.appIds.contains(newApp.id)) {
+                        col.appIds.append(newApp.id);
+                        db->updateCollection(col);
+                        emit appListNeedsRefresh();
+                        emit collectionNeedsRefresh();
+                        QMessageBox::information(this, "成功", QString("已将 \"%1\" 添加到集合 \"%2\"！").arg(conn.name, col.name));
+                    }
+                }
+            });
+        }
+        
+        if (collections.isEmpty()) {
+            QAction *noColAction = addToCollectionMenu->addAction("尚无集合");
+            noColAction->setEnabled(false);
+        }
+    }
+    
+    contextMenu.addSeparator();
+    
     QAction *addAction = contextMenu.addAction(QApplication::style()->standardIcon(QStyle::SP_FileDialogNewFolder), "添加连接");
     connect(addAction, &QAction::triggered, this, &RemoteDesktopWidget::onAddConnection);
     
     contextMenu.exec(connectionTable->mapToGlobal(pos));
+}
+
+void RemoteDesktopWidget::onAddToAppList()
+{
+    RemoteDesktopConnection conn = getSelectedConnection();
+    if (conn.id == -1) return;
+
+    QList<AppInfo> allApps = db->getAllApps();
+    int maxSortOrder = 0;
+    for (const AppInfo &a : allApps) {
+        if (a.sortOrder > maxSortOrder) {
+            maxSortOrder = a.sortOrder;
+        }
+    }
+
+    AppInfo app;
+    app.name = conn.name;
+    app.path = "";
+    app.arguments = "";
+    app.iconPath = "";
+    app.category = conn.category;
+    app.useCount = 0;
+    app.isFavorite = false;
+    app.sortOrder = maxSortOrder + 1;
+    app.isRemoteDesktop = true;
+    app.remoteDesktopId = conn.id;
+
+    if (db->addApp(app)) {
+        emit appListNeedsRefresh();
+        QMessageBox::information(this, "成功", QString("已将 \"%1\" 添加到应用列表！").arg(conn.name));
+    } else {
+        QMessageBox::warning(this, "错误", "添加到应用列表失败！");
+    }
+}
+
+void RemoteDesktopWidget::onAddToCollection()
+{
 }

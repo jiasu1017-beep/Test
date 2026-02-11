@@ -18,6 +18,8 @@ struct AppInfo {
     int useCount;
     bool isFavorite;
     int sortOrder;
+    bool isRemoteDesktop;
+    int remoteDesktopId;
 };
 
 struct AppCollection {
