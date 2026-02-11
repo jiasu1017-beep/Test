@@ -101,7 +101,7 @@ void MainWindow::setupUI()
     connect(collectionManagerWidget, &CollectionManagerWidget::statusMessageRequested, this, &MainWindow::setStatusText);
     connect(remoteDesktopWidget, &RemoteDesktopWidget::statusMessageRequested, this, &MainWindow::setStatusText);
     
-    tabWidget->addTab(appManagerWidget, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "应用管理");
+    tabWidget->addTab(appManagerWidget, QApplication::style()->standardIcon(QStyle::SP_DesktopIcon), "应用管理");
     tabWidget->addTab(collectionManagerWidget, QApplication::style()->standardIcon(QStyle::SP_DirHomeIcon), "集合管理");
     tabWidget->addTab(remoteDesktopWidget, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "远程桌面");
     tabWidget->addTab(recommendedAppsWidget, QApplication::style()->standardIcon(QStyle::SP_ArrowForward), "推荐应用");
