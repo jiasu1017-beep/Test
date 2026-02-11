@@ -14,6 +14,8 @@
 #include <QFormLayout>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QMenu>
+#include <QAction>
 #include "database.h"
 
 class RemoteDesktopWidget : public QWidget
@@ -35,6 +37,7 @@ private slots:
     void onExportConnections();
     void onConnectionSelectionChanged();
     void onToggleFavorite();
+    void onTableContextMenuRequested(const QPoint &pos);
 
 private:
     void setupUI();

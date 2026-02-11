@@ -62,11 +62,13 @@ void RemoteDesktopWidget::setupUI()
     connectionTable->setSelectionMode(QAbstractItemView::SingleSelection);
     connectionTable->setAlternatingRowColors(true);
     connectionTable->verticalHeader()->setVisible(false);
+    connectionTable->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(connectionTable, &QTableWidget::itemSelectionChanged, this, &RemoteDesktopWidget::onConnectionSelectionChanged);
     connect(connectionTable, &QTableWidget::doubleClicked, this, [this](const QModelIndex &index) {
         Q_UNUSED(index);
         onConnect();
     });
+    connect(connectionTable, &QTableWidget::customContextMenuRequested, this, &RemoteDesktopWidget::onTableContextMenuRequested);
 
     mainLayout->addWidget(connectionTable);
 
@@ -641,4 +643,47 @@ void RemoteDesktopDialog::validateForm()
 void RemoteDesktopDialog::onSave()
 {
     accept();
+}
+
+void RemoteDesktopWidget::onTableContextMenuRequested(const QPoint &pos)
+{
+    QMenu contextMenu(this);
+    
+    RemoteDesktopConnection selectedConn = getSelectedConnection();
+    bool hasSelection = (selectedConn.id != -1);
+    
+    QAction *connectAction = contextMenu.addAction(QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "连接");
+    connectAction->setEnabled(hasSelection);
+    connect(connectAction, &QAction::triggered, this, &RemoteDesktopWidget::onConnect);
+    
+    QAction *testAction = contextMenu.addAction(QApplication::style()->standardIcon(QStyle::SP_BrowserReload), "测试连接");
+    testAction->setEnabled(hasSelection);
+    connect(testAction, &QAction::triggered, this, &RemoteDesktopWidget::onTestConnection);
+    
+    contextMenu.addSeparator();
+    
+    QAction *editAction = contextMenu.addAction(QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView), "编辑连接");
+    editAction->setEnabled(hasSelection);
+    connect(editAction, &QAction::triggered, this, &RemoteDesktopWidget::onEditConnection);
+    
+    QAction *deleteAction = contextMenu.addAction(QApplication::style()->standardIcon(QStyle::SP_TrashIcon), "删除连接");
+    deleteAction->setEnabled(hasSelection);
+    connect(deleteAction, &QAction::triggered, this, &RemoteDesktopWidget::onDeleteConnection);
+    
+    contextMenu.addSeparator();
+    
+    QString favoriteText = hasSelection && selectedConn.isFavorite ? "取消收藏" : "收藏";
+    QIcon favoriteIcon = hasSelection && selectedConn.isFavorite 
+        ? QApplication::style()->standardIcon(QStyle::SP_DialogNoButton)
+        : QApplication::style()->standardIcon(QStyle::SP_DialogYesButton);
+    QAction *favoriteAction = contextMenu.addAction(favoriteIcon, favoriteText);
+    favoriteAction->setEnabled(hasSelection);
+    connect(favoriteAction, &QAction::triggered, this, &RemoteDesktopWidget::onToggleFavorite);
+    
+    contextMenu.addSeparator();
+    
+    QAction *addAction = contextMenu.addAction(QApplication::style()->standardIcon(QStyle::SP_FileDialogNewFolder), "添加连接");
+    connect(addAction, &QAction::triggered, this, &RemoteDesktopWidget::onAddConnection);
+    
+    contextMenu.exec(connectionTable->mapToGlobal(pos));
 }
