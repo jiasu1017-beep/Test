@@ -1,4 +1,5 @@
 #include "updatemanager.h"
+#include "logger.h"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -739,19 +740,8 @@ QString UpdateManager::formatFileSize(qint64 bytes) const
 
 void UpdateManager::log(const QString &message)
 {
-    QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
-    QString msg = QString("[%1] %2").arg(timestamp, message);
-    
-    qDebug() << msg;
-    emit logMessage(msg);
-    
-    QString logPath = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + "/PonyWork-update.log";
-    QFile logFile(logPath);
-    if (logFile.open(QIODevice::WriteOnly | QIODevice::Append)) {
-        QTextStream out(&logFile);
-        out << msg << "\n";
-        logFile.close();
-    }
+    Logger::instance()->log(message);
+    emit logMessage(message);
 }
 
 QString UpdateManager::calculateFileHash(const QString &filePath, QCryptographicHash::Algorithm algorithm)

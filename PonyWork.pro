@@ -16,7 +16,8 @@ SOURCES += main.cpp \
            recommendedappswidget.cpp \
            updatemanager.cpp \
            updatedialog.cpp \
-           updateprogressdialog.cpp
+           updateprogressdialog.cpp \
+           logger.cpp
 
 HEADERS  += mainwindow.h \
             database.h \
@@ -28,7 +29,8 @@ HEADERS  += mainwindow.h \
             recommendedappswidget.h \
             updatemanager.h \
             updatedialog.h \
-            updateprogressdialog.h
+            updateprogressdialog.h \
+            logger.h
 
 FORMS += ui/appmanagerwidget.ui \
          ui/fishmodewidget.ui \
