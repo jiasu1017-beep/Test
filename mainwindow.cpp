@@ -98,6 +98,8 @@ void MainWindow::setupUI()
     connect(remoteDesktopWidget, &RemoteDesktopWidget::appListNeedsRefresh, appManagerWidget, &AppManagerWidget::refreshAppList);
     connect(remoteDesktopWidget, &RemoteDesktopWidget::collectionNeedsRefresh, collectionManagerWidget, &CollectionManagerWidget::refreshCollectionList);
     connect(remoteDesktopWidget, &RemoteDesktopWidget::collectionNeedsRefresh, collectionManagerWidget, &CollectionManagerWidget::refreshCollectionApps);
+    connect(collectionManagerWidget, &CollectionManagerWidget::statusMessageRequested, this, &MainWindow::setStatusText);
+    connect(remoteDesktopWidget, &RemoteDesktopWidget::statusMessageRequested, this, &MainWindow::setStatusText);
     
     tabWidget->addTab(appManagerWidget, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "应用管理");
     tabWidget->addTab(collectionManagerWidget, QApplication::style()->standardIcon(QStyle::SP_DirHomeIcon), "集合管理");

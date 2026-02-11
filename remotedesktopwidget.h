@@ -28,6 +28,7 @@ public:
 signals:
     void collectionNeedsRefresh();
     void appListNeedsRefresh();
+    void statusMessageRequested(const QString &message);
 
 private slots:
     void refreshConnectionList();

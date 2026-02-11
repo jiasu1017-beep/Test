@@ -715,14 +715,14 @@ void RemoteDesktopWidget::onTableContextMenuRequested(const QPoint &pos)
                 
                 if (appExists) {
                     if (col.appIds.contains(existingApp.id)) {
-                        QMessageBox::information(this, "提示", QString("\"%1\" 已在集合 \"%2\" 中，无需重复添加！").arg(conn.name, col.name));
+                        emit statusMessageRequested(QString("\"%1\" 已在集合 \"%2\" 中，无需重复添加！").arg(conn.name, col.name));
                         return;
                     }
                     
                     col.appIds.append(existingApp.id);
                     db->updateCollection(col);
                     emit collectionNeedsRefresh();
-                    QMessageBox::information(this, "成功", QString("已将 \"%1\" 添加到集合 \"%2\"！").arg(conn.name, col.name));
+                    emit statusMessageRequested(QString("已将 \"%1\" 添加到集合 \"%2\"！").arg(conn.name, col.name));
                 } else {
                     int maxSortOrder = 0;
                     for (const AppInfo &a : allApps) {
@@ -749,7 +749,7 @@ void RemoteDesktopWidget::onTableContextMenuRequested(const QPoint &pos)
                         db->updateCollection(col);
                         emit appListNeedsRefresh();
                         emit collectionNeedsRefresh();
-                        QMessageBox::information(this, "成功", QString("已将 \"%1\" 添加到集合 \"%2\"！").arg(conn.name, col.name));
+                        emit statusMessageRequested(QString("已将 \"%1\" 添加到集合 \"%2\"！").arg(conn.name, col.name));
                     }
                 }
             });
@@ -778,7 +778,7 @@ void RemoteDesktopWidget::onAddToAppList()
     
     for (const AppInfo &a : allApps) {
         if (a.isRemoteDesktop && a.remoteDesktopId == conn.id) {
-            QMessageBox::information(this, "提示", QString("\"%1\" 已在应用列表中，无需重复添加！").arg(conn.name));
+            emit statusMessageRequested(QString("\"%1\" 已在应用列表中，无需重复添加！").arg(conn.name));
             return;
         }
     }
@@ -804,9 +804,9 @@ void RemoteDesktopWidget::onAddToAppList()
 
     if (db->addApp(app)) {
         emit appListNeedsRefresh();
-        QMessageBox::information(this, "成功", QString("已将 \"%1\" 添加到应用列表！").arg(conn.name));
+        emit statusMessageRequested(QString("已将 \"%1\" 添加到应用列表！").arg(conn.name));
     } else {
-        QMessageBox::warning(this, "错误", "添加到应用列表失败！");
+        emit statusMessageRequested("添加到应用列表失败！");
     }
 }
 

@@ -808,10 +808,10 @@ void CollectionManagerWidget::onAddAppToCollection()
         }
         
         if (db->updateCollection(collection)) {
-            QMessageBox::information(this, "成功", "应用添加成功！");
+            emit statusMessageRequested("应用添加成功！");
             refreshCollectionApps();
         } else {
-            QMessageBox::warning(this, "错误", "应用添加失败！");
+            emit statusMessageRequested("应用添加失败！");
         }
     }
 }
@@ -887,8 +887,8 @@ void CollectionManagerWidget::onRunCollection()
         }
     }
     
-    QString message = QString("批量运行完成！\n成功: %1 个\n失败: %2 个").arg(successCount).arg(failCount);
-    QMessageBox::information(this, "完成", message);
+    QString message = QString("批量运行完成！成功: %1 个，失败: %2 个").arg(successCount).arg(failCount);
+    emit statusMessageRequested(message);
 }
 
 void CollectionManagerWidget::onAppItemDoubleClicked(const QModelIndex &index)

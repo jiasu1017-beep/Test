@@ -56,6 +56,9 @@ public slots:
     void refreshCollectionList();
     void refreshCollectionApps();
 
+signals:
+    void statusMessageRequested(const QString &message);
+
 private slots:
     void onCreateCollection();
     void onEditCollection();
