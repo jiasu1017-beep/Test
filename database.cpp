@@ -127,9 +127,18 @@ QJsonObject Database::collectionToJson(const AppCollection &collection)
     obj["tag"] = collection.tag;
     obj["sortPriority"] = collection.sortPriority;
     
+    QJsonArray appsArray = rootObject["apps"].toArray();
+    QSet<int> validAppIds;
+    for (const QJsonValue &val : appsArray) {
+        QJsonObject appObj = val.toObject();
+        validAppIds.insert(appObj["id"].toInt());
+    }
+    
     QJsonArray idArray;
     for (int id : collection.appIds) {
-        idArray.append(id);
+        if (validAppIds.contains(id)) {
+            idArray.append(id);
+        }
     }
     obj["appIds"] = idArray;
     return obj;
@@ -149,9 +158,19 @@ AppCollection Database::jsonToCollection(const QJsonObject &obj)
     }
     col.sortPriority = obj["sortPriority"].toInt(0);
     
+    QJsonArray appsArray = rootObject["apps"].toArray();
+    QSet<int> validAppIds;
+    for (const QJsonValue &val : appsArray) {
+        QJsonObject appObj = val.toObject();
+        validAppIds.insert(appObj["id"].toInt());
+    }
+    
     QJsonArray idArray = obj["appIds"].toArray();
     for (const QJsonValue &val : idArray) {
-        col.appIds.append(val.toInt());
+        int appId = val.toInt();
+        if (validAppIds.contains(appId)) {
+            col.appIds.append(appId);
+        }
     }
     return col;
 }
@@ -198,6 +217,21 @@ bool Database::deleteApp(int id)
     }
     
     rootObject["apps"] = appsArray;
+    
+    QJsonArray colsArray = rootObject["collections"].toArray();
+    for (int i = 0; i < colsArray.size(); ++i) {
+        QJsonObject colObj = colsArray[i].toObject();
+        QJsonArray idArray = colObj["appIds"].toArray();
+        QJsonArray newIdArray;
+        for (const QJsonValue &val : idArray) {
+            if (val.toInt() != id) {
+                newIdArray.append(val);
+            }
+        }
+        colObj["appIds"] = newIdArray;
+        colsArray[i] = colObj;
+    }
+    rootObject["collections"] = colsArray;
     
     return saveData();
 }
