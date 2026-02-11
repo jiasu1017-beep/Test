@@ -307,6 +307,13 @@ void MainWindow::closeEvent(QCloseEvent *event)
     if (!showPrompt) {
         if (minimizeToTray) {
             hide();
+            QString version = qApp->applicationVersion();
+            trayIcon->showMessage(
+                "小马办公",
+                "已最小化到系统托盘\n双击托盘图标可重新打开窗口",
+                QSystemTrayIcon::Information,
+                4000
+            );
             event->ignore();
         } else {
             event->accept();
@@ -336,6 +343,13 @@ void MainWindow::closeEvent(QCloseEvent *event)
                 db->setShowClosePrompt(false);
             }
             hide();
+            QString version = qApp->applicationVersion();
+            trayIcon->showMessage(
+                "小马办公",
+                "已最小化到系统托盘\n双击托盘图标可重新打开窗口",
+                QSystemTrayIcon::Information,
+                4000
+            );
             event->ignore();
         } else {
             event->ignore();
@@ -471,6 +485,13 @@ void MainWindow::changeEvent(QEvent *event)
             bool minimizeToTray = db->getMinimizeToTray();
             if (minimizeToTray) {
                 hide();
+                QString version = qApp->applicationVersion();
+                trayIcon->showMessage(
+                    "小马办公",
+                    "已最小化到系统托盘\n双击托盘图标可重新打开窗口",
+                    QSystemTrayIcon::Information,
+                    4000
+                );
             }
         }
     }
