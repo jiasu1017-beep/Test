@@ -9,6 +9,8 @@
 #include <QAction>
 #include <QCloseEvent>
 #include <QEvent>
+#include <QLabel>
+#include <QStatusBar>
 #include "database.h"
 #include "updatemanager.h"
 
@@ -29,6 +31,9 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+public slots:
+    void setStatusText(const QString &text);
+    
 private slots:
     void onTabChanged(int index);
     void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
@@ -75,6 +80,7 @@ private:
     UpdateManager *updateManager;
     UpdateDialog *updateDialog;
     UpdateProgressDialog *updateProgressDialog;
+    QLabel *statusLabel;
 };
 
 #endif

@@ -5,3 +5,5 @@ release-v1.0.0/
 *.zip
 release-v0.0.1/
 deploy/
+release-v0.0.2/
+release-v0.0.3/

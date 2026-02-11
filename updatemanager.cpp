@@ -38,6 +38,8 @@ UpdateManager::UpdateManager(QObject *parent)
 
 void UpdateManager::checkForUpdates()
 {
+    emit checkForUpdatesStarted();
+    
     log("开始检查更新...");
     log(QString("当前版本: %1").arg(m_currentVersion));
     

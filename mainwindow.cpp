@@ -30,6 +30,10 @@ MainWindow::MainWindow(QWidget *parent)
     updateManager = new UpdateManager(this);
     updateManager->setIgnoredVersion(db->getIgnoredVersion());
     
+    connect(updateManager, &UpdateManager::checkForUpdatesStarted, this, [this]() {
+        QString version = qApp->applicationVersion();
+        setStatusText(QString("小马办公 v%1 - 正在检查更新...").arg(version));
+    });
     connect(updateManager, &UpdateManager::updateAvailable, this, &MainWindow::onUpdateAvailable);
     connect(updateManager, &UpdateManager::noUpdateAvailable, this, &MainWindow::onNoUpdateAvailable);
     connect(updateManager, &UpdateManager::updateCheckFailed, this, &MainWindow::onUpdateCheckFailed);
@@ -96,6 +100,11 @@ void MainWindow::setupUI()
     connect(tabWidget, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
     
     mainLayout->addWidget(tabWidget);
+    
+    statusLabel = new QLabel(this);
+    statusBar()->addWidget(statusLabel);
+    QString version = qApp->applicationVersion();
+    statusLabel->setText(QString("小马办公 v%1 - 就绪").arg(version));
 }
 
 void MainWindow::initPresetApps()
@@ -283,8 +292,16 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
 }
 
+void MainWindow::setStatusText(const QString &text)
+{
+    if (statusLabel) {
+        statusLabel->setText(text);
+    }
+}
+
 void MainWindow::onUpdateAvailable(const UpdateInfo &info)
 {
+    setStatusText(QString("发现新版本 v%1").arg(info.version));
     updateDialog = new UpdateDialog(info, this);
     connect(updateDialog, &UpdateDialog::updateNow, this, &MainWindow::onUpdateNow);
     connect(updateDialog, &UpdateDialog::remindLater, this, &MainWindow::onRemindLater);
@@ -294,11 +311,15 @@ void MainWindow::onUpdateAvailable(const UpdateInfo &info)
 
 void MainWindow::onNoUpdateAvailable()
 {
+    QString version = qApp->applicationVersion();
+    setStatusText(QString("小马办公 v%1 - 已是最新版本").arg(version));
 }
 
 void MainWindow::onUpdateCheckFailed(const QString &error)
 {
     qWarning() << "Update check failed:" << error;
+    QString version = qApp->applicationVersion();
+    setStatusText(QString("小马办公 v%1 - 检查更新失败").arg(version));
 }
 
 void MainWindow::onUpdateNow()

@@ -44,6 +44,7 @@ public slots:
     void restartApplication();
     
 signals:
+    void checkForUpdatesStarted();
     void updateAvailable(const UpdateInfo &info);
     void noUpdateAvailable();
     void updateCheckFailed(const QString &error);
