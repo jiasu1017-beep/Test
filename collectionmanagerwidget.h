@@ -74,6 +74,7 @@ private slots:
     void onRenameCollection();
     void onEditCollectionProperties();
     void onExportCollection();
+    void onDesktopSnapshot();
 
 private:
     void setupUI();
@@ -96,6 +97,7 @@ private:
     QPushButton *addAppButton;
     QPushButton *removeAppButton;
     QPushButton *runCollectionButton;
+    QPushButton *desktopSnapshotButton;
     
     QLabel *collectionNameLabel;
     QLabel *collectionDescLabel;

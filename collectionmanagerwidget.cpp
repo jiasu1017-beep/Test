@@ -1,4 +1,5 @@
 #include "collectionmanagerwidget.h"
+#include "desktopsnapshotdialog.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
@@ -465,6 +466,16 @@ void CollectionManagerWidget::setupUI()
     appsButtonLayout->addWidget(removeAppButton);
     
     appsButtonLayout->addStretch();
+    
+    desktopSnapshotButton = new QPushButton("桌面快照", this);
+    desktopSnapshotButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_ComputerIcon));
+    desktopSnapshotButton->setStyleSheet(
+        "QPushButton { background-color: #fdcb6e; color: #2d3436; padding: 10px 18px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
+        "QPushButton:hover { background-color: #f6c050; } "
+        "QPushButton:pressed { background-color: #eab543; }"
+    );
+    connect(desktopSnapshotButton, &QPushButton::clicked, this, &CollectionManagerWidget::onDesktopSnapshot);
+    appsButtonLayout->addWidget(desktopSnapshotButton);
     
     runCollectionButton = new QPushButton("批量运行", this);
     runCollectionButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_MediaPlay));
@@ -1151,4 +1162,14 @@ void CollectionManagerWidget::launchApp(const AppInfo &app)
 void CollectionManagerWidget::runApp(const AppInfo &app)
 {
     launchApp(app);
+}
+
+void CollectionManagerWidget::onDesktopSnapshot()
+{
+    DesktopSnapshotDialog dialog(db, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        refreshCollectionList();
+        refreshCollectionApps();
+        emit statusMessageRequested("桌面快照添加完成！");
+    }
 }

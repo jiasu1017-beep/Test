@@ -2,6 +2,8 @@ QT       += core gui network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
+win32: LIBS += -lpsapi
+
 TARGET = PonyWork
 TEMPLATE = app
 
@@ -18,7 +20,8 @@ SOURCES += main.cpp \
            updatedialog.cpp \
            updateprogressdialog.cpp \
            logger.cpp \
-           remotedesktopwidget.cpp
+           remotedesktopwidget.cpp \
+           desktopsnapshotdialog.cpp
 
 HEADERS  += mainwindow.h \
             database.h \
@@ -32,7 +35,8 @@ HEADERS  += mainwindow.h \
             updatedialog.h \
             updateprogressdialog.h \
             logger.h \
-            remotedesktopwidget.h
+            remotedesktopwidget.h \
+            desktopsnapshotdialog.h
 
 FORMS += ui/appmanagerwidget.ui \
          ui/fishmodewidget.ui \
