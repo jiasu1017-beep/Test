@@ -113,7 +113,7 @@ void SettingsWidget::setupUI()
     QGroupBox *aboutGroup = new QGroupBox("关于", this);
     QVBoxLayout *aboutLayout = new QVBoxLayout();
     
-    QLabel *aboutLabel = new QLabel("小马办公 v1.0\n\n"
+    QLabel *aboutLabel = new QLabel("小马办公 v0.0\n\n"
                                       "一个功能完善的桌面办公助手应用\n"
                                       "• 应用管理模块\n"
                                       "• 摸鱼模式模块\n"
@@ -180,7 +180,7 @@ void SettingsWidget::onAboutClicked()
     contentLayout->setSpacing(12);
     contentLayout->setContentsMargins(20, 20, 20, 20);
     
-    QLabel *titleLabel = new QLabel("小马办公 v1.0", contentWidget);
+    QLabel *titleLabel = new QLabel("小马办公 v0.0", contentWidget);
     titleLabel->setStyleSheet("font-size: 24px; font-weight: bold; color: #6200ea; padding: 10px;");
     titleLabel->setAlignment(Qt::AlignCenter);
     contentLayout->addWidget(titleLabel);
