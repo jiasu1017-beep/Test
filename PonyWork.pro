@@ -17,7 +17,8 @@ SOURCES += main.cpp \
            updatemanager.cpp \
            updatedialog.cpp \
            updateprogressdialog.cpp \
-           logger.cpp
+           logger.cpp \
+           remotedesktopwidget.cpp
 
 HEADERS  += mainwindow.h \
             database.h \
@@ -30,7 +31,8 @@ HEADERS  += mainwindow.h \
             updatemanager.h \
             updatedialog.h \
             updateprogressdialog.h \
-            logger.h
+            logger.h \
+            remotedesktopwidget.h
 
 FORMS += ui/appmanagerwidget.ui \
          ui/fishmodewidget.ui \

@@ -7,6 +7,7 @@
 #include "recommendedappswidget.h"
 #include "updatedialog.h"
 #include "updateprogressdialog.h"
+#include "remotedesktopwidget.h"
 #include <QApplication>
 #include <QStyle>
 #include <QStandardPaths>
@@ -86,6 +87,7 @@ void MainWindow::setupUI()
     
     appManagerWidget = new AppManagerWidget(db, this);
     collectionManagerWidget = new CollectionManagerWidget(db, this);
+    remoteDesktopWidget = new RemoteDesktopWidget(db, this);
     fishModeWidget = new FishModeWidget(this);
     shutdownWidget = new ShutdownWidget(this);
     settingsWidget = new SettingsWidget(db, this);
@@ -96,11 +98,12 @@ void MainWindow::setupUI()
     
     tabWidget->addTab(appManagerWidget, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "应用管理");
     tabWidget->addTab(collectionManagerWidget, QApplication::style()->standardIcon(QStyle::SP_DirHomeIcon), "集合管理");
+    tabWidget->addTab(remoteDesktopWidget, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "远程桌面");
     tabWidget->addTab(recommendedAppsWidget, QApplication::style()->standardIcon(QStyle::SP_ArrowForward), "推荐应用");
     tabWidget->addTab(fishModeWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView), "摸鱼模式");
     tabWidget->addTab(shutdownWidget, QApplication::style()->standardIcon(QStyle::SP_BrowserStop), "定时关机");
     tabWidget->addTab(settingsWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogInfoView), "设置");
-    
+ 
     tabWidget->setIconSize(QSize(24, 24));
     
     connect(tabWidget, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);

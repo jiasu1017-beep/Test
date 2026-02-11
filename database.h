@@ -29,6 +29,31 @@ struct AppCollection {
     int sortPriority;
 };
 
+struct RemoteDesktopConnection {
+    int id;
+    QString name;
+    QString hostAddress;
+    int port;
+    QString username;
+    QString password;
+    QString domain;
+    QString displayName;
+    int screenWidth;
+    int screenHeight;
+    bool fullScreen;
+    bool useAllMonitors;
+    bool enableAudio;
+    bool enableClipboard;
+    bool enablePrinter;
+    bool enableDrive;
+    QString notes;
+    QString category;
+    int sortOrder;
+    bool isFavorite;
+    QDateTime createdTime;
+    QDateTime lastUsedTime;
+};
+
 class Database : public QObject
 {
     Q_OBJECT
@@ -66,11 +91,20 @@ public:
     bool setIgnoredVersion(const QString &version);
     QString getIgnoredVersion();
 
+    bool addRemoteDesktop(const RemoteDesktopConnection &connection);
+    bool updateRemoteDesktop(const RemoteDesktopConnection &connection);
+    bool deleteRemoteDesktop(int id);
+    QList<RemoteDesktopConnection> getAllRemoteDesktops();
+    QList<RemoteDesktopConnection> getFavoriteRemoteDesktops();
+    RemoteDesktopConnection getRemoteDesktopById(int id);
+    QList<RemoteDesktopConnection> searchRemoteDesktops(const QString &keyword);
+
 private:
     QString dataFilePath;
     QJsonObject rootObject;
     int nextAppId;
     int nextCollectionId;
+    int nextRemoteDesktopId;
     
     bool loadData();
     bool saveData();
@@ -78,6 +112,10 @@ private:
     AppInfo jsonToApp(const QJsonObject &obj);
     QJsonObject collectionToJson(const AppCollection &collection);
     AppCollection jsonToCollection(const QJsonObject &obj);
+    QJsonObject remoteDesktopToJson(const RemoteDesktopConnection &connection);
+    RemoteDesktopConnection jsonToRemoteDesktop(const QJsonObject &obj);
+    QString encryptPassword(const QString &password);
+    QString decryptPassword(const QString &encrypted);
 };
 
 #endif

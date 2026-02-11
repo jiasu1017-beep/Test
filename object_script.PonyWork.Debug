@@ -9,6 +9,9 @@ debug/collectionmanagerwidget.o
 debug/recommendedappswidget.o
 debug/updatemanager.o
 debug/updatedialog.o
+debug/updateprogressdialog.o
+debug/logger.o
+debug/remotedesktopwidget.o
 debug/qrc_resources.o
 debug/moc_mainwindow.o
 debug/moc_database.o
@@ -20,3 +23,6 @@ debug/moc_collectionmanagerwidget.o
 debug/moc_recommendedappswidget.o
 debug/moc_updatemanager.o
 debug/moc_updatedialog.o
+debug/moc_updateprogressdialog.o
+debug/moc_logger.o
+debug/moc_remotedesktopwidget.o

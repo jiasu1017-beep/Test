@@ -10,6 +10,7 @@ Database::Database(QObject *parent) : QObject(parent)
 {
     nextAppId = 1;
     nextCollectionId = 1;
+    nextRemoteDesktopId = 1;
 }
 
 Database::~Database()
@@ -30,9 +31,11 @@ bool Database::init()
         rootObject = QJsonObject();
         rootObject["apps"] = QJsonArray();
         rootObject["collections"] = QJsonArray();
+        rootObject["remoteDesktops"] = QJsonArray();
         rootObject["settings"] = QJsonObject();
         rootObject["nextAppId"] = 1;
         rootObject["nextCollectionId"] = 1;
+        rootObject["nextRemoteDesktopId"] = 1;
         saveData();
     }
     
@@ -57,6 +60,7 @@ bool Database::loadData()
     rootObject = doc.object();
     nextAppId = rootObject["nextAppId"].toInt(1);
     nextCollectionId = rootObject["nextCollectionId"].toInt(1);
+    nextRemoteDesktopId = rootObject["nextRemoteDesktopId"].toInt(1);
     
     return true;
 }
@@ -65,6 +69,7 @@ bool Database::saveData()
 {
     rootObject["nextAppId"] = nextAppId;
     rootObject["nextCollectionId"] = nextCollectionId;
+    rootObject["nextRemoteDesktopId"] = nextRemoteDesktopId;
     
     QJsonDocument doc(rootObject);
     QFile file(dataFilePath);
@@ -417,4 +422,217 @@ QString Database::getIgnoredVersion()
 {
     QJsonObject settingsObj = rootObject["settings"].toObject();
     return settingsObj["ignored_version"].toString("");
+}
+
+QString Database::encryptPassword(const QString &password)
+{
+    QByteArray data = password.toUtf8();
+    QByteArray key = "PonyWorkRemoteDesktopSecretKey2024";
+    QByteArray result;
+    
+    for (int i = 0; i < data.size(); ++i) {
+        result.append(data[i] ^ key[i % key.size()]);
+    }
+    
+    return result.toBase64();
+}
+
+QString Database::decryptPassword(const QString &encrypted)
+{
+    QByteArray data = QByteArray::fromBase64(encrypted.toUtf8());
+    QByteArray key = "PonyWorkRemoteDesktopSecretKey2024";
+    QByteArray result;
+    
+    for (int i = 0; i < data.size(); ++i) {
+        result.append(data[i] ^ key[i % key.size()]);
+    }
+    
+    return QString::fromUtf8(result);
+}
+
+QJsonObject Database::remoteDesktopToJson(const RemoteDesktopConnection &connection)
+{
+    QJsonObject obj;
+    obj["id"] = connection.id;
+    obj["name"] = connection.name;
+    obj["hostAddress"] = connection.hostAddress;
+    obj["port"] = connection.port;
+    obj["username"] = connection.username;
+    obj["password"] = encryptPassword(connection.password);
+    obj["domain"] = connection.domain;
+    obj["displayName"] = connection.displayName;
+    obj["screenWidth"] = connection.screenWidth;
+    obj["screenHeight"] = connection.screenHeight;
+    obj["fullScreen"] = connection.fullScreen;
+    obj["useAllMonitors"] = connection.useAllMonitors;
+    obj["enableAudio"] = connection.enableAudio;
+    obj["enableClipboard"] = connection.enableClipboard;
+    obj["enablePrinter"] = connection.enablePrinter;
+    obj["enableDrive"] = connection.enableDrive;
+    obj["notes"] = connection.notes;
+    obj["category"] = connection.category;
+    obj["sortOrder"] = connection.sortOrder;
+    obj["isFavorite"] = connection.isFavorite;
+    obj["createdTime"] = connection.createdTime.toString(Qt::ISODate);
+    obj["lastUsedTime"] = connection.lastUsedTime.toString(Qt::ISODate);
+    return obj;
+}
+
+RemoteDesktopConnection Database::jsonToRemoteDesktop(const QJsonObject &obj)
+{
+    RemoteDesktopConnection conn;
+    conn.id = obj["id"].toInt();
+    conn.name = obj["name"].toString();
+    conn.hostAddress = obj["hostAddress"].toString();
+    conn.port = obj["port"].toInt(3389);
+    conn.username = obj["username"].toString();
+    conn.password = decryptPassword(obj["password"].toString());
+    conn.domain = obj["domain"].toString();
+    conn.displayName = obj["displayName"].toString();
+    conn.screenWidth = obj["screenWidth"].toInt(1920);
+    conn.screenHeight = obj["screenHeight"].toInt(1080);
+    conn.fullScreen = obj["fullScreen"].toBool(false);
+    conn.useAllMonitors = obj["useAllMonitors"].toBool(false);
+    conn.enableAudio = obj["enableAudio"].toBool(true);
+    conn.enableClipboard = obj["enableClipboard"].toBool(true);
+    conn.enablePrinter = obj["enablePrinter"].toBool(false);
+    conn.enableDrive = obj["enableDrive"].toBool(false);
+    conn.notes = obj["notes"].toString();
+    conn.category = obj["category"].toString("未分类");
+    conn.sortOrder = obj["sortOrder"].toInt(0);
+    conn.isFavorite = obj["isFavorite"].toBool(false);
+    conn.createdTime = QDateTime::fromString(obj["createdTime"].toString(), Qt::ISODate);
+    conn.lastUsedTime = QDateTime::fromString(obj["lastUsedTime"].toString(), Qt::ISODate);
+    return conn;
+}
+
+bool Database::addRemoteDesktop(const RemoteDesktopConnection &connection)
+{
+    RemoteDesktopConnection newConn = connection;
+    newConn.id = nextRemoteDesktopId++;
+    newConn.createdTime = QDateTime::currentDateTime();
+    newConn.lastUsedTime = QDateTime::currentDateTime();
+    
+    QJsonArray rdsArray = rootObject["remoteDesktops"].toArray();
+    rdsArray.append(remoteDesktopToJson(newConn));
+    rootObject["remoteDesktops"] = rdsArray;
+    
+    return saveData();
+}
+
+bool Database::updateRemoteDesktop(const RemoteDesktopConnection &connection)
+{
+    QJsonArray rdsArray = rootObject["remoteDesktops"].toArray();
+    
+    for (int i = 0; i < rdsArray.size(); ++i) {
+        QJsonObject obj = rdsArray[i].toObject();
+        if (obj["id"].toInt() == connection.id) {
+            rdsArray[i] = remoteDesktopToJson(connection);
+            break;
+        }
+    }
+    
+    rootObject["remoteDesktops"] = rdsArray;
+    
+    return saveData();
+}
+
+bool Database::deleteRemoteDesktop(int id)
+{
+    QJsonArray rdsArray = rootObject["remoteDesktops"].toArray();
+    
+    for (int i = 0; i < rdsArray.size(); ++i) {
+        QJsonObject obj = rdsArray[i].toObject();
+        if (obj["id"].toInt() == id) {
+            rdsArray.removeAt(i);
+            break;
+        }
+    }
+    
+    rootObject["remoteDesktops"] = rdsArray;
+    
+    return saveData();
+}
+
+QList<RemoteDesktopConnection> Database::getAllRemoteDesktops()
+{
+    QList<RemoteDesktopConnection> connections;
+    QJsonArray rdsArray = rootObject["remoteDesktops"].toArray();
+    
+    QList<QJsonObject> rdObjects;
+    for (const QJsonValue &val : rdsArray) {
+        rdObjects.append(val.toObject());
+    }
+    
+    std::sort(rdObjects.begin(), rdObjects.end(), [](const QJsonObject &a, const QJsonObject &b) {
+        return a["sortOrder"].toInt() < b["sortOrder"].toInt();
+    });
+    
+    for (const QJsonObject &obj : rdObjects) {
+        connections.append(jsonToRemoteDesktop(obj));
+    }
+    
+    return connections;
+}
+
+QList<RemoteDesktopConnection> Database::getFavoriteRemoteDesktops()
+{
+    QList<RemoteDesktopConnection> connections;
+    QJsonArray rdsArray = rootObject["remoteDesktops"].toArray();
+    
+    QList<QJsonObject> rdObjects;
+    for (const QJsonValue &val : rdsArray) {
+        QJsonObject obj = val.toObject();
+        if (obj["isFavorite"].toBool()) {
+            rdObjects.append(obj);
+        }
+    }
+    
+    std::sort(rdObjects.begin(), rdObjects.end(), [](const QJsonObject &a, const QJsonObject &b) {
+        return a["sortOrder"].toInt() < b["sortOrder"].toInt();
+    });
+    
+    for (const QJsonObject &obj : rdObjects) {
+        connections.append(jsonToRemoteDesktop(obj));
+    }
+    
+    return connections;
+}
+
+RemoteDesktopConnection Database::getRemoteDesktopById(int id)
+{
+    RemoteDesktopConnection conn;
+    conn.id = -1;
+    
+    QJsonArray rdsArray = rootObject["remoteDesktops"].toArray();
+    
+    for (const QJsonValue &val : rdsArray) {
+        QJsonObject obj = val.toObject();
+        if (obj["id"].toInt() == id) {
+            conn = jsonToRemoteDesktop(obj);
+            break;
+        }
+    }
+    
+    return conn;
+}
+
+QList<RemoteDesktopConnection> Database::searchRemoteDesktops(const QString &keyword)
+{
+    QList<RemoteDesktopConnection> connections;
+    QList<RemoteDesktopConnection> allConnections = getAllRemoteDesktops();
+    
+    QString lowerKeyword = keyword.toLower();
+    
+    for (const RemoteDesktopConnection &conn : allConnections) {
+        if (conn.name.toLower().contains(lowerKeyword) ||
+            conn.hostAddress.toLower().contains(lowerKeyword) ||
+            conn.username.toLower().contains(lowerKeyword) ||
+            conn.category.toLower().contains(lowerKeyword) ||
+            conn.notes.toLower().contains(lowerKeyword)) {
+            connections.append(conn);
+        }
+    }
+    
+    return connections;
 }
