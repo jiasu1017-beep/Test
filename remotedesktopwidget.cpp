@@ -699,29 +699,52 @@ void RemoteDesktopWidget::onTableContextMenuRequested(const QPoint &pos)
                 if (conn.id == -1) return;
                 
                 QList<AppInfo> allApps = db->getAllApps();
-                int maxSortOrder = 0;
+                AppInfo existingApp;
+                bool appExists = false;
+                
                 for (const AppInfo &a : allApps) {
-                    if (a.sortOrder > maxSortOrder) {
-                        maxSortOrder = a.sortOrder;
+                    if (a.isRemoteDesktop && a.remoteDesktopId == conn.id) {
+                        existingApp = a;
+                        appExists = true;
+                        break;
                     }
                 }
                 
-                AppInfo app;
-                app.name = conn.name;
-                app.path = "";
-                app.arguments = "";
-                app.iconPath = "";
-                app.category = conn.category;
-                app.useCount = 0;
-                app.isFavorite = false;
-                app.sortOrder = maxSortOrder + 1;
-                app.isRemoteDesktop = true;
-                app.remoteDesktopId = conn.id;
+                AppCollection col = db->getCollectionById(collectionId);
+                if (col.id <= 0) return;
                 
-                if (db->addApp(app)) {
-                    AppInfo newApp = db->getAllApps().last();
-                    AppCollection col = db->getCollectionById(collectionId);
-                    if (col.id > 0 && !col.appIds.contains(newApp.id)) {
+                if (appExists) {
+                    if (col.appIds.contains(existingApp.id)) {
+                        QMessageBox::information(this, "提示", QString("\"%1\" 已在集合 \"%2\" 中，无需重复添加！").arg(conn.name, col.name));
+                        return;
+                    }
+                    
+                    col.appIds.append(existingApp.id);
+                    db->updateCollection(col);
+                    emit collectionNeedsRefresh();
+                    QMessageBox::information(this, "成功", QString("已将 \"%1\" 添加到集合 \"%2\"！").arg(conn.name, col.name));
+                } else {
+                    int maxSortOrder = 0;
+                    for (const AppInfo &a : allApps) {
+                        if (a.sortOrder > maxSortOrder) {
+                            maxSortOrder = a.sortOrder;
+                        }
+                    }
+                    
+                    AppInfo app;
+                    app.name = conn.name;
+                    app.path = "";
+                    app.arguments = "";
+                    app.iconPath = "";
+                    app.category = conn.category;
+                    app.useCount = 0;
+                    app.isFavorite = false;
+                    app.sortOrder = maxSortOrder + 1;
+                    app.isRemoteDesktop = true;
+                    app.remoteDesktopId = conn.id;
+                    
+                    if (db->addApp(app)) {
+                        AppInfo newApp = db->getAllApps().last();
                         col.appIds.append(newApp.id);
                         db->updateCollection(col);
                         emit appListNeedsRefresh();
@@ -752,6 +775,14 @@ void RemoteDesktopWidget::onAddToAppList()
     if (conn.id == -1) return;
 
     QList<AppInfo> allApps = db->getAllApps();
+    
+    for (const AppInfo &a : allApps) {
+        if (a.isRemoteDesktop && a.remoteDesktopId == conn.id) {
+            QMessageBox::information(this, "提示", QString("\"%1\" 已在应用列表中，无需重复添加！").arg(conn.name));
+            return;
+        }
+    }
+    
     int maxSortOrder = 0;
     for (const AppInfo &a : allApps) {
         if (a.sortOrder > maxSortOrder) {
