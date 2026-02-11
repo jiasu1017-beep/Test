@@ -19,6 +19,7 @@ class SettingsWidget;
 class CollectionManagerWidget;
 class RecommendedAppsWidget;
 class UpdateDialog;
+class UpdateProgressDialog;
 
 class MainWindow : public QMainWindow
 {
@@ -42,6 +43,13 @@ private slots:
     void onDownloadProgress(qint64 bytesReceived, qint64 bytesTotal);
     void onDownloadFinished(const QString &filePath);
     void onDownloadFailed(const QString &error);
+    void onExtractProgress(int percent);
+    void onExtractFinished(const QString &extractPath);
+    void onExtractFailed(const QString &error);
+    void onInstallProgress(int percent);
+    void onInstallFinished();
+    void onInstallFailed(const QString &error);
+    void onLogMessage(const QString &message);
     
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -66,6 +74,7 @@ private:
     QAction *exitAppAction;
     UpdateManager *updateManager;
     UpdateDialog *updateDialog;
+    UpdateProgressDialog *updateProgressDialog;
 };
 
 #endif

@@ -10,6 +10,7 @@
 #include <QPixmap>
 #include <QScrollArea>
 #include "updatedialog.h"
+#include "updateprogressdialog.h"
 
 SettingsWidget::SettingsWidget(Database *db, QWidget *parent)
     : QWidget(parent), db(db), updateManager(nullptr), progressDialog(nullptr)
@@ -22,7 +23,6 @@ void SettingsWidget::setUpdateManager(UpdateManager *manager)
     updateManager = manager;
     
     if (updateManager) {
-        connect(updateManager, &UpdateManager::updateAvailable, this, &SettingsWidget::onUpdateAvailable);
         connect(updateManager, &UpdateManager::noUpdateAvailable, this, &SettingsWidget::onNoUpdateAvailable);
         connect(updateManager, &UpdateManager::updateCheckFailed, this, &SettingsWidget::onUpdateCheckFailed);
     }
@@ -372,6 +372,8 @@ void SettingsWidget::onCheckUpdateClicked()
         return;
     }
     
+    QMessageBox::information(this, "调试", "开始检查更新...");
+    
     progressDialog = new QProgressDialog(this);
     progressDialog->setWindowTitle("检查更新");
     progressDialog->setLabelText("正在检查更新...");
@@ -396,8 +398,17 @@ void SettingsWidget::onUpdateAvailable(const UpdateInfo &info)
     
     UpdateDialog *dialog = new UpdateDialog(info, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
-    connect(dialog, &UpdateDialog::updateNow, [this]() {
+    connect(dialog, &UpdateDialog::updateNow, [this, info]() {
+        Q_UNUSED(info);
         if (updateManager) {
+            updateProgressDialog = new UpdateProgressDialog(this);
+            updateProgressDialog->setUpdateManager(updateManager);
+            updateProgressDialog->show();
+            
+            connect(updateManager, &UpdateManager::downloadFinished, this, [this](const QString &filePath) {
+                updateManager->installUpdate(filePath);
+            });
+            
             updateManager->downloadUpdate();
         }
     });

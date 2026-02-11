@@ -6,6 +6,7 @@
 #include "collectionmanagerwidget.h"
 #include "recommendedappswidget.h"
 #include "updatedialog.h"
+#include "updateprogressdialog.h"
 #include <QApplication>
 #include <QStyle>
 #include <QStandardPaths>
@@ -35,6 +36,13 @@ MainWindow::MainWindow(QWidget *parent)
     connect(updateManager, &UpdateManager::downloadProgress, this, &MainWindow::onDownloadProgress);
     connect(updateManager, &UpdateManager::downloadFinished, this, &MainWindow::onDownloadFinished);
     connect(updateManager, &UpdateManager::downloadFailed, this, &MainWindow::onDownloadFailed);
+    connect(updateManager, &UpdateManager::extractProgress, this, &MainWindow::onExtractProgress);
+    connect(updateManager, &UpdateManager::extractFinished, this, &MainWindow::onExtractFinished);
+    connect(updateManager, &UpdateManager::extractFailed, this, &MainWindow::onExtractFailed);
+    connect(updateManager, &UpdateManager::installProgress, this, &MainWindow::onInstallProgress);
+    connect(updateManager, &UpdateManager::installFinished, this, &MainWindow::onInstallFinished);
+    connect(updateManager, &UpdateManager::installFailed, this, &MainWindow::onInstallFailed);
+    connect(updateManager, &UpdateManager::logMessage, this, &MainWindow::onLogMessage);
     
     setupUI();
     setupTrayIcon();
@@ -295,6 +303,10 @@ void MainWindow::onUpdateCheckFailed(const QString &error)
 
 void MainWindow::onUpdateNow()
 {
+    updateProgressDialog = new UpdateProgressDialog(this);
+    updateProgressDialog->setUpdateManager(updateManager);
+    updateProgressDialog->show();
+    
     updateManager->downloadUpdate();
 }
 
@@ -314,27 +326,45 @@ void MainWindow::onDownloadProgress(qint64 bytesReceived, qint64 bytesTotal)
 
 void MainWindow::onDownloadFinished(const QString &filePath)
 {
-    QMessageBox msgBox(this);
-    msgBox.setWindowTitle("下载完成");
-    msgBox.setText("更新包已下载完成！");
-    msgBox.setInformativeText(QString("文件位置: %1\n\n是否立即打开文件位置？").arg(filePath));
-    msgBox.setIcon(QMessageBox::Information);
-    
-    QPushButton *openButton = msgBox.addButton("打开文件位置", QMessageBox::ActionRole);
-    QPushButton *closeButton = msgBox.addButton("关闭", QMessageBox::RejectRole);
-    msgBox.setDefaultButton(openButton);
-    
-    msgBox.exec();
-    
-    if (msgBox.clickedButton() == openButton) {
-        QFileInfo info(filePath);
-        QDesktopServices::openUrl(QUrl::fromLocalFile(info.absolutePath()));
-    }
+    updateManager->installUpdate(filePath);
+}
+
+void MainWindow::onExtractProgress(int percent)
+{
+}
+
+void MainWindow::onExtractFinished(const QString &extractPath)
+{
+    Q_UNUSED(extractPath);
+}
+
+void MainWindow::onExtractFailed(const QString &error)
+{
+    Q_UNUSED(error);
+}
+
+void MainWindow::onInstallProgress(int percent)
+{
+    Q_UNUSED(percent);
+}
+
+void MainWindow::onInstallFinished()
+{
+}
+
+void MainWindow::onInstallFailed(const QString &error)
+{
+    Q_UNUSED(error);
+}
+
+void MainWindow::onLogMessage(const QString &message)
+{
+    Q_UNUSED(message);
 }
 
 void MainWindow::onDownloadFailed(const QString &error)
 {
-    QMessageBox::warning(this, "下载失败", QString("更新下载失败:\n%1").arg(error));
+    Q_UNUSED(error);
 }
 
 void MainWindow::changeEvent(QEvent *event)

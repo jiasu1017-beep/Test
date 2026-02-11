@@ -13,6 +13,8 @@
 #include "database.h"
 #include "updatemanager.h"
 
+class UpdateProgressDialog;
+
 class SettingsWidget : public QWidget
 {
     Q_OBJECT
@@ -44,6 +46,7 @@ private:
     QPushButton *checkUpdateButton;
     QLabel *statusLabel;
     QProgressDialog *progressDialog;
+    UpdateProgressDialog *updateProgressDialog;
 };
 
 #endif
