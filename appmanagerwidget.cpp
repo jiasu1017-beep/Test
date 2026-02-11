@@ -134,6 +134,11 @@ void AppManagerWidget::setupUI()
                                    "QPushButton:hover { background-color: #7b1fa2; }");
     connect(ui->moveDownButton, &QPushButton::clicked, this, &AppManagerWidget::onMoveDown);
     
+    ui->initButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_DialogResetButton));
+    ui->initButton->setStyleSheet("QPushButton { background-color: #e91e63; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
+                                   "QPushButton:hover { background-color: #c2185b; }");
+    connect(ui->initButton, &QPushButton::clicked, this, &AppManagerWidget::onInitApps);
+    
     ui->iconViewButton->setStyleSheet("QPushButton:checked { background-color: #1976d2; color: white; } "
                                      "QPushButton { background-color: #e0e0e0; color: #333; }");
     connect(ui->iconViewButton, &QPushButton::clicked, this, &AppManagerWidget::onIconViewMode);
@@ -484,4 +489,9 @@ void AppManagerWidget::launchApp(const AppInfo &app)
     db->updateApp(updatedApp);
     
     refreshAppList();
+}
+
+void AppManagerWidget::onInitApps()
+{
+    emit resetAppsRequested();
 }

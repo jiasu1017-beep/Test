@@ -379,6 +379,116 @@ void RecommendedAppsWidget::loadAppData()
     cat5.iconEmoji = "🌍";
     {
         RecommendedAppInfo app;
+        app.name = "百度";
+        app.url = "https://www.baidu.com/";
+        app.description = "全球最大的中文搜索引擎";
+        app.iconEmoji = "🔍";
+        app.category = "网站与资源";
+        app.isFavorite = false;
+        cat5.apps.append(app);
+        allApps.append(app);
+    }
+    {
+        RecommendedAppInfo app;
+        app.name = "Google";
+        app.url = "https://www.google.com/";
+        app.description = "全球领先的搜索引擎";
+        app.iconEmoji = "🔍";
+        app.category = "网站与资源";
+        app.isFavorite = false;
+        cat5.apps.append(app);
+        allApps.append(app);
+    }
+    {
+        RecommendedAppInfo app;
+        app.name = "Bing";
+        app.url = "https://www.bing.com/";
+        app.description = "微软必应搜索引擎";
+        app.iconEmoji = "🔍";
+        app.category = "网站与资源";
+        app.isFavorite = false;
+        cat5.apps.append(app);
+        allApps.append(app);
+    }
+    {
+        RecommendedAppInfo app;
+        app.name = "GitHub";
+        app.url = "https://github.com/";
+        app.description = "全球最大的代码托管平台";
+        app.iconEmoji = "🐙";
+        app.category = "网站与资源";
+        app.isFavorite = false;
+        cat5.apps.append(app);
+        allApps.append(app);
+    }
+    {
+        RecommendedAppInfo app;
+        app.name = "Gitee";
+        app.url = "https://gitee.com/";
+        app.description = "国内代码托管平台，速度更快";
+        app.iconEmoji = "🐭";
+        app.category = "网站与资源";
+        app.isFavorite = false;
+        cat5.apps.append(app);
+        allApps.append(app);
+    }
+    {
+        RecommendedAppInfo app;
+        app.name = "知乎";
+        app.url = "https://www.zhihu.com/";
+        app.description = "问答社区，知识分享平台";
+        app.iconEmoji = "❓";
+        app.category = "网站与资源";
+        app.isFavorite = false;
+        cat5.apps.append(app);
+        allApps.append(app);
+    }
+    {
+        RecommendedAppInfo app;
+        app.name = "B站";
+        app.url = "https://www.bilibili.com/";
+        app.description = "视频分享网站，学习娱乐两不误";
+        app.iconEmoji = "📺";
+        app.category = "网站与资源";
+        app.isFavorite = false;
+        cat5.apps.append(app);
+        allApps.append(app);
+    }
+    {
+        RecommendedAppInfo app;
+        app.name = "CSDN";
+        app.url = "https://www.csdn.net/";
+        app.description = "程序员社区，技术学习分享";
+        app.iconEmoji = "💻";
+        app.category = "网站与资源";
+        app.isFavorite = false;
+        cat5.apps.append(app);
+        allApps.append(app);
+    }
+    {
+        RecommendedAppInfo app;
+        app.name = "掘金";
+        app.url = "https://juejin.cn/";
+        app.description = "帮助开发者成长的社区";
+        app.iconEmoji = "⛏️";
+        app.category = "网站与资源";
+        app.isFavorite = false;
+        cat5.apps.append(app);
+        allApps.append(app);
+    }
+    {
+        RecommendedAppInfo app;
+        app.name = "微博";
+        app.url = "https://weibo.com/";
+        app.description = "社交媒体平台";
+        app.iconEmoji = "📱";
+        app.category = "网站与资源";
+        app.isFavorite = false;
+        cat5.apps.append(app);
+        allApps.append(app);
+    }
+    {
+        RecommendedAppInfo app;
         app.name = "实用网站汇总";
         app.url = "https://haiezan.github.io/page/collections/";
         app.description = "包含国家标准、图标下载、配色方案等实用网站";

@@ -33,6 +33,7 @@ public:
 
 public slots:
     void setStatusText(const QString &text);
+    void resetApps();
     
 private slots:
     void onTabChanged(int index);
@@ -64,6 +65,9 @@ private:
     void setupUI();
     void setupTrayIcon();
     void initPresetApps();
+    void initPresetApps(bool forceReset);
+    QString findOfficeAppPath(const QString &appName);
+    QString getOfficeVersion();
     
     Database *db;
     QTabWidget *tabWidget;

@@ -16,6 +16,10 @@
 #include <QProgressDialog>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QSettings>
+#include <QTimer>
+#include <QFile>
+#include <QRegExp>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -88,6 +92,8 @@ void MainWindow::setupUI()
     settingsWidget->setUpdateManager(updateManager);
     recommendedAppsWidget = new RecommendedAppsWidget(this);
     
+    connect(appManagerWidget, &AppManagerWidget::resetAppsRequested, this, &MainWindow::resetApps);
+    
     tabWidget->addTab(appManagerWidget, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "应用管理");
     tabWidget->addTab(collectionManagerWidget, QApplication::style()->standardIcon(QStyle::SP_DirHomeIcon), "集合管理");
     tabWidget->addTab(recommendedAppsWidget, QApplication::style()->standardIcon(QStyle::SP_ArrowForward), "推荐应用");
@@ -109,15 +115,27 @@ void MainWindow::setupUI()
 
 void MainWindow::initPresetApps()
 {
+    initPresetApps(false);
+}
+
+void MainWindow::initPresetApps(bool forceReset)
+{
     QList<AppInfo> existingApps = db->getAllApps();
-    if (!existingApps.isEmpty()) {
+    if (!existingApps.isEmpty() && !forceReset) {
         return;
+    }
+    
+    if (forceReset) {
+        for (const AppInfo &app : existingApps) {
+            db->deleteApp(app.id);
+        }
     }
     
     QString winDir = qgetenv("WINDIR");
     QString systemDir = winDir + "/System32";
     
     QList<AppInfo> presetApps;
+    QStringList detectionMessages;
     
     AppInfo notepad;
     notepad.name = "记事本";
@@ -142,23 +160,79 @@ void MainWindow::initPresetApps()
     cmd.sortOrder = 2;
     presetApps.append(cmd);
     
+    AppInfo powershell;
+    powershell.name = "PowerShell";
+    powershell.path = systemDir + "/WindowsPowerShell/v1.0/powershell.exe";
+    powershell.category = "系统工具";
+    powershell.sortOrder = 3;
+    presetApps.append(powershell);
+    
     AppInfo mspaint;
     mspaint.name = "画图";
     mspaint.path = systemDir + "/mspaint.exe";
     mspaint.category = "系统工具";
-    mspaint.sortOrder = 3;
+    mspaint.sortOrder = 4;
     presetApps.append(mspaint);
     
     AppInfo taskmgr;
     taskmgr.name = "任务管理器";
     taskmgr.path = systemDir + "/taskmgr.exe";
     taskmgr.category = "系统工具";
-    taskmgr.sortOrder = 4;
+    taskmgr.sortOrder = 5;
     presetApps.append(taskmgr);
+    
+    QString officeVersion = getOfficeVersion();
+    if (!officeVersion.isEmpty()) {
+        detectionMessages << QString("检测到 Microsoft Office 版本: %1").arg(officeVersion);
+    }
+    
+    QString wordPath = findOfficeAppPath("WINWORD.EXE");
+    if (!wordPath.isEmpty() && QFile::exists(wordPath)) {
+        AppInfo word;
+        word.name = "Microsoft Word";
+        word.path = wordPath;
+        word.category = "Office办公";
+        word.sortOrder = 6;
+        presetApps.append(word);
+        detectionMessages << "✓ 已检测到 Microsoft Word";
+    } else {
+        detectionMessages << "✗ 未检测到 Microsoft Word";
+    }
+    
+    QString excelPath = findOfficeAppPath("EXCEL.EXE");
+    if (!excelPath.isEmpty() && QFile::exists(excelPath)) {
+        AppInfo excel;
+        excel.name = "Microsoft Excel";
+        excel.path = excelPath;
+        excel.category = "Office办公";
+        excel.sortOrder = 7;
+        presetApps.append(excel);
+        detectionMessages << "✓ 已检测到 Microsoft Excel";
+    } else {
+        detectionMessages << "✗ 未检测到 Microsoft Excel";
+    }
+    
+    QString pptPath = findOfficeAppPath("POWERPNT.EXE");
+    if (!pptPath.isEmpty() && QFile::exists(pptPath)) {
+        AppInfo powerpoint;
+        powerpoint.name = "Microsoft PowerPoint";
+        powerpoint.path = pptPath;
+        powerpoint.category = "Office办公";
+        powerpoint.sortOrder = 8;
+        presetApps.append(powerpoint);
+        detectionMessages << "✓ 已检测到 Microsoft PowerPoint";
+    } else {
+        detectionMessages << "✗ 未检测到 Microsoft PowerPoint";
+    }
     
     for (const AppInfo &app : presetApps) {
         db->addApp(app);
     }
+    
+    QTimer::singleShot(1000, this, [this, detectionMessages]() {
+        QString message = "🔍 Office 应用检测完成\n\n" + detectionMessages.join("\n");
+        QMessageBox::information(this, "Office 检测完成", message);
+    });
 }
 
 void MainWindow::onTabChanged(int index)
@@ -399,5 +473,58 @@ void MainWindow::changeEvent(QEvent *event)
                 hide();
             }
         }
+    }
+}
+
+QString MainWindow::findOfficeAppPath(const QString &appName)
+{
+    QSettings settings("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\" + appName, QSettings::NativeFormat);
+    QString path = settings.value(".").toString();
+    
+    if (path.isEmpty() || !QFile::exists(path)) {
+        QSettings settings32("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\App Paths\\" + appName, QSettings::NativeFormat);
+        path = settings32.value(".").toString();
+    }
+    
+    return path;
+}
+
+QString MainWindow::getOfficeVersion()
+{
+    QSettings settings("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Office", QSettings::NativeFormat);
+    QStringList versions = settings.childGroups();
+    
+    QString latestVersion = "";
+    for (const QString &version : versions) {
+        if (version.contains(QRegExp("^\\d+\\.\\d+$"))) {
+            if (latestVersion.isEmpty() || version > latestVersion) {
+                latestVersion = version;
+            }
+        }
+    }
+    
+    return latestVersion;
+}
+
+void MainWindow::resetApps()
+{
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("确认初始化");
+    msgBox.setText("确定要初始化应用列表吗？");
+    msgBox.setInformativeText("原应用列表可能会被覆盖，此操作将重新检测并添加所有预设应用。\n\n此操作不可撤销！");
+    msgBox.setIcon(QMessageBox::Warning);
+    
+    QPushButton *confirmBtn = msgBox.addButton("确认", QMessageBox::AcceptRole);
+    QPushButton *cancelBtn = msgBox.addButton("取消", QMessageBox::RejectRole);
+    msgBox.setDefaultButton(cancelBtn);
+    
+    msgBox.exec();
+    
+    if (msgBox.clickedButton() == confirmBtn) {
+        initPresetApps(true);
+        if (appManagerWidget) {
+            appManagerWidget->refreshAppList();
+        }
+        QMessageBox::information(this, "初始化完成", "应用列表已成功初始化！");
     }
 }

@@ -41,6 +41,12 @@ public:
     explicit AppManagerWidget(Database *db, QWidget *parent = nullptr);
     ~AppManagerWidget();
 
+signals:
+    void resetAppsRequested();
+
+public slots:
+    void refreshAppList();
+    
 private slots:
     void onAddApp();
     void onDeleteApp();
@@ -51,11 +57,11 @@ private slots:
     void onChangeIcon();
     void onChangePath();
     void onChangeArguments();
-    void refreshAppList();
     void onIconViewMode();
     void onListViewMode();
     void onMoveUp();
     void onMoveDown();
+    void onInitApps();
 
 private:
     void setupUI();
