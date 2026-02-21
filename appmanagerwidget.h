@@ -68,6 +68,10 @@ private:
     void launchApp(const AppInfo &app);
     QIcon getAppIcon(const AppInfo &app);
     void saveAppOrder();
+    void addExecutableApp();
+    void addWebsiteApp();
+    void addFolderApp();
+    void addDocumentApp();
     
     Database *db;
     Ui::AppManagerWidget *ui;

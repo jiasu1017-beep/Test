@@ -8,6 +8,14 @@
 #include <QJsonArray>
 #include <QFile>
 
+enum AppType {
+    AppType_Executable,
+    AppType_Website,
+    AppType_Folder,
+    AppType_Document,
+    AppType_RemoteDesktop
+};
+
 struct AppInfo {
     int id;
     QString name;
@@ -18,6 +26,7 @@ struct AppInfo {
     int useCount;
     bool isFavorite;
     int sortOrder;
+    AppType type;
     bool isRemoteDesktop;
     int remoteDesktopId;
 };

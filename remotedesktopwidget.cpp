@@ -740,6 +740,7 @@ void RemoteDesktopWidget::onTableContextMenuRequested(const QPoint &pos)
                     app.useCount = 0;
                     app.isFavorite = false;
                     app.sortOrder = maxSortOrder + 1;
+                    app.type = AppType_RemoteDesktop;
                     app.isRemoteDesktop = true;
                     app.remoteDesktopId = conn.id;
                     
@@ -799,6 +800,7 @@ void RemoteDesktopWidget::onAddToAppList()
     app.useCount = 0;
     app.isFavorite = false;
     app.sortOrder = maxSortOrder + 1;
+    app.type = AppType_RemoteDesktop;
     app.isRemoteDesktop = true;
     app.remoteDesktopId = conn.id;
 

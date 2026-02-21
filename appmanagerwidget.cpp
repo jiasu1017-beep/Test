@@ -12,6 +12,8 @@
 #include <QTextStream>
 #include <QProcess>
 #include <QTcpSocket>
+#include <QDesktopServices>
+#include <QUrl>
 #include <windows.h>
 #include <shellapi.h>
 
@@ -259,7 +261,7 @@ void AppManagerWidget::refreshAppList()
 
 QIcon AppManagerWidget::getAppIcon(const AppInfo &app)
 {
-    if (app.isRemoteDesktop) {
+    if (app.isRemoteDesktop || app.type == AppType_RemoteDesktop) {
         return QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
     }
 
@@ -268,6 +270,22 @@ QIcon AppManagerWidget::getAppIcon(const AppInfo &app)
         if (!icon.isNull()) {
             return icon;
         }
+    }
+    
+    if (app.type == AppType_Website) {
+        return QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView);
+    }
+    
+    if (app.type == AppType_Folder) {
+        return QApplication::style()->standardIcon(QStyle::SP_DirIcon);
+    }
+    
+    if (app.type == AppType_Document) {
+        if (QFile::exists(app.path)) {
+            QFileInfo fileInfo(app.path);
+            return iconProvider.icon(fileInfo);
+        }
+        return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
     }
     
     if (QFile::exists(app.path)) {
@@ -279,6 +297,88 @@ QIcon AppManagerWidget::getAppIcon(const AppInfo &app)
 }
 
 void AppManagerWidget::onAddApp()
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle("添加应用");
+    dialog.setMinimumWidth(400);
+    dialog.setStyleSheet("QDialog { background-color: #fafbfc; }");
+    
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    layout->setSpacing(16);
+    layout->setContentsMargins(24, 24, 24, 24);
+    
+    QLabel *label = new QLabel("请选择要添加的内容类型：", &dialog);
+    label->setStyleSheet("font-size: 14px; color: #2d3436; font-weight: 500;");
+    layout->addWidget(label);
+    
+    QPushButton *btnExecutable = new QPushButton("应用程序 (.exe/.bat/.cmd)", &dialog);
+    btnExecutable->setStyleSheet(
+        "QPushButton { background-color: #00b894; color: white; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
+        "QPushButton:hover { background-color: #00a085; }"
+    );
+    layout->addWidget(btnExecutable);
+    
+    QPushButton *btnWebsite = new QPushButton("网站链接", &dialog);
+    btnWebsite->setStyleSheet(
+        "QPushButton { background-color: #0984e3; color: white; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
+        "QPushButton:hover { background-color: #0770c4; }"
+    );
+    layout->addWidget(btnWebsite);
+    
+    QPushButton *btnFolder = new QPushButton("文件夹", &dialog);
+    btnFolder->setStyleSheet(
+        "QPushButton { background-color: #fd79a8; color: white; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
+        "QPushButton:hover { background-color: #f06795; }"
+    );
+    layout->addWidget(btnFolder);
+    
+    QPushButton *btnDocument = new QPushButton("文档文件 (.docx/.pdf/.txt等)", &dialog);
+    btnDocument->setStyleSheet(
+        "QPushButton { background-color: #6c5ce7; color: white; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
+        "QPushButton:hover { background-color: #5f4fd6; }"
+    );
+    layout->addWidget(btnDocument);
+    
+    QPushButton *btnCancel = new QPushButton("取消", &dialog);
+    btnCancel->setStyleSheet(
+        "QPushButton { background-color: #b2bec3; color: white; padding: 12px 28px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
+        "QPushButton:hover { background-color: #a0aab0; }"
+    );
+    layout->addWidget(btnCancel, 0, Qt::AlignCenter);
+    
+    bool *accepted = new bool(false);
+    
+    connect(btnExecutable, &QPushButton::clicked, [&]() {
+        *accepted = true;
+        addExecutableApp();
+        dialog.accept();
+    });
+    
+    connect(btnWebsite, &QPushButton::clicked, [&]() {
+        *accepted = true;
+        addWebsiteApp();
+        dialog.accept();
+    });
+    
+    connect(btnFolder, &QPushButton::clicked, [&]() {
+        *accepted = true;
+        addFolderApp();
+        dialog.accept();
+    });
+    
+    connect(btnDocument, &QPushButton::clicked, [&]() {
+        *accepted = true;
+        addDocumentApp();
+        dialog.accept();
+    });
+    
+    connect(btnCancel, &QPushButton::clicked, &dialog, &QDialog::reject);
+    
+    dialog.exec();
+    delete accepted;
+}
+
+void AppManagerWidget::addExecutableApp()
 {
     QString filePath = QFileDialog::getOpenFileName(this, "选择应用程序", "", 
                                                     "可执行文件 (*.exe *.bat *.cmd);;所有文件 (*.*)");
@@ -292,9 +392,125 @@ void AppManagerWidget::onAddApp()
     app.path = filePath;
     app.arguments = "";
     app.iconPath = "";
-    app.category = "自定义";
+    app.category = "应用程序";
     app.useCount = 0;
     app.isFavorite = false;
+    app.type = AppType_Executable;
+    app.isRemoteDesktop = false;
+    app.remoteDesktopId = -1;
+    
+    int maxOrder = 0;
+    QList<AppInfo> existingApps = db->getAllApps();
+    for (const AppInfo &existing : existingApps) {
+        if (existing.sortOrder > maxOrder) {
+            maxOrder = existing.sortOrder;
+        }
+    }
+    app.sortOrder = maxOrder + 1;
+    
+    db->addApp(app);
+    refreshAppList();
+}
+
+void AppManagerWidget::addWebsiteApp()
+{
+    bool ok;
+    QString url = QInputDialog::getText(this, "添加网站链接", "请输入网站URL（例如：https://www.baidu.com）：", 
+                                         QLineEdit::Normal, "https://", &ok);
+    if (!ok || url.trimmed().isEmpty()) return;
+    
+    QString trimmedUrl = url.trimmed();
+    if (!trimmedUrl.startsWith("http://") && !trimmedUrl.startsWith("https://")) {
+        trimmedUrl = "https://" + trimmedUrl;
+    }
+    
+    bool ok2;
+    QString name = QInputDialog::getText(this, "网站名称", "请输入网站显示名称：", 
+                                          QLineEdit::Normal, trimmedUrl, &ok2);
+    if (!ok2 || name.trimmed().isEmpty()) {
+        name = trimmedUrl;
+    }
+    
+    AppInfo app;
+    app.name = name.trimmed();
+    app.path = trimmedUrl;
+    app.arguments = "";
+    app.iconPath = "";
+    app.category = "网站";
+    app.useCount = 0;
+    app.isFavorite = false;
+    app.type = AppType_Website;
+    app.isRemoteDesktop = false;
+    app.remoteDesktopId = -1;
+    
+    int maxOrder = 0;
+    QList<AppInfo> existingApps = db->getAllApps();
+    for (const AppInfo &existing : existingApps) {
+        if (existing.sortOrder > maxOrder) {
+            maxOrder = existing.sortOrder;
+        }
+    }
+    app.sortOrder = maxOrder + 1;
+    
+    db->addApp(app);
+    refreshAppList();
+}
+
+void AppManagerWidget::addFolderApp()
+{
+    QString folderPath = QFileDialog::getExistingDirectory(this, "选择文件夹", "", 
+                                                          QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+    if (folderPath.isEmpty()) return;
+    
+    QFileInfo fileInfo(folderPath);
+    QString appName = fileInfo.fileName();
+    if (appName.isEmpty()) appName = folderPath;
+    
+    AppInfo app;
+    app.name = appName;
+    app.path = folderPath;
+    app.arguments = "";
+    app.iconPath = "";
+    app.category = "文件夹";
+    app.useCount = 0;
+    app.isFavorite = false;
+    app.type = AppType_Folder;
+    app.isRemoteDesktop = false;
+    app.remoteDesktopId = -1;
+    
+    int maxOrder = 0;
+    QList<AppInfo> existingApps = db->getAllApps();
+    for (const AppInfo &existing : existingApps) {
+        if (existing.sortOrder > maxOrder) {
+            maxOrder = existing.sortOrder;
+        }
+    }
+    app.sortOrder = maxOrder + 1;
+    
+    db->addApp(app);
+    refreshAppList();
+}
+
+void AppManagerWidget::addDocumentApp()
+{
+    QString filePath = QFileDialog::getOpenFileName(this, "选择文档文件", "", 
+                                                    "文档文件 (*.docx *.doc *.pdf *.txt *.xlsx *.xls *.pptx *.ppt);;所有文件 (*.*)");
+    if (filePath.isEmpty()) return;
+    
+    QFileInfo fileInfo(filePath);
+    QString appName = fileInfo.completeBaseName();
+    
+    AppInfo app;
+    app.name = appName;
+    app.path = filePath;
+    app.arguments = "";
+    app.iconPath = "";
+    app.category = "文档";
+    app.useCount = 0;
+    app.isFavorite = false;
+    app.type = AppType_Document;
+    app.isRemoteDesktop = false;
+    app.remoteDesktopId = -1;
     
     int maxOrder = 0;
     QList<AppInfo> existingApps = db->getAllApps();
@@ -451,12 +667,44 @@ void AppManagerWidget::onChangePath()
     if (app.id <= 0) return;
     
     QString defaultPath = app.path;
-    QString newPath = QFileDialog::getOpenFileName(this, "选择应用程序", defaultPath, 
-                                                    "可执行文件 (*.exe *.bat *.cmd);;所有文件 (*.*)");
-    if (!newPath.isEmpty()) {
-        app.path = newPath;
-        db->updateApp(app);
-        refreshAppList();
+    QString newPath;
+    
+    if (app.type == AppType_Website) {
+        bool ok;
+        newPath = QInputDialog::getText(this, "修改网站链接", "请输入网站URL：", QLineEdit::Normal, defaultPath, &ok);
+        if (ok && !newPath.trimmed().isEmpty()) {
+            QString trimmedUrl = newPath.trimmed();
+            if (!trimmedUrl.startsWith("http://") && !trimmedUrl.startsWith("https://")) {
+                trimmedUrl = "https://" + trimmedUrl;
+            }
+            app.path = trimmedUrl;
+            db->updateApp(app);
+            refreshAppList();
+        }
+    } else if (app.type == AppType_Folder) {
+        newPath = QFileDialog::getExistingDirectory(this, "选择文件夹", defaultPath, 
+                                                     QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+        if (!newPath.isEmpty()) {
+            app.path = newPath;
+            db->updateApp(app);
+            refreshAppList();
+        }
+    } else if (app.type == AppType_Document) {
+        newPath = QFileDialog::getOpenFileName(this, "选择文档文件", defaultPath, 
+                                              "文档文件 (*.docx *.doc *.pdf *.txt *.xlsx *.xls *.pptx *.ppt);;所有文件 (*.*)");
+        if (!newPath.isEmpty()) {
+            app.path = newPath;
+            db->updateApp(app);
+            refreshAppList();
+        }
+    } else {
+        newPath = QFileDialog::getOpenFileName(this, "选择应用程序", defaultPath, 
+                                              "可执行文件 (*.exe *.bat *.cmd);;所有文件 (*.*)");
+        if (!newPath.isEmpty()) {
+            app.path = newPath;
+            db->updateApp(app);
+            refreshAppList();
+        }
     }
 }
 
@@ -483,6 +731,33 @@ void AppManagerWidget::onChangeArguments()
 
 void AppManagerWidget::launchApp(const AppInfo &app)
 {
+    if (app.type == AppType_Website) {
+        QDesktopServices::openUrl(QUrl(app.path));
+        AppInfo updatedApp = app;
+        updatedApp.useCount++;
+        db->updateApp(updatedApp);
+        refreshAppList();
+        return;
+    }
+    
+    if (app.type == AppType_Folder) {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(app.path));
+        AppInfo updatedApp = app;
+        updatedApp.useCount++;
+        db->updateApp(updatedApp);
+        refreshAppList();
+        return;
+    }
+    
+    if (app.type == AppType_Document) {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(app.path));
+        AppInfo updatedApp = app;
+        updatedApp.useCount++;
+        db->updateApp(updatedApp);
+        refreshAppList();
+        return;
+    }
+    
     if (app.isRemoteDesktop && app.remoteDesktopId > 0) {
         RemoteDesktopConnection conn = db->getRemoteDesktopById(app.remoteDesktopId);
         if (conn.id != -1) {

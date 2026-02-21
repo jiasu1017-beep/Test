@@ -21,6 +21,8 @@
 #include <QFileDialog>
 #include <QGraphicsDropShadowEffect>
 #include <QStandardPaths>
+#include <QDesktopServices>
+#include <QUrl>
 
 void drawProfessionalIconBackground(QPainter *painter, const QRect &rect, const QColor &color, bool isHovered, bool isSelected)
 {
@@ -554,7 +556,7 @@ void CollectionManagerWidget::refreshCollectionApps()
 
 QIcon CollectionManagerWidget::getAppIcon(const AppInfo &app)
 {
-    if (app.isRemoteDesktop) {
+    if (app.isRemoteDesktop || app.type == AppType_RemoteDesktop) {
         return QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
     }
 
@@ -563,6 +565,22 @@ QIcon CollectionManagerWidget::getAppIcon(const AppInfo &app)
         if (!icon.isNull()) {
             return icon;
         }
+    }
+    
+    if (app.type == AppType_Website) {
+        return QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView);
+    }
+    
+    if (app.type == AppType_Folder) {
+        return QApplication::style()->standardIcon(QStyle::SP_DirIcon);
+    }
+    
+    if (app.type == AppType_Document) {
+        if (QFile::exists(app.path)) {
+            QFileInfo fileInfo(app.path);
+            return iconProvider.icon(fileInfo);
+        }
+        return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
     }
     
     if (QFile::exists(app.path)) {
@@ -1073,6 +1091,33 @@ void CollectionManagerWidget::onExportCollection()
 
 void CollectionManagerWidget::launchApp(const AppInfo &app)
 {
+    if (app.type == AppType_Website) {
+        QDesktopServices::openUrl(QUrl(app.path));
+        AppInfo updatedApp = app;
+        updatedApp.useCount++;
+        db->updateApp(updatedApp);
+        refreshCollectionApps();
+        return;
+    }
+    
+    if (app.type == AppType_Folder) {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(app.path));
+        AppInfo updatedApp = app;
+        updatedApp.useCount++;
+        db->updateApp(updatedApp);
+        refreshCollectionApps();
+        return;
+    }
+    
+    if (app.type == AppType_Document) {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(app.path));
+        AppInfo updatedApp = app;
+        updatedApp.useCount++;
+        db->updateApp(updatedApp);
+        refreshCollectionApps();
+        return;
+    }
+    
     if (app.isRemoteDesktop && app.remoteDesktopId > 0) {
         RemoteDesktopConnection conn = db->getRemoteDesktopById(app.remoteDesktopId);
         if (conn.id != -1) {

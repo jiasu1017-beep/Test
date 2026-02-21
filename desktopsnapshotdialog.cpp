@@ -355,6 +355,7 @@ void DesktopSnapshotDialog::onAddToCollection()
             newApp.useCount = 0;
             newApp.isFavorite = false;
             newApp.sortOrder = maxSortOrder + 1;
+            newApp.type = AppType_Executable;
             newApp.isRemoteDesktop = false;
             newApp.remoteDesktopId = -1;
             
