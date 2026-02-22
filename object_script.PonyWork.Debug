@@ -12,6 +12,8 @@ debug/updatedialog.o
 debug/updateprogressdialog.o
 debug/logger.o
 debug/remotedesktopwidget.o
+debug/desktopsnapshotdialog.o
+debug/snapshotmanagerwidget.o
 debug/qrc_resources.o
 debug/moc_mainwindow.o
 debug/moc_database.o
@@ -26,3 +28,5 @@ debug/moc_updatedialog.o
 debug/moc_updateprogressdialog.o
 debug/moc_logger.o
 debug/moc_remotedesktopwidget.o
+debug/moc_desktopsnapshotdialog.o
+debug/moc_snapshotmanagerwidget.o

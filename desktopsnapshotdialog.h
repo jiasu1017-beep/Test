@@ -20,6 +20,12 @@ struct SnapshotWindowInfo {
     bool isSelected;
 };
 
+struct AppTypeDetection {
+    AppType type;
+    QString path;
+    QString name;
+};
+
 class DesktopSnapshotDialog : public QDialog
 {
     Q_OBJECT
@@ -41,10 +47,15 @@ private:
     QString getProcessPathFromWindow(HWND hwnd);
     QString getProcessNameFromPath(const QString &path);
     QString extractWindowTitle(const QString &title);
+    QString getExplorerFolderPath(HWND hwnd);
+    QString getBrowserURL(HWND hwnd);
+    QString getDocumentPath(HWND hwnd);
+    AppTypeDetection detectAppType(const SnapshotWindowInfo &window);
 
     Database *db;
     QTableWidget *windowTable;
     QPushButton *captureButton;
+    QList<SnapshotWindowInfo> currentWindows;
     QPushButton *addToCollectionButton;
     QPushButton *selectAllButton;
     QPushButton *deselectAllButton;

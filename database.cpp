@@ -11,6 +11,7 @@ Database::Database(QObject *parent) : QObject(parent)
     nextAppId = 1;
     nextCollectionId = 1;
     nextRemoteDesktopId = 1;
+    nextSnapshotId = 1;
 }
 
 Database::~Database()
@@ -32,10 +33,12 @@ bool Database::init()
         rootObject["apps"] = QJsonArray();
         rootObject["collections"] = QJsonArray();
         rootObject["remoteDesktops"] = QJsonArray();
+        rootObject["snapshots"] = QJsonArray();
         rootObject["settings"] = QJsonObject();
         rootObject["nextAppId"] = 1;
         rootObject["nextCollectionId"] = 1;
         rootObject["nextRemoteDesktopId"] = 1;
+        rootObject["nextSnapshotId"] = 1;
         saveData();
     }
     
@@ -61,6 +64,11 @@ bool Database::loadData()
     nextAppId = rootObject["nextAppId"].toInt(1);
     nextCollectionId = rootObject["nextCollectionId"].toInt(1);
     nextRemoteDesktopId = rootObject["nextRemoteDesktopId"].toInt(1);
+    nextSnapshotId = rootObject["nextSnapshotId"].toInt(1);
+    
+    if (!rootObject.contains("snapshots")) {
+        rootObject["snapshots"] = QJsonArray();
+    }
     
     return true;
 }
@@ -70,6 +78,7 @@ bool Database::saveData()
     rootObject["nextAppId"] = nextAppId;
     rootObject["nextCollectionId"] = nextCollectionId;
     rootObject["nextRemoteDesktopId"] = nextRemoteDesktopId;
+    rootObject["nextSnapshotId"] = nextSnapshotId;
     
     QJsonDocument doc(rootObject);
     QFile file(dataFilePath);
@@ -622,6 +631,195 @@ QList<RemoteDesktopConnection> Database::getAllRemoteDesktops()
     }
     
     return connections;
+}
+
+QJsonObject Database::snapshotToJson(const SnapshotInfo &snapshot)
+{
+    QJsonObject obj;
+    obj["id"] = snapshot.id;
+    obj["name"] = snapshot.name;
+    obj["path"] = snapshot.path;
+    obj["description"] = snapshot.description;
+    obj["type"] = static_cast<int>(snapshot.type);
+    obj["thumbnailPath"] = snapshot.thumbnailPath;
+    obj["createdTime"] = snapshot.createdTime.toString(Qt::ISODate);
+    obj["lastAccessedTime"] = snapshot.lastAccessedTime.toString(Qt::ISODate);
+    obj["folderStructure"] = snapshot.folderStructure;
+    obj["fileTypeDistribution"] = snapshot.fileTypeDistribution;
+    obj["websiteTitle"] = snapshot.websiteTitle;
+    obj["websiteUrl"] = snapshot.websiteUrl;
+    obj["documentTitle"] = snapshot.documentTitle;
+    obj["documentAuthor"] = snapshot.documentAuthor;
+    obj["documentModifiedDate"] = snapshot.documentModifiedDate;
+    obj["fileCount"] = snapshot.fileCount;
+    obj["totalSize"] = static_cast<qint64>(snapshot.totalSize);
+    obj["tags"] = snapshot.tags;
+    obj["isFavorite"] = snapshot.isFavorite;
+    obj["sortOrder"] = snapshot.sortOrder;
+    return obj;
+}
+
+SnapshotInfo Database::jsonToSnapshot(const QJsonObject &obj)
+{
+    SnapshotInfo snapshot;
+    snapshot.id = obj["id"].toInt(-1);
+    snapshot.name = obj["name"].toString();
+    snapshot.path = obj["path"].toString();
+    snapshot.description = obj["description"].toString();
+    
+    int typeInt = obj["type"].toInt(0);
+    if (typeInt < 0 || typeInt > 2) typeInt = 0;
+    snapshot.type = static_cast<SnapshotType>(typeInt);
+    
+    snapshot.thumbnailPath = obj["thumbnailPath"].toString();
+    snapshot.createdTime = QDateTime::fromString(obj["createdTime"].toString(), Qt::ISODate);
+    snapshot.lastAccessedTime = QDateTime::fromString(obj["lastAccessedTime"].toString(), Qt::ISODate);
+    snapshot.folderStructure = obj["folderStructure"].toString();
+    snapshot.fileTypeDistribution = obj["fileTypeDistribution"].toString();
+    snapshot.websiteTitle = obj["websiteTitle"].toString();
+    snapshot.websiteUrl = obj["websiteUrl"].toString();
+    snapshot.documentTitle = obj["documentTitle"].toString();
+    snapshot.documentAuthor = obj["documentAuthor"].toString();
+    snapshot.documentModifiedDate = obj["documentModifiedDate"].toString();
+    snapshot.fileCount = obj["fileCount"].toInt(0);
+    snapshot.totalSize = static_cast<qint64>(obj["totalSize"].toDouble(0));
+    snapshot.tags = obj["tags"].toString();
+    snapshot.isFavorite = obj["isFavorite"].toBool(false);
+    snapshot.sortOrder = obj["sortOrder"].toInt(0);
+    
+    return snapshot;
+}
+
+bool Database::addSnapshot(const SnapshotInfo &snapshot)
+{
+    SnapshotInfo newSnapshot = snapshot;
+    newSnapshot.id = nextSnapshotId++;
+    
+    QJsonArray snapshotsArray = rootObject["snapshots"].toArray();
+    snapshotsArray.append(snapshotToJson(newSnapshot));
+    rootObject["snapshots"] = snapshotsArray;
+    
+    return saveData();
+}
+
+bool Database::updateSnapshot(const SnapshotInfo &snapshot)
+{
+    QJsonArray snapshotsArray = rootObject["snapshots"].toArray();
+    
+    for (int i = 0; i < snapshotsArray.size(); ++i) {
+        QJsonObject obj = snapshotsArray[i].toObject();
+        if (obj["id"].toInt() == snapshot.id) {
+            snapshotsArray[i] = snapshotToJson(snapshot);
+            break;
+        }
+    }
+    
+    rootObject["snapshots"] = snapshotsArray;
+    
+    return saveData();
+}
+
+bool Database::deleteSnapshot(int id)
+{
+    QJsonArray snapshotsArray = rootObject["snapshots"].toArray();
+    
+    for (int i = 0; i < snapshotsArray.size(); ++i) {
+        QJsonObject obj = snapshotsArray[i].toObject();
+        if (obj["id"].toInt() == id) {
+            snapshotsArray.removeAt(i);
+            break;
+        }
+    }
+    
+    rootObject["snapshots"] = snapshotsArray;
+    
+    return saveData();
+}
+
+QList<SnapshotInfo> Database::getAllSnapshots()
+{
+    QList<SnapshotInfo> snapshots;
+    QJsonArray snapshotsArray = rootObject["snapshots"].toArray();
+    
+    QList<QJsonObject> snapshotObjects;
+    for (const QJsonValue &val : snapshotsArray) {
+        snapshotObjects.append(val.toObject());
+    }
+    
+    std::sort(snapshotObjects.begin(), snapshotObjects.end(), [](const QJsonObject &a, const QJsonObject &b) {
+        return a["sortOrder"].toInt() < b["sortOrder"].toInt();
+    });
+    
+    for (const QJsonObject &obj : snapshotObjects) {
+        snapshots.append(jsonToSnapshot(obj));
+    }
+    
+    return snapshots;
+}
+
+QList<SnapshotInfo> Database::getSnapshotsByType(SnapshotType type)
+{
+    QList<SnapshotInfo> allSnapshots = getAllSnapshots();
+    QList<SnapshotInfo> filtered;
+    
+    for (const SnapshotInfo &snapshot : allSnapshots) {
+        if (snapshot.type == type) {
+            filtered.append(snapshot);
+        }
+    }
+    
+    return filtered;
+}
+
+QList<SnapshotInfo> Database::getFavoriteSnapshots()
+{
+    QList<SnapshotInfo> allSnapshots = getAllSnapshots();
+    QList<SnapshotInfo> favorites;
+    
+    for (const SnapshotInfo &snapshot : allSnapshots) {
+        if (snapshot.isFavorite) {
+            favorites.append(snapshot);
+        }
+    }
+    
+    return favorites;
+}
+
+SnapshotInfo Database::getSnapshotById(int id)
+{
+    SnapshotInfo snapshot;
+    snapshot.id = -1;
+    
+    QJsonArray snapshotsArray = rootObject["snapshots"].toArray();
+    
+    for (const QJsonValue &val : snapshotsArray) {
+        QJsonObject obj = val.toObject();
+        if (obj["id"].toInt() == id) {
+            snapshot = jsonToSnapshot(obj);
+            break;
+        }
+    }
+    
+    return snapshot;
+}
+
+QList<SnapshotInfo> Database::searchSnapshots(const QString &keyword)
+{
+    QList<SnapshotInfo> snapshots;
+    QList<SnapshotInfo> allSnapshots = getAllSnapshots();
+    
+    QString lowerKeyword = keyword.toLower();
+    
+    for (const SnapshotInfo &snapshot : allSnapshots) {
+        if (snapshot.name.toLower().contains(lowerKeyword) ||
+            snapshot.description.toLower().contains(lowerKeyword) ||
+            snapshot.tags.toLower().contains(lowerKeyword) ||
+            snapshot.path.toLower().contains(lowerKeyword)) {
+            snapshots.append(snapshot);
+        }
+    }
+    
+    return snapshots;
 }
 
 QList<RemoteDesktopConnection> Database::getFavoriteRemoteDesktops()

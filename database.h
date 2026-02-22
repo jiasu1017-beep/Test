@@ -16,6 +16,12 @@ enum AppType {
     AppType_RemoteDesktop
 };
 
+enum SnapshotType {
+    SnapshotType_Folder,
+    SnapshotType_Website,
+    SnapshotType_Document
+};
+
 struct AppInfo {
     int id;
     QString name;
@@ -29,6 +35,29 @@ struct AppInfo {
     AppType type;
     bool isRemoteDesktop;
     int remoteDesktopId;
+};
+
+struct SnapshotInfo {
+    int id;
+    QString name;
+    QString path;
+    QString description;
+    SnapshotType type;
+    QString thumbnailPath;
+    QDateTime createdTime;
+    QDateTime lastAccessedTime;
+    QString folderStructure;
+    QString fileTypeDistribution;
+    QString websiteTitle;
+    QString websiteUrl;
+    QString documentTitle;
+    QString documentAuthor;
+    QString documentModifiedDate;
+    int fileCount;
+    qint64 totalSize;
+    QString tags;
+    bool isFavorite;
+    int sortOrder;
 };
 
 struct AppCollection {
@@ -110,12 +139,22 @@ public:
     RemoteDesktopConnection getRemoteDesktopById(int id);
     QList<RemoteDesktopConnection> searchRemoteDesktops(const QString &keyword);
 
+    bool addSnapshot(const SnapshotInfo &snapshot);
+    bool updateSnapshot(const SnapshotInfo &snapshot);
+    bool deleteSnapshot(int id);
+    QList<SnapshotInfo> getAllSnapshots();
+    QList<SnapshotInfo> getSnapshotsByType(SnapshotType type);
+    QList<SnapshotInfo> getFavoriteSnapshots();
+    SnapshotInfo getSnapshotById(int id);
+    QList<SnapshotInfo> searchSnapshots(const QString &keyword);
+
 private:
     QString dataFilePath;
     QJsonObject rootObject;
     int nextAppId;
     int nextCollectionId;
     int nextRemoteDesktopId;
+    int nextSnapshotId;
     
     bool loadData();
     bool saveData();
@@ -125,6 +164,8 @@ private:
     AppCollection jsonToCollection(const QJsonObject &obj);
     QJsonObject remoteDesktopToJson(const RemoteDesktopConnection &connection);
     RemoteDesktopConnection jsonToRemoteDesktop(const QJsonObject &obj);
+    QJsonObject snapshotToJson(const SnapshotInfo &snapshot);
+    SnapshotInfo jsonToSnapshot(const QJsonObject &obj);
     QString encryptPassword(const QString &password);
     QString decryptPassword(const QString &encrypted);
 };

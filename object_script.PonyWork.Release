@@ -12,6 +12,8 @@ release/updatedialog.o
 release/updateprogressdialog.o
 release/logger.o
 release/remotedesktopwidget.o
+release/desktopsnapshotdialog.o
+release/snapshotmanagerwidget.o
 release/qrc_resources.o
 release/moc_mainwindow.o
 release/moc_database.o
@@ -26,3 +28,5 @@ release/moc_updatedialog.o
 release/moc_updateprogressdialog.o
 release/moc_logger.o
 release/moc_remotedesktopwidget.o
+release/moc_desktopsnapshotdialog.o
+release/moc_snapshotmanagerwidget.o

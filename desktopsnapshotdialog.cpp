@@ -6,8 +6,14 @@
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QFileInfo>
+#include <QDir>
+#include <QFileDialog>
+#include <QStandardPaths>
 #include <windows.h>
 #include <psapi.h>
+#include <shlwapi.h>
+#include <objbase.h>
+#include <exdisp.h>
 
 BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
 {
@@ -155,6 +161,214 @@ void DesktopSnapshotDialog::setupUI()
     mainLayout->addLayout(bottomButtonLayout);
 }
 
+QString DesktopSnapshotDialog::getExplorerFolderPath(HWND hwnd)
+{
+    QString folderPath;
+    
+    HRESULT hr = CoInitialize(NULL);
+    if (FAILED(hr)) {
+        return folderPath;
+    }
+    
+    IShellWindows* pShellWindows = NULL;
+    hr = CoCreateInstance(CLSID_ShellWindows, NULL, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pShellWindows));
+    if (FAILED(hr) || !pShellWindows) {
+        CoUninitialize();
+        return folderPath;
+    }
+    
+    long lCount = 0;
+    hr = pShellWindows->get_Count(&lCount);
+    if (SUCCEEDED(hr)) {
+        for (long i = 0; i < lCount; i++) {
+            VARIANT varIndex;
+            varIndex.vt = VT_I4;
+            varIndex.lVal = i;
+            
+            IDispatch* pDispatch = NULL;
+            hr = pShellWindows->Item(varIndex, &pDispatch);
+            
+            if (SUCCEEDED(hr) && pDispatch) {
+                IWebBrowser2* pWebBrowser = NULL;
+                hr = pDispatch->QueryInterface(IID_PPV_ARGS(&pWebBrowser));
+                pDispatch->Release();
+                
+                if (SUCCEEDED(hr) && pWebBrowser) {
+                    HWND hwndBrowser = NULL;
+                    hr = pWebBrowser->get_HWND((SHANDLE_PTR*)&hwndBrowser);
+                    
+                    if (SUCCEEDED(hr) && hwndBrowser == hwnd) {
+                        BSTR bstrURL = NULL;
+                        hr = pWebBrowser->get_LocationURL(&bstrURL);
+                        
+                        if (SUCCEEDED(hr) && bstrURL) {
+                            QString url = QString::fromWCharArray(bstrURL);
+                            if (url.startsWith("file:///")) {
+                                folderPath = url.mid(8);
+                                folderPath.replace("/", "\\");
+                            }
+                            SysFreeString(bstrURL);
+                        }
+                    }
+                    
+                    pWebBrowser->Release();
+                }
+            }
+        }
+    }
+    
+    pShellWindows->Release();
+    CoUninitialize();
+    
+    return folderPath;
+}
+
+BOOL IsDescendantWindow(HWND hwndParent, HWND hwndChild)
+{
+    if (hwndParent == hwndChild) {
+        return TRUE;
+    }
+    
+    HWND hwnd = GetWindow(hwndChild, GW_OWNER);
+    while (hwnd) {
+        if (hwnd == hwndParent) {
+            return TRUE;
+        }
+        hwnd = GetWindow(hwnd, GW_OWNER);
+    }
+    
+    hwnd = GetParent(hwndChild);
+    while (hwnd) {
+        if (hwnd == hwndParent) {
+            return TRUE;
+        }
+        hwnd = GetParent(hwnd);
+    }
+    
+    return FALSE;
+}
+
+QString DesktopSnapshotDialog::getBrowserURL(HWND hwnd)
+{
+    QString url;
+    
+    HRESULT hr = CoInitialize(NULL);
+    if (FAILED(hr)) {
+        return url;
+    }
+    
+    IShellWindows* pShellWindows = NULL;
+    hr = CoCreateInstance(CLSID_ShellWindows, NULL, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&pShellWindows));
+    if (FAILED(hr) || !pShellWindows) {
+        CoUninitialize();
+        return url;
+    }
+    
+    long lCount = 0;
+    hr = pShellWindows->get_Count(&lCount);
+    if (SUCCEEDED(hr)) {
+        for (long i = 0; i < lCount; i++) {
+            VARIANT varIndex;
+            varIndex.vt = VT_I4;
+            varIndex.lVal = i;
+            
+            IDispatch* pDispatch = NULL;
+            hr = pShellWindows->Item(varIndex, &pDispatch);
+            
+            if (SUCCEEDED(hr) && pDispatch) {
+                IWebBrowser2* pWebBrowser = NULL;
+                hr = pDispatch->QueryInterface(IID_PPV_ARGS(&pWebBrowser));
+                pDispatch->Release();
+                
+                if (SUCCEEDED(hr) && pWebBrowser) {
+                    HWND hwndBrowser = NULL;
+                    hr = pWebBrowser->get_HWND((SHANDLE_PTR*)&hwndBrowser);
+                    
+                    if (SUCCEEDED(hr)) {
+                        if (hwndBrowser == hwnd || IsDescendantWindow(hwnd, hwndBrowser)) {
+                            BSTR bstrURL = NULL;
+                            hr = pWebBrowser->get_LocationURL(&bstrURL);
+                            
+                            if (SUCCEEDED(hr) && bstrURL) {
+                                url = QString::fromWCharArray(bstrURL);
+                                SysFreeString(bstrURL);
+                            }
+                        }
+                    }
+                    
+                    pWebBrowser->Release();
+                }
+            }
+        }
+    }
+    
+    pShellWindows->Release();
+    CoUninitialize();
+    
+    return url;
+}
+
+QString DesktopSnapshotDialog::getDocumentPath(HWND hwnd)
+{
+    QString filePath;
+    
+    wchar_t windowTitle[256];
+    GetWindowTextW(hwnd, windowTitle, 256);
+    QString title = QString::fromWCharArray(windowTitle);
+    
+    QString docName;
+    int dashIndex = title.lastIndexOf(" - ");
+    if (dashIndex > 0) {
+        docName = title.left(dashIndex).trimmed();
+    } else {
+        docName = title.trimmed();
+    }
+    
+    if (docName.isEmpty()) {
+        return filePath;
+    }
+    
+    QStringList commonExtensions;
+    commonExtensions << ".docx" << ".doc" << ".pdf" << ".txt" 
+                     << ".xlsx" << ".xls" << ".pptx" << ".ppt"
+                     << ".wps" << ".rtf" << ".odt";
+    
+    QStringList searchPaths;
+    searchPaths << QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+    searchPaths << QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    searchPaths << QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    searchPaths << QDir::homePath();
+    
+    QFileInfo docInfo(docName);
+    QString baseName = docInfo.completeBaseName();
+    QString existingExt = docInfo.suffix().toLower();
+    
+    for (const QString &searchPath : searchPaths) {
+        if (searchPath.isEmpty()) continue;
+        
+        QDir dir(searchPath);
+        if (!dir.exists()) continue;
+        
+        if (!existingExt.isEmpty()) {
+            QString fullPath = searchPath + "/" + docName;
+            if (QFile::exists(fullPath)) {
+                filePath = QDir::toNativeSeparators(fullPath);
+                return filePath;
+            }
+        }
+        
+        for (const QString &ext : commonExtensions) {
+            QString testPath = searchPath + "/" + baseName + ext;
+            if (QFile::exists(testPath)) {
+                filePath = QDir::toNativeSeparators(testPath);
+                return filePath;
+            }
+        }
+    }
+    
+    return filePath;
+}
+
 QList<SnapshotWindowInfo> DesktopSnapshotDialog::captureOpenWindows()
 {
     QList<SnapshotWindowInfo> windows;
@@ -163,6 +377,13 @@ QList<SnapshotWindowInfo> DesktopSnapshotDialog::captureOpenWindows()
     for (int i = 0; i < windows.size(); ++i) {
         windows[i].processPath = getProcessPathFromWindow(windows[i].hwnd);
         windows[i].processName = getProcessNameFromPath(windows[i].processPath);
+        
+        if (windows[i].processName.toLower() == "explorer.exe") {
+            QString folderPath = getExplorerFolderPath(windows[i].hwnd);
+            if (!folderPath.isEmpty()) {
+                windows[i].processPath = folderPath;
+            }
+        }
     }
     
     return windows;
@@ -209,6 +430,7 @@ QString DesktopSnapshotDialog::extractWindowTitle(const QString &title)
 
 void DesktopSnapshotDialog::populateTable(const QList<SnapshotWindowInfo> &windows)
 {
+    currentWindows = windows;
     windowTable->setRowCount(0);
     
     for (int i = 0; i < windows.size(); ++i) {
@@ -264,6 +486,55 @@ void DesktopSnapshotDialog::onDeselectAll()
     }
 }
 
+AppTypeDetection DesktopSnapshotDialog::detectAppType(const SnapshotWindowInfo &window)
+{
+    AppTypeDetection result;
+    result.type = AppType_Executable;
+    result.path = window.processPath;
+    result.name = window.title;
+    
+    QString lowerProcessName = window.processName.toLower();
+    QString lowerTitle = window.title.toLower();
+    
+    if (lowerProcessName == "explorer.exe") {
+        result.type = AppType_Folder;
+        QString cleanTitle = window.title;
+        int dashIndex = cleanTitle.lastIndexOf(" - ");
+        if (dashIndex > 0) {
+            cleanTitle = cleanTitle.left(dashIndex).trimmed();
+        }
+        result.name = cleanTitle;
+    } else if (lowerProcessName.contains("chrome") || lowerProcessName.contains("firefox") || 
+               lowerProcessName.contains("msedge") || lowerProcessName.contains("opera") ||
+               lowerProcessName.contains("brave") || lowerProcessName.contains("safari")) {
+        result.type = AppType_Website;
+        QString cleanTitle = window.title;
+        int dashIndex = cleanTitle.lastIndexOf(" - ");
+        if (dashIndex > 0) {
+            cleanTitle = cleanTitle.left(dashIndex).trimmed();
+        }
+        result.name = cleanTitle;
+    } else if (lowerProcessName.contains("notepad") || lowerProcessName.contains("word") || 
+               lowerProcessName.contains("excel") || lowerProcessName.contains("powerpoint") ||
+               lowerProcessName.contains("pdf") || lowerProcessName.contains("acrobat") ||
+               lowerProcessName.contains("wps") || lowerProcessName.contains("office") ||
+               lowerTitle.endsWith(".docx") || lowerTitle.endsWith(".pdf") ||
+               lowerTitle.endsWith(".txt") || lowerTitle.endsWith(".xlsx") ||
+               lowerTitle.endsWith(".pptx")) {
+        result.type = AppType_Document;
+        QString cleanTitle = window.title;
+        int dashIndex = cleanTitle.lastIndexOf(" - ");
+        if (dashIndex > 0) {
+            cleanTitle = cleanTitle.left(dashIndex).trimmed();
+        }
+        result.name = cleanTitle;
+    } else {
+        result.name = extractWindowTitle(window.title);
+    }
+    
+    return result;
+}
+
 void DesktopSnapshotDialog::onTableItemChanged(QTableWidgetItem *item)
 {
 }
@@ -271,14 +542,11 @@ void DesktopSnapshotDialog::onTableItemChanged(QTableWidgetItem *item)
 void DesktopSnapshotDialog::onAddToCollection()
 {
     QList<SnapshotWindowInfo> selectedWindows;
+    
     for (int i = 0; i < windowTable->rowCount(); ++i) {
         QCheckBox *checkBox = qobject_cast<QCheckBox*>(windowTable->cellWidget(i, 0));
-        if (checkBox && checkBox->isChecked()) {
-            SnapshotWindowInfo info;
-            info.title = windowTable->item(i, 1)->text();
-            info.processName = windowTable->item(i, 2)->text();
-            info.processPath = windowTable->item(i, 3)->text();
-            selectedWindows.append(info);
+        if (checkBox && checkBox->isChecked() && i < currentWindows.size()) {
+            selectedWindows.append(currentWindows[i]);
         }
     }
     
@@ -319,14 +587,76 @@ void DesktopSnapshotDialog::onAddToCollection()
     QList<AppInfo> allApps = db->getAllApps();
     
     for (const SnapshotWindowInfo &window : selectedWindows) {
-        if (window.processPath.isEmpty()) {
-            continue;
+        AppTypeDetection detection = this->detectAppType(window);
+        
+        if (detection.type == AppType_Folder) {
+            QString folderPath = getExplorerFolderPath(window.hwnd);
+            if (folderPath.isEmpty()) {
+                folderPath = QFileDialog::getExistingDirectory(this, "选择文件夹路径", QDir::homePath());
+                if (folderPath.isEmpty()) {
+                    continue;
+                }
+            }
+            detection.path = folderPath;
+        } else if (detection.type == AppType_Website) {
+            QString url = getBrowserURL(window.hwnd);
+            if (url.isEmpty() || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+                bool ok;
+                QString defaultUrl = "https://";
+                QString lowerTitle = window.title.toLower();
+                
+                if (lowerTitle.contains("youtube")) {
+                    defaultUrl = "https://www.youtube.com";
+                } else if (lowerTitle.contains("github")) {
+                    defaultUrl = "https://github.com";
+                } else if (lowerTitle.contains("baidu")) {
+                    defaultUrl = "https://www.baidu.com";
+                } else if (lowerTitle.contains("bing")) {
+                    defaultUrl = "https://www.bing.com";
+                } else if (lowerTitle.contains("google")) {
+                    defaultUrl = "https://www.google.com";
+                }
+                
+                QString inputUrl = QInputDialog::getText(this, "输入网站地址", 
+                    QString("自动获取失败，请手动输入网站URL:\n\n"
+                           "📋 窗口标题: %1\n"
+                           "💡 提示: 您可以从浏览器地址栏复制并粘贴URL").arg(detection.name), 
+                    QLineEdit::Normal, defaultUrl, &ok);
+                if (ok && !inputUrl.trimmed().isEmpty()) {
+                    QString trimmedUrl = inputUrl.trimmed();
+                    if (!trimmedUrl.startsWith("http://") && !trimmedUrl.startsWith("https://")) {
+                        trimmedUrl = "https://" + trimmedUrl;
+                    }
+                    url = trimmedUrl;
+                } else {
+                    continue;
+                }
+            }
+            detection.path = url;
+        } else if (detection.type == AppType_Document) {
+            QString foundPath = getDocumentPath(window.hwnd);
+            QString filePath;
+            
+            if (!foundPath.isEmpty() && QFile::exists(foundPath)) {
+                filePath = foundPath;
+            } else {
+                QString initialPath = QDir::homePath();
+                QString fileNameFilter = "所有文件 (*.*);;Word文档 (*.docx *.doc);;PDF文档 (*.pdf);;文本文档 (*.txt);;Excel文档 (*.xlsx *.xls);;PowerPoint文档 (*.pptx *.ppt)";
+                filePath = QFileDialog::getOpenFileName(this, "选择文档文件", initialPath, fileNameFilter);
+                if (filePath.isEmpty()) {
+                    continue;
+                }
+            }
+            
+            QFileInfo fileInfo(filePath);
+            detection.name = fileInfo.completeBaseName();
+            detection.path = filePath;
         }
         
         bool appExists = false;
         AppInfo existingApp;
         for (const AppInfo &app : allApps) {
-            if (app.path == window.processPath) {
+            if (app.type == detection.type && app.path == detection.path && app.name == detection.name) {
                 appExists = true;
                 existingApp = app;
                 break;
@@ -347,15 +677,15 @@ void DesktopSnapshotDialog::onAddToCollection()
             }
             
             AppInfo newApp;
-            newApp.name = extractWindowTitle(window.title);
-            newApp.path = window.processPath;
+            newApp.name = detection.name;
+            newApp.path = detection.path;
             newApp.arguments = "";
             newApp.iconPath = "";
             newApp.category = "桌面快照";
             newApp.useCount = 0;
             newApp.isFavorite = false;
             newApp.sortOrder = maxSortOrder + 1;
-            newApp.type = AppType_Executable;
+            newApp.type = detection.type;
             newApp.isRemoteDesktop = false;
             newApp.remoteDesktopId = -1;
             
