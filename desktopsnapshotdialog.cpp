@@ -555,36 +555,8 @@ void DesktopSnapshotDialog::onAddToCollection()
         return;
     }
     
-    int collectionId = collectionComboBox->currentData().toInt();
-    AppCollection collection;
-    
-    if (collectionId == -1) {
-        bool ok;
-        QString collectionName = QInputDialog::getText(this, "新建集合", "请输入集合名称:", QLineEdit::Normal, "桌面快照", &ok);
-        if (!ok || collectionName.trimmed().isEmpty()) {
-            return;
-        }
-        
-        collection.name = collectionName.trimmed();
-        collection.description = "通过桌面快照创建的集合";
-        collection.tag = "未分类";
-        
-        if (db->addCollection(collection)) {
-            collection = db->getAllCollections().last();
-        } else {
-            QMessageBox::warning(this, "错误", "创建集合失败！");
-            return;
-        }
-    } else {
-        collection = db->getCollectionById(collectionId);
-        if (collection.id <= 0) {
-            QMessageBox::warning(this, "错误", "无法找到该集合！");
-            return;
-        }
-    }
-    
-    int addedCount = 0;
     QList<AppInfo> allApps = db->getAllApps();
+    QList<AppTypeDetection> validApps;
     
     for (const SnapshotWindowInfo &window : selectedWindows) {
         AppTypeDetection detection = this->detectAppType(window);
@@ -598,6 +570,7 @@ void DesktopSnapshotDialog::onAddToCollection()
                 }
             }
             detection.path = folderPath;
+            validApps.append(detection);
         } else if (detection.type == AppType_Website) {
             QString url = getBrowserURL(window.hwnd);
             if (url.isEmpty() || (!url.startsWith("http://") && !url.startsWith("https://"))) {
@@ -628,11 +601,13 @@ void DesktopSnapshotDialog::onAddToCollection()
                         trimmedUrl = "https://" + trimmedUrl;
                     }
                     url = trimmedUrl;
-                } else {
-                    continue;
+                    detection.path = url;
+                    validApps.append(detection);
                 }
+            } else {
+                detection.path = url;
+                validApps.append(detection);
             }
-            detection.path = url;
         } else if (detection.type == AppType_Document) {
             QString foundPath = getDocumentPath(window.hwnd);
             QString filePath;
@@ -651,10 +626,65 @@ void DesktopSnapshotDialog::onAddToCollection()
             QFileInfo fileInfo(filePath);
             detection.name = fileInfo.completeBaseName();
             detection.path = filePath;
+            validApps.append(detection);
+        }
+    }
+    
+    if (validApps.isEmpty()) {
+        QMessageBox::warning(this, "添加失败", "未识别到有效应用，无法创建集合！\n请确保选择的窗口包含有效的文件夹、网站或文档。");
+        return;
+    }
+    
+    int collectionId = collectionComboBox->currentData().toInt();
+    AppCollection collection;
+    QList<AppCollection> allCollections = db->getAllCollections();
+    
+    if (collectionId == -1) {
+        bool ok;
+        QString collectionName = QInputDialog::getText(this, "新建集合", "请输入集合名称:", QLineEdit::Normal, "桌面快照", &ok);
+        if (!ok || collectionName.trimmed().isEmpty()) {
+            return;
         }
         
+        QString trimmedCollectionName = collectionName.trimmed();
+        
+        for (const AppCollection &existingCol : allCollections) {
+            if (existingCol.name == trimmedCollectionName) {
+                QMessageBox::information(this, "提示", QString("集合 \"%1\" 已存在，将把应用添加到该集合中。").arg(trimmedCollectionName));
+                collection = existingCol;
+                collectionId = existingCol.id;
+                break;
+            }
+        }
+        
+        if (collectionId == -1) {
+            collection.name = trimmedCollectionName;
+            collection.description = "通过桌面快照创建的集合";
+            collection.tag = "未分类";
+            
+            if (db->addCollection(collection)) {
+                collection = db->getAllCollections().last();
+            } else {
+                QMessageBox::warning(this, "错误", "创建集合失败！");
+                return;
+            }
+        }
+    } else {
+        collection = db->getCollectionById(collectionId);
+        if (collection.id <= 0) {
+            QMessageBox::warning(this, "错误", "无法找到该集合！");
+            return;
+        }
+    }
+    
+    int addedCount = 0;
+    int skippedCount = 0;
+    QStringList skippedAppNames;
+    
+    for (const AppTypeDetection &detection : validApps) {
         bool appExists = false;
         AppInfo existingApp;
+        
         for (const AppInfo &app : allApps) {
             if (app.type == detection.type && app.path == detection.path && app.name == detection.name) {
                 appExists = true;
@@ -667,6 +697,9 @@ void DesktopSnapshotDialog::onAddToCollection()
             if (!collection.appIds.contains(existingApp.id)) {
                 collection.appIds.append(existingApp.id);
                 addedCount++;
+            } else {
+                skippedCount++;
+                skippedAppNames.append(detection.name);
             }
         } else {
             int maxSortOrder = 0;
@@ -699,7 +732,17 @@ void DesktopSnapshotDialog::onAddToCollection()
     }
     
     if (db->updateCollection(collection)) {
-        QMessageBox::information(this, "成功", QString("已成功将 %1 个应用添加到集合 \"%2\"！").arg(addedCount).arg(collection.name));
+        QString message = QString("已成功将 %1 个应用添加到集合 \"%2\"！").arg(addedCount).arg(collection.name);
+        if (skippedCount > 0) {
+            message += QString("\n\n跳过了 %1 个已存在的应用：\n").arg(skippedCount);
+            for (int i = 0; i < skippedAppNames.size() && i < 5; ++i) {
+                message += QString("  • %1\n").arg(skippedAppNames[i]);
+            }
+            if (skippedAppNames.size() > 5) {
+                message += QString("  ... 还有 %1 个应用").arg(skippedAppNames.size() - 5);
+            }
+        }
+        QMessageBox::information(this, "成功", message);
         accept();
     } else {
         QMessageBox::warning(this, "错误", "更新集合失败！");
