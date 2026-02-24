@@ -23,7 +23,6 @@ class RecommendedAppsWidget;
 class UpdateDialog;
 class UpdateProgressDialog;
 class RemoteDesktopWidget;
-class SnapshotManagerWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -87,7 +86,6 @@ private:
     UpdateDialog *updateDialog;
     UpdateProgressDialog *updateProgressDialog;
     RemoteDesktopWidget *remoteDesktopWidget;
-    SnapshotManagerWidget *snapshotManagerWidget;
     QLabel *statusLabel;
 };
 

@@ -8,7 +8,6 @@
 #include "updatedialog.h"
 #include "updateprogressdialog.h"
 #include "remotedesktopwidget.h"
-#include "snapshotmanagerwidget.h"
 #include <QApplication>
 #include <QStyle>
 #include <QStandardPaths>
@@ -89,7 +88,6 @@ void MainWindow::setupUI()
     appManagerWidget = new AppManagerWidget(db, this);
     collectionManagerWidget = new CollectionManagerWidget(db, this);
     remoteDesktopWidget = new RemoteDesktopWidget(db, this);
-    snapshotManagerWidget = new SnapshotManagerWidget(db, this);
     fishModeWidget = new FishModeWidget(this);
     shutdownWidget = new ShutdownWidget(this);
     settingsWidget = new SettingsWidget(db, this);
@@ -102,12 +100,10 @@ void MainWindow::setupUI()
     connect(remoteDesktopWidget, &RemoteDesktopWidget::collectionNeedsRefresh, collectionManagerWidget, &CollectionManagerWidget::refreshCollectionApps);
     connect(collectionManagerWidget, &CollectionManagerWidget::statusMessageRequested, this, &MainWindow::setStatusText);
     connect(remoteDesktopWidget, &RemoteDesktopWidget::statusMessageRequested, this, &MainWindow::setStatusText);
-    connect(snapshotManagerWidget, &SnapshotManagerWidget::statusMessageRequested, this, &MainWindow::setStatusText);
     
     tabWidget->addTab(appManagerWidget, QApplication::style()->standardIcon(QStyle::SP_DesktopIcon), "应用管理");
     tabWidget->addTab(collectionManagerWidget, QApplication::style()->standardIcon(QStyle::SP_DirHomeIcon), "集合管理");
     tabWidget->addTab(remoteDesktopWidget, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "远程桌面");
-    tabWidget->addTab(snapshotManagerWidget, QApplication::style()->standardIcon(QStyle::SP_DialogSaveButton), "快照管理");
     tabWidget->addTab(recommendedAppsWidget, QApplication::style()->standardIcon(QStyle::SP_ArrowForward), "推荐应用");
     tabWidget->addTab(fishModeWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView), "摸鱼模式");
     tabWidget->addTab(shutdownWidget, QApplication::style()->standardIcon(QStyle::SP_BrowserStop), "定时关机");
