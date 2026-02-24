@@ -3004,8 +3004,6 @@ release/mainwindow.o: mainwindow.cpp mainwindow.h \
 		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/QLayout \
 		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/QDialogButtonBox \
 		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/qdialogbuttonbox.h \
-		snapshotmanagerwidget.h \
-		D:/Qt/5.15.2/mingw81_64/include/QtCore/QDir \
 		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/QApplication \
 		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/qapplication.h \
 		D:/Qt/5.15.2/mingw81_64/include/QtCore/qcoreapplication.h \
@@ -3306,7 +3304,6 @@ release/appmanagerwidget.o: appmanagerwidget.cpp appmanagerwidget.h \
 		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/qdesktopwidget.h \
 		D:/Qt/5.15.2/mingw81_64/include/QtGui/qguiapplication.h \
 		D:/Qt/5.15.2/mingw81_64/include/QtGui/qinputmethod.h \
-		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/QSpacerItem \
 		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/QStyle \
 		D:/Qt/5.15.2/mingw81_64/include/QtGui/QStandardItem \
 		D:/Qt/5.15.2/mingw81_64/include/QtCore/QStandardPaths \
@@ -5223,7 +5220,9 @@ release/desktopsnapshotdialog.o: desktopsnapshotdialog.cpp desktopsnapshotdialog
 		D:/Qt/5.15.2/mingw81_64/include/QtCore/QDir \
 		D:/Qt/5.15.2/mingw81_64/include/QtCore/qdir.h \
 		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/QFileDialog \
-		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/qfiledialog.h
+		D:/Qt/5.15.2/mingw81_64/include/QtWidgets/qfiledialog.h \
+		D:/Qt/5.15.2/mingw81_64/include/QtCore/QStandardPaths \
+		D:/Qt/5.15.2/mingw81_64/include/QtCore/qstandardpaths.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o release\desktopsnapshotdialog.o desktopsnapshotdialog.cpp
 
 release/snapshotmanagerwidget.o: snapshotmanagerwidget.cpp snapshotmanagerwidget.h \
