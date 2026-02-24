@@ -18,6 +18,7 @@ struct SnapshotWindowInfo {
     QString processPath;
     HWND hwnd;
     bool isSelected;
+    AppType appType;
 };
 
 struct AppTypeDetection {
@@ -39,6 +40,7 @@ private slots:
     void onSelectAll();
     void onDeselectAll();
     void onTableItemChanged(QTableWidgetItem *item);
+    void onFilterChanged();
 
 private:
     void setupUI();
@@ -51,6 +53,8 @@ private:
     QString getBrowserURL(HWND hwnd);
     QString getDocumentPath(HWND hwnd);
     AppTypeDetection detectAppType(const SnapshotWindowInfo &window);
+    void applyFilters();
+    bool shouldShowWindow(const SnapshotWindowInfo &window);
 
     Database *db;
     QTableWidget *windowTable;
@@ -61,6 +65,11 @@ private:
     QPushButton *deselectAllButton;
     QComboBox *collectionComboBox;
     QLabel *statusLabel;
+    QCheckBox *filterFolderCheckBox;
+    QCheckBox *filterDocumentCheckBox;
+    QCheckBox *filterWebsiteCheckBox;
+    QCheckBox *filterProgramCheckBox;
+    QWidget *filterContainer;
 };
 
 #endif

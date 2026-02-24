@@ -67,6 +67,42 @@ void DesktopSnapshotDialog::setupUI()
     statusLabel->setStyleSheet("font-size: 13px; color: #636e72;");
     mainLayout->addWidget(statusLabel);
     
+    filterContainer = new QWidget(this);
+    QHBoxLayout *filterLayout = new QHBoxLayout(filterContainer);
+    filterLayout->setSpacing(15);
+    filterLayout->setContentsMargins(0, 5, 0, 5);
+    
+    QLabel *filterLabel = new QLabel("筛选:", this);
+    filterLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: #2d3436;");
+    filterLayout->addWidget(filterLabel);
+    
+    filterFolderCheckBox = new QCheckBox("文件夹应用", this);
+    filterFolderCheckBox->setChecked(true);
+    filterFolderCheckBox->setStyleSheet("font-size: 13px; color: #2d3436;");
+    connect(filterFolderCheckBox, &QCheckBox::stateChanged, this, &DesktopSnapshotDialog::onFilterChanged);
+    filterLayout->addWidget(filterFolderCheckBox);
+    
+    filterDocumentCheckBox = new QCheckBox("文档应用", this);
+    filterDocumentCheckBox->setChecked(false);
+    filterDocumentCheckBox->setStyleSheet("font-size: 13px; color: #2d3436;");
+    connect(filterDocumentCheckBox, &QCheckBox::stateChanged, this, &DesktopSnapshotDialog::onFilterChanged);
+    filterLayout->addWidget(filterDocumentCheckBox);
+    
+    filterWebsiteCheckBox = new QCheckBox("网站应用", this);
+    filterWebsiteCheckBox->setChecked(false);
+    filterWebsiteCheckBox->setStyleSheet("font-size: 13px; color: #2d3436;");
+    connect(filterWebsiteCheckBox, &QCheckBox::stateChanged, this, &DesktopSnapshotDialog::onFilterChanged);
+    filterLayout->addWidget(filterWebsiteCheckBox);
+    
+    filterProgramCheckBox = new QCheckBox("程序应用", this);
+    filterProgramCheckBox->setChecked(true);
+    filterProgramCheckBox->setStyleSheet("font-size: 13px; color: #2d3436;");
+    connect(filterProgramCheckBox, &QCheckBox::stateChanged, this, &DesktopSnapshotDialog::onFilterChanged);
+    filterLayout->addWidget(filterProgramCheckBox);
+    
+    filterLayout->addStretch();
+    mainLayout->addWidget(filterContainer);
+    
     windowTable = new QTableWidget(this);
     windowTable->setColumnCount(4);
     windowTable->setHorizontalHeaderLabels(QStringList() << "选择" << "窗口标题" << "进程名" << "进程路径");
@@ -384,6 +420,9 @@ QList<SnapshotWindowInfo> DesktopSnapshotDialog::captureOpenWindows()
                 windows[i].processPath = folderPath;
             }
         }
+        
+        AppTypeDetection detection = detectAppType(windows[i]);
+        windows[i].appType = detection.type;
     }
     
     return windows;
@@ -452,6 +491,9 @@ void DesktopSnapshotDialog::populateTable(const QList<SnapshotWindowInfo> &windo
         QTableWidgetItem *pathItem = new QTableWidgetItem(info.processPath);
         pathItem->setFlags(pathItem->flags() & ~Qt::ItemIsEditable);
         windowTable->setItem(i, 3, pathItem);
+        
+        bool shouldShow = shouldShowWindow(info);
+        windowTable->setRowHidden(i, !shouldShow);
     }
 }
 
@@ -469,9 +511,11 @@ void DesktopSnapshotDialog::onCaptureSnapshot()
 void DesktopSnapshotDialog::onSelectAll()
 {
     for (int i = 0; i < windowTable->rowCount(); ++i) {
-        QCheckBox *checkBox = qobject_cast<QCheckBox*>(windowTable->cellWidget(i, 0));
-        if (checkBox) {
-            checkBox->setChecked(true);
+        if (!windowTable->isRowHidden(i)) {
+            QCheckBox *checkBox = qobject_cast<QCheckBox*>(windowTable->cellWidget(i, 0));
+            if (checkBox) {
+                checkBox->setChecked(true);
+            }
         }
     }
 }
@@ -479,9 +523,11 @@ void DesktopSnapshotDialog::onSelectAll()
 void DesktopSnapshotDialog::onDeselectAll()
 {
     for (int i = 0; i < windowTable->rowCount(); ++i) {
-        QCheckBox *checkBox = qobject_cast<QCheckBox*>(windowTable->cellWidget(i, 0));
-        if (checkBox) {
-            checkBox->setChecked(false);
+        if (!windowTable->isRowHidden(i)) {
+            QCheckBox *checkBox = qobject_cast<QCheckBox*>(windowTable->cellWidget(i, 0));
+            if (checkBox) {
+                checkBox->setChecked(false);
+            }
         }
     }
 }
@@ -539,6 +585,37 @@ void DesktopSnapshotDialog::onTableItemChanged(QTableWidgetItem *item)
 {
 }
 
+void DesktopSnapshotDialog::onFilterChanged()
+{
+    applyFilters();
+}
+
+void DesktopSnapshotDialog::applyFilters()
+{
+    int rowCount = qMin(currentWindows.size(), windowTable->rowCount());
+    
+    for (int i = 0; i < rowCount; ++i) {
+        bool shouldShow = shouldShowWindow(currentWindows[i]);
+        windowTable->setRowHidden(i, !shouldShow);
+    }
+}
+
+bool DesktopSnapshotDialog::shouldShowWindow(const SnapshotWindowInfo &window)
+{
+    switch (window.appType) {
+        case AppType_Folder:
+            return filterFolderCheckBox->isChecked();
+        case AppType_Document:
+            return filterDocumentCheckBox->isChecked();
+        case AppType_Website:
+            return filterWebsiteCheckBox->isChecked();
+        case AppType_Executable:
+            return filterProgramCheckBox->isChecked();
+        default:
+            return true;
+    }
+}
+
 void DesktopSnapshotDialog::onAddToCollection()
 {
     QList<SnapshotWindowInfo> selectedWindows;
@@ -546,12 +623,14 @@ void DesktopSnapshotDialog::onAddToCollection()
     for (int i = 0; i < windowTable->rowCount(); ++i) {
         QCheckBox *checkBox = qobject_cast<QCheckBox*>(windowTable->cellWidget(i, 0));
         if (checkBox && checkBox->isChecked() && i < currentWindows.size()) {
-            selectedWindows.append(currentWindows[i]);
+            if (!windowTable->isRowHidden(i)) {
+                selectedWindows.append(currentWindows[i]);
+            }
         }
     }
     
     if (selectedWindows.isEmpty()) {
-        QMessageBox::warning(this, "提示", "请至少选择一个窗口！");
+        QMessageBox::warning(this, "提示", "请至少选择一个可见的窗口！\n\n提示：被筛选隐藏的窗口无法添加到集合。");
         return;
     }
     
@@ -563,7 +642,8 @@ void DesktopSnapshotDialog::onAddToCollection()
         
         if (detection.type == AppType_Folder) {
             QString folderPath = getExplorerFolderPath(window.hwnd);
-            if (folderPath.isEmpty()) {
+            
+            if (folderPath.isEmpty() || folderPath == "快速访问" || !QDir(folderPath).exists()) {
                 folderPath = QFileDialog::getExistingDirectory(this, "选择文件夹路径", QDir::homePath());
                 if (folderPath.isEmpty()) {
                     continue;
@@ -627,11 +707,14 @@ void DesktopSnapshotDialog::onAddToCollection()
             detection.name = fileInfo.completeBaseName();
             detection.path = filePath;
             validApps.append(detection);
+        } else {
+            detection.path = detection.path;
+            validApps.append(detection);
         }
     }
     
     if (validApps.isEmpty()) {
-        QMessageBox::warning(this, "添加失败", "未识别到有效应用，无法创建集合！\n请确保选择的窗口包含有效的文件夹、网站或文档。");
+        QMessageBox::warning(this, "添加失败", "未识别到有效应用，无法创建集合！\n请确保选择的窗口包含有效的文件夹、网站、文档或程序。");
         return;
     }
     
