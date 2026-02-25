@@ -437,156 +437,198 @@ RDPConnectionInfo RemoteDesktopWidget::parseRDPFile(const QString &filePath) {
 
         // 处理 full address:s:
         if (trimmedLine.startsWith("full address:s:", Qt::CaseInsensitive)) {
-            // 查找最后一个冒号，确保能正确提取值
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
-                parseFullAddress(value, info);
-                hasServerAddress = true;
+            // 找到第二个冒号的位置，跳过"full address:s:"部分
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    QString value = trimmedLine.mid(secondColonPos + 1).trimmed();
+                    parseFullAddress(value, info);
+                    hasServerAddress = true;
+                }
             }
         }
         // 处理 server port:i:
         else if (trimmedLine.startsWith("server port:i:", Qt::CaseInsensitive)) {
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
-                bool ok = false;
-                int port = value.toInt(&ok);
-                if (ok && port > 0 && port <= 65535) {
-                    info.port = port;
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    QString value = trimmedLine.mid(secondColonPos + 1).trimmed();
+                    bool ok = false;
+                    int port = value.toInt(&ok);
+                    if (ok && port > 0 && port <= 65535) {
+                        info.port = port;
+                    }
                 }
             }
         }
         // 处理 username:s:
         else if (trimmedLine.startsWith("username:s:", Qt::CaseInsensitive)) {
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                info.username = trimmedLine.mid(lastColonPos + 1).trimmed();
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    info.username = trimmedLine.mid(secondColonPos + 1).trimmed();
+                }
             }
         }
         // 处理 domain:s:
         else if (trimmedLine.startsWith("domain:s:", Qt::CaseInsensitive)) {
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                info.domain = trimmedLine.mid(lastColonPos + 1).trimmed();
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    info.domain = trimmedLine.mid(secondColonPos + 1).trimmed();
+                }
             }
         }
         // 处理 desktopwidth:i:
         else if (trimmedLine.startsWith("desktopwidth:i:", Qt::CaseInsensitive)) {
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
-                bool ok = false;
-                int width = value.toInt(&ok);
-                if (ok && width > 0) {
-                    info.screenWidth = width;
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    QString value = trimmedLine.mid(secondColonPos + 1).trimmed();
+                    bool ok = false;
+                    int width = value.toInt(&ok);
+                    if (ok && width > 0) {
+                        info.screenWidth = width;
+                    }
                 }
             }
         }
         // 处理 desktopheight:i:
         else if (trimmedLine.startsWith("desktopheight:i:", Qt::CaseInsensitive)) {
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
-                bool ok = false;
-                int height = value.toInt(&ok);
-                if (ok && height > 0) {
-                    info.screenHeight = height;
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    QString value = trimmedLine.mid(secondColonPos + 1).trimmed();
+                    bool ok = false;
+                    int height = value.toInt(&ok);
+                    if (ok && height > 0) {
+                        info.screenHeight = height;
+                    }
                 }
             }
         }
         // 处理 session bpp:i:
         else if (trimmedLine.startsWith("session bpp:i:", Qt::CaseInsensitive)) {
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
-                bool ok = false;
-                int bpp = value.toInt(&ok);
-                if (ok && bpp > 0) {
-                    info.colorDepth = bpp;
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    QString value = trimmedLine.mid(secondColonPos + 1).trimmed();
+                    bool ok = false;
+                    int bpp = value.toInt(&ok);
+                    if (ok && bpp > 0) {
+                        info.colorDepth = bpp;
+                    }
                 }
             }
         }
         // 处理 screen mode id:i:
         else if (trimmedLine.startsWith("screen mode id:i:", Qt::CaseInsensitive)) {
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
-                bool ok = false;
-                int mode = value.toInt(&ok);
-                if (ok) {
-                    info.fullScreen = (mode == 2);
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    QString value = trimmedLine.mid(secondColonPos + 1).trimmed();
+                    bool ok = false;
+                    int mode = value.toInt(&ok);
+                    if (ok) {
+                        info.fullScreen = (mode == 2);
+                    }
                 }
             }
         }
         // 处理 use multimon:i:
         else if (trimmedLine.startsWith("use multimon:i:", Qt::CaseInsensitive)) {
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
-                bool ok = false;
-                int valueInt = value.toInt(&ok);
-                if (ok) {
-                    info.useAllMonitors = (valueInt == 1);
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    QString value = trimmedLine.mid(secondColonPos + 1).trimmed();
+                    bool ok = false;
+                    int valueInt = value.toInt(&ok);
+                    if (ok) {
+                        info.useAllMonitors = (valueInt == 1);
+                    }
                 }
             }
         }
         // 处理 audiomode:i:
         else if (trimmedLine.startsWith("audiomode:i:", Qt::CaseInsensitive)) {
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
-                bool ok = false;
-                int mode = value.toInt(&ok);
-                if (ok) {
-                    info.enableAudio = (mode != 2);
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    QString value = trimmedLine.mid(secondColonPos + 1).trimmed();
+                    bool ok = false;
+                    int mode = value.toInt(&ok);
+                    if (ok) {
+                        info.enableAudio = (mode != 2);
+                    }
                 }
             }
         }
         // 处理 redirectclipboard:i:
         else if (trimmedLine.startsWith("redirectclipboard:i:", Qt::CaseInsensitive)) {
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
-                bool ok = false;
-                int valueInt = value.toInt(&ok);
-                if (ok) {
-                    info.enableClipboard = (valueInt == 1);
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    QString value = trimmedLine.mid(secondColonPos + 1).trimmed();
+                    bool ok = false;
+                    int valueInt = value.toInt(&ok);
+                    if (ok) {
+                        info.enableClipboard = (valueInt == 1);
+                    }
                 }
             }
         }
         // 处理 redirectprinters:i:
         else if (trimmedLine.startsWith("redirectprinters:i:", Qt::CaseInsensitive)) {
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
-                bool ok = false;
-                int valueInt = value.toInt(&ok);
-                if (ok) {
-                    info.enablePrinter = (valueInt == 1);
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    QString value = trimmedLine.mid(secondColonPos + 1).trimmed();
+                    bool ok = false;
+                    int valueInt = value.toInt(&ok);
+                    if (ok) {
+                        info.enablePrinter = (valueInt == 1);
+                    }
                 }
             }
         }
         // 处理 redirectdrives:i:
         else if (trimmedLine.startsWith("redirectdrives:i:", Qt::CaseInsensitive)) {
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
-                bool ok = false;
-                int valueInt = value.toInt(&ok);
-                if (ok) {
-                    info.enableDrive = (valueInt == 1);
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    QString value = trimmedLine.mid(secondColonPos + 1).trimmed();
+                    bool ok = false;
+                    int valueInt = value.toInt(&ok);
+                    if (ok) {
+                        info.enableDrive = (valueInt == 1);
+                    }
                 }
             }
         }
         // 处理 drivestoredirect:s:
         else if (trimmedLine.startsWith("drivestoredirect:s:", Qt::CaseInsensitive)) {
             // 这个配置项表示是否重定向驱动器
-            int lastColonPos = trimmedLine.lastIndexOf(":");
-            if (lastColonPos > 0) {
-                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
-                // 如果值不为空，表示启用了驱动器重定向
-                info.enableDrive = !value.isEmpty();
+            int firstColonPos = trimmedLine.indexOf(":");
+            if (firstColonPos > 0) {
+                int secondColonPos = trimmedLine.indexOf(":", firstColonPos + 1);
+                if (secondColonPos > firstColonPos) {
+                    QString value = trimmedLine.mid(secondColonPos + 1).trimmed();
+                    // 如果值不为空，表示启用了驱动器重定向
+                    info.enableDrive = !value.isEmpty();
+                }
             }
         }
     }
