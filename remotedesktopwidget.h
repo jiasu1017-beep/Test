@@ -18,6 +18,24 @@
 #include <QAction>
 #include "database.h"
 
+struct RDPConnectionInfo {
+    QString serverAddress;
+    int port;
+    QString username;
+    QString domain;
+    int screenWidth;
+    int screenHeight;
+    int colorDepth;
+    bool fullScreen;
+    bool useAllMonitors;
+    bool enableAudio;
+    bool enableClipboard;
+    bool enablePrinter;
+    bool enableDrive;
+    bool isValid;
+    QString errorMessage;
+};
+
 class RemoteDesktopWidget : public QWidget
 {
     Q_OBJECT
@@ -45,12 +63,17 @@ private slots:
     void onTableContextMenuRequested(const QPoint &pos);
     void onAddToAppList();
     void onAddToCollection();
+    void importFromRDPFile(const QString &filePath);
+    void importFromJSONFile(const QString &filePath);
 
 private:
     void setupUI();
     void loadConnections(const QList<RemoteDesktopConnection> &connections);
     RemoteDesktopConnection getSelectedConnection();
     void updateConnectionButtons();
+    RDPConnectionInfo parseRDPFile(const QString &filePath);
+    void parseFullAddress(const QString &fullAddress, RDPConnectionInfo &info);
+    RemoteDesktopConnection rdpInfoToConnection(const RDPConnectionInfo &rdpInfo);
 
     Database *db;
 

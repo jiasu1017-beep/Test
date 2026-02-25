@@ -4,6 +4,7 @@
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -340,10 +341,330 @@ void RemoteDesktopWidget::onTestConnection()
 
 void RemoteDesktopWidget::onImportConnections()
 {
-    QString fileName = QFileDialog::getOpenFileName(this, "导入连接配置", "", "JSON 文件 (*.json);;所有文件 (*.*)");
+    QString fileName = QFileDialog::getOpenFileName(this, "导入连接配置",
+        "", "RDP 文件 (*.rdp);;JSON 文件 (*.json);;所有文件 (*.*)");
+
     if (fileName.isEmpty()) return;
 
-    QFile file(fileName);
+    QString suffix = QFileInfo(fileName).suffix().toLower();
+
+    if (suffix == "rdp") {
+        importFromRDPFile(fileName);
+        return;
+    }
+
+    importFromJSONFile(fileName);
+}
+
+void RemoteDesktopWidget::importFromRDPFile(const QString &filePath) {
+    RDPConnectionInfo rdpInfo = parseRDPFile(filePath);
+
+    if (!rdpInfo.isValid) {
+        QMessageBox::warning(this, "导入失败",
+            QString("解析RDP文件失败：\n%1").arg(rdpInfo.errorMessage));
+        return;
+    }
+
+    RemoteDesktopConnection conn = rdpInfoToConnection(rdpInfo);
+
+    // 以文件名作为远程桌面名称
+    QFileInfo fileInfo(filePath);
+    conn.name = fileInfo.baseName();
+    
+    // 分类默认为"工作"
+    conn.category = "工作";
+
+    RemoteDesktopDialog dialog(db, conn, this);
+    dialog.setWindowTitle("导入RDP连接 - 确认并编辑");
+
+    if (dialog.exec() == QDialog::Accepted) {
+        RemoteDesktopConnection finalConn = dialog.getConnection();
+        if (db->addRemoteDesktop(finalConn)) {
+            refreshConnectionList();
+            QMessageBox::information(this, "导入成功",
+                QString("成功导入连接：%1\n服务器地址：%2\n端口：%3")
+                    .arg(finalConn.name)
+                    .arg(finalConn.hostAddress)
+                    .arg(finalConn.port));
+        } else {
+            QMessageBox::warning(this, "错误", "保存连接失败！");
+        }
+    }
+}
+
+RDPConnectionInfo RemoteDesktopWidget::parseRDPFile(const QString &filePath) {
+    RDPConnectionInfo info;
+    info.isValid = false;
+    info.port = 3389;
+    info.screenWidth = 1920;
+    info.screenHeight = 1080;
+    info.colorDepth = 32;
+    info.fullScreen = true;
+    info.useAllMonitors = false;
+    info.enableAudio = true;
+    info.enableClipboard = true;
+    info.enablePrinter = false;
+    info.enableDrive = false;
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        info.errorMessage = "无法打开文件，请检查文件是否被占用或无读取权限";
+        return info;
+    }
+
+    QTextStream in(&file);
+    in.setCodec("UTF-8");
+
+    QStringList lines;
+    while (!in.atEnd()) {
+        lines.append(in.readLine());
+    }
+    file.close();
+
+    if (lines.isEmpty()) {
+        info.errorMessage = "RDP文件为空，不包含任何有效配置";
+        return info;
+    }
+
+    bool hasServerAddress = false;
+
+    for (const QString &line : lines) {
+        QString trimmedLine = line.trimmed();
+
+        if (trimmedLine.isEmpty() || trimmedLine.startsWith("#") || trimmedLine.startsWith(";")) {
+            continue;
+        }
+
+        // 处理 full address:s:
+        if (trimmedLine.startsWith("full address:s:", Qt::CaseInsensitive)) {
+            // 查找最后一个冒号，确保能正确提取值
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
+                parseFullAddress(value, info);
+                hasServerAddress = true;
+            }
+        }
+        // 处理 server port:i:
+        else if (trimmedLine.startsWith("server port:i:", Qt::CaseInsensitive)) {
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
+                bool ok = false;
+                int port = value.toInt(&ok);
+                if (ok && port > 0 && port <= 65535) {
+                    info.port = port;
+                }
+            }
+        }
+        // 处理 username:s:
+        else if (trimmedLine.startsWith("username:s:", Qt::CaseInsensitive)) {
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                info.username = trimmedLine.mid(lastColonPos + 1).trimmed();
+            }
+        }
+        // 处理 domain:s:
+        else if (trimmedLine.startsWith("domain:s:", Qt::CaseInsensitive)) {
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                info.domain = trimmedLine.mid(lastColonPos + 1).trimmed();
+            }
+        }
+        // 处理 desktopwidth:i:
+        else if (trimmedLine.startsWith("desktopwidth:i:", Qt::CaseInsensitive)) {
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
+                bool ok = false;
+                int width = value.toInt(&ok);
+                if (ok && width > 0) {
+                    info.screenWidth = width;
+                }
+            }
+        }
+        // 处理 desktopheight:i:
+        else if (trimmedLine.startsWith("desktopheight:i:", Qt::CaseInsensitive)) {
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
+                bool ok = false;
+                int height = value.toInt(&ok);
+                if (ok && height > 0) {
+                    info.screenHeight = height;
+                }
+            }
+        }
+        // 处理 session bpp:i:
+        else if (trimmedLine.startsWith("session bpp:i:", Qt::CaseInsensitive)) {
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
+                bool ok = false;
+                int bpp = value.toInt(&ok);
+                if (ok && bpp > 0) {
+                    info.colorDepth = bpp;
+                }
+            }
+        }
+        // 处理 screen mode id:i:
+        else if (trimmedLine.startsWith("screen mode id:i:", Qt::CaseInsensitive)) {
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
+                bool ok = false;
+                int mode = value.toInt(&ok);
+                if (ok) {
+                    info.fullScreen = (mode == 2);
+                }
+            }
+        }
+        // 处理 use multimon:i:
+        else if (trimmedLine.startsWith("use multimon:i:", Qt::CaseInsensitive)) {
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
+                bool ok = false;
+                int valueInt = value.toInt(&ok);
+                if (ok) {
+                    info.useAllMonitors = (valueInt == 1);
+                }
+            }
+        }
+        // 处理 audiomode:i:
+        else if (trimmedLine.startsWith("audiomode:i:", Qt::CaseInsensitive)) {
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
+                bool ok = false;
+                int mode = value.toInt(&ok);
+                if (ok) {
+                    info.enableAudio = (mode != 2);
+                }
+            }
+        }
+        // 处理 redirectclipboard:i:
+        else if (trimmedLine.startsWith("redirectclipboard:i:", Qt::CaseInsensitive)) {
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
+                bool ok = false;
+                int valueInt = value.toInt(&ok);
+                if (ok) {
+                    info.enableClipboard = (valueInt == 1);
+                }
+            }
+        }
+        // 处理 redirectprinters:i:
+        else if (trimmedLine.startsWith("redirectprinters:i:", Qt::CaseInsensitive)) {
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
+                bool ok = false;
+                int valueInt = value.toInt(&ok);
+                if (ok) {
+                    info.enablePrinter = (valueInt == 1);
+                }
+            }
+        }
+        // 处理 redirectdrives:i:
+        else if (trimmedLine.startsWith("redirectdrives:i:", Qt::CaseInsensitive)) {
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
+                bool ok = false;
+                int valueInt = value.toInt(&ok);
+                if (ok) {
+                    info.enableDrive = (valueInt == 1);
+                }
+            }
+        }
+        // 处理 drivestoredirect:s:
+        else if (trimmedLine.startsWith("drivestoredirect:s:", Qt::CaseInsensitive)) {
+            // 这个配置项表示是否重定向驱动器
+            int lastColonPos = trimmedLine.lastIndexOf(":");
+            if (lastColonPos > 0) {
+                QString value = trimmedLine.mid(lastColonPos + 1).trimmed();
+                // 如果值不为空，表示启用了驱动器重定向
+                info.enableDrive = !value.isEmpty();
+            }
+        }
+    }
+
+    if (!hasServerAddress) {
+        info.errorMessage = "未找到服务器地址（full address:s）";
+        return info;
+    }
+
+    if (info.serverAddress.isEmpty()) {
+        info.errorMessage = "服务器地址为空";
+        return info;
+    }
+
+    info.isValid = true;
+    return info;
+}
+
+void RemoteDesktopWidget::parseFullAddress(const QString &fullAddress, RDPConnectionInfo &info)
+{
+    QString address = fullAddress;
+
+    int colonPos = fullAddress.lastIndexOf(':');
+    if (colonPos > 0) {
+        QString portStr = fullAddress.mid(colonPos + 1);
+        bool ok = false;
+        int port = portStr.toInt(&ok);
+        if (ok && port > 0 && port <= 65535) {
+            info.port = port;
+            address = fullAddress.left(colonPos);
+        }
+    }
+
+    if (address.startsWith("[")) {
+        int endBracket = address.indexOf(']');
+        if (endBracket > 0) {
+            info.serverAddress = address.mid(1, endBracket - 1);
+            if (endBracket + 1 < address.length()) {
+                QString suffix = address.mid(endBracket + 1);
+                if (suffix.startsWith(":")) {
+                    bool ok = false;
+                    int port = suffix.mid(1).toInt(&ok);
+                    if (ok && port > 0 && port <= 65535) {
+                        info.port = port;
+                    }
+                }
+            }
+        }
+    } else {
+        info.serverAddress = address;
+    }
+}
+
+RemoteDesktopConnection RemoteDesktopWidget::rdpInfoToConnection(const RDPConnectionInfo &rdpInfo)
+{
+    RemoteDesktopConnection conn;
+    conn.name = rdpInfo.serverAddress;
+    conn.hostAddress = rdpInfo.serverAddress;
+    conn.port = rdpInfo.port;
+    conn.username = rdpInfo.username;
+    conn.password = "";
+    conn.domain = rdpInfo.domain;
+    conn.screenWidth = rdpInfo.screenWidth;
+    conn.screenHeight = rdpInfo.screenHeight;
+    conn.fullScreen = rdpInfo.fullScreen;
+    conn.useAllMonitors = rdpInfo.useAllMonitors;
+    conn.enableAudio = rdpInfo.enableAudio;
+    conn.enableClipboard = rdpInfo.enableClipboard;
+    conn.enablePrinter = rdpInfo.enablePrinter;
+    conn.enableDrive = rdpInfo.enableDrive;
+    conn.category = "未分类";
+    conn.isFavorite = false;
+    return conn;
+}
+
+void RemoteDesktopWidget::importFromJSONFile(const QString &filePath)
+{
+    QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
         QMessageBox::warning(this, "错误", "无法打开文件！");
         return;
