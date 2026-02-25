@@ -3,12 +3,26 @@
 #include <QStyle>
 #include <QGridLayout>
 #include <QFrame>
+#include <QShowEvent>
 
 RecommendedAppsWidget::RecommendedAppsWidget(QWidget *parent)
     : QWidget(parent)
 {
+    updater = new AppCollectionUpdater(this);
+    
+    connect(updater, &AppCollectionUpdater::updateCheckStarted, this, &RecommendedAppsWidget::onUpdateCheckStarted);
+    connect(updater, &AppCollectionUpdater::updateAvailable, this, &RecommendedAppsWidget::onUpdateAvailable);
+    connect(updater, &AppCollectionUpdater::noUpdateAvailable, this, &RecommendedAppsWidget::onNoUpdateAvailable);
+    connect(updater, &AppCollectionUpdater::updateCheckFailed, this, &RecommendedAppsWidget::onUpdateCheckFailed);
+    connect(updater, &AppCollectionUpdater::updateFinished, this, &RecommendedAppsWidget::onUpdateFinished);
+    connect(updater, &AppCollectionUpdater::updateFailed, this, &RecommendedAppsWidget::onUpdateFailed);
+    connect(updater, &AppCollectionUpdater::logMessage, this, &RecommendedAppsWidget::onLogMessage);
+    
     loadAppData();
     setupUI();
+    
+    // 标记模块尚未打开过，第一次打开时执行更新检查
+    m_hasOpened = false;
 }
 
 void RecommendedAppsWidget::setupUI()
@@ -25,9 +39,31 @@ void RecommendedAppsWidget::setupUI()
     subtitleLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(subtitleLabel);
     
+    QFrame *updateStatusFrame = new QFrame(this);
+    updateStatusFrame->setStyleSheet("background-color: #f0f8ff; border-radius: 10px; padding: 10px;");
+    QVBoxLayout *updateStatusLayout = new QVBoxLayout(updateStatusFrame);
+    
+    statusLabel = new QLabel("🔄 准备就绪", this);
+    statusLabel->setStyleSheet("color: #1976d2; padding: 5px; font-size: 12px;");
+    statusLabel->setObjectName("statusLabel");
+    updateStatusLayout->addWidget(statusLabel);
+    
+    updateProgressBar = new QProgressBar(this);
+    updateProgressBar->setMaximumHeight(8);
+    updateProgressBar->setStyleSheet(
+        "QProgressBar { border-radius: 4px; background-color: #e3f2fd; } "
+        "QProgressBar::chunk { background-color: #1976d2; border-radius: 4px; }"
+    );
+    updateProgressBar->setValue(0);
+    updateProgressBar->setVisible(false);
+    updateStatusLayout->addWidget(updateProgressBar);
+    
+    mainLayout->addWidget(updateStatusFrame);
+    
     QFrame *searchFrame = new QFrame(this);
     searchFrame->setStyleSheet("background-color: #f5f5f5; border-radius: 10px; padding: 10px;");
     QHBoxLayout *searchLayout = new QHBoxLayout(searchFrame);
+    searchLayout->setContentsMargins(0, 0, 0, 0);
     
     searchEdit = new QLineEdit(this);
     searchEdit->setPlaceholderText("🔍 搜索应用名称或描述...");
@@ -35,10 +71,25 @@ void RecommendedAppsWidget::setupUI()
     connect(searchEdit, &QLineEdit::textChanged, this, &RecommendedAppsWidget::onSearchTextChanged);
     searchLayout->addWidget(searchEdit);
     
+    searchLayout->addStretch();
+    
     showFavoritesCheck = new QCheckBox("⭐ 仅显示收藏", this);
     showFavoritesCheck->setStyleSheet("QCheckBox { padding: 8px; font-size: 14px; color: #555; } QCheckBox::indicator { width: 20px; height: 20px; }");
     connect(showFavoritesCheck, &QCheckBox::stateChanged, this, &RecommendedAppsWidget::onShowFavoritesChanged);
     searchLayout->addWidget(showFavoritesCheck);
+    
+    searchLayout->addSpacing(10);
+    
+    updateButton = new QPushButton("🔄 更新", this);
+    updateButton->setStyleSheet(
+        "QPushButton { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1976d2, stop:1 #42a5f5); "
+        "color: white; padding: 10px 20px; border-radius: 20px; font-weight: bold; font-size: 13px; } "
+        "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1565c0, stop:1 #1976d2); } "
+        "QPushButton:disabled { background: #bdbdbd; color: #757575; }"
+    );
+    updateButton->setCursor(Qt::PointingHandCursor);
+    connect(updateButton, &QPushButton::clicked, this, &RecommendedAppsWidget::checkForUpdates);
+    searchLayout->addWidget(updateButton);
     
     mainLayout->addWidget(searchFrame);
     
@@ -109,8 +160,10 @@ QWidget* RecommendedAppsWidget::createCategoryWidget(const CategoryInfo &categor
 QWidget* RecommendedAppsWidget::createAppCard(const RecommendedAppInfo &app)
 {
     QWidget *card = new QWidget();
-    card->setStyleSheet("QWidget { background-color: white; border: 2px solid #e3f2fd; border-radius: 12px; } QWidget:hover { border-color: #1976d2; }");
     card->setMinimumHeight(160);
+    
+    // 使用更高效的样式设置方式
+    card->setProperty("class", "appCard");
     
     QVBoxLayout *cardLayout = new QVBoxLayout(card);
     
@@ -147,29 +200,35 @@ QWidget* RecommendedAppsWidget::createAppCard(const RecommendedAppInfo &app)
     cardLayout->addLayout(headerLayout);
     
     QLabel *descLabel = new QLabel(app.description, card);
-    descLabel->setStyleSheet("color: #546e7a; padding: 8px 0; font-size: 12px; line-height: 1.5;");
+    descLabel->setStyleSheet("font-size: 12px; color: #666; padding: 5px;");
     descLabel->setWordWrap(true);
-    descLabel->setMinimumHeight(40);
+    descLabel->setMaximumHeight(60);
     cardLayout->addWidget(descLabel);
     
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
-    buttonLayout->addStretch();
+    cardLayout->addStretch();
     
-    QPushButton *openButton = new QPushButton("🔗 打开链接", card);
-    openButton->setStyleSheet(
+    QHBoxLayout *footerLayout = new QHBoxLayout();
+    footerLayout->addStretch();
+    
+    QPushButton *openBtn = new QPushButton("🚀 打开", card);
+    openBtn->setStyleSheet(
         "QPushButton { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1976d2, stop:1 #42a5f5); "
-        "color: white; padding: 10px 24px; border-radius: 25px; font-weight: bold; font-size: 13px; } "
+        "color: white; padding: 8px 16px; border-radius: 15px; font-weight: bold; font-size: 12px; } "
         "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1565c0, stop:1 #1976d2); }"
     );
-    openButton->setCursor(Qt::PointingHandCursor);
-    connect(openButton, &QPushButton::clicked, [this, app]() {
+    openBtn->setCursor(Qt::PointingHandCursor);
+    connect(openBtn, &QPushButton::clicked, [this, app]() {
         openAppUrl(app.url);
     });
+    footerLayout->addWidget(openBtn);
     
-    buttonLayout->addWidget(openButton);
-    cardLayout->addLayout(buttonLayout);
+    cardLayout->addLayout(footerLayout);
     
-    cardLayout->addStretch();
+    // 直接设置卡片的样式
+    card->setStyleSheet(
+        "QWidget { background-color: white; border: 2px solid #e3f2fd; border-radius: 12px; } "
+        "QWidget:hover { border-color: #1976d2; }"
+    );
     
     return card;
 }
@@ -269,412 +328,34 @@ void RecommendedAppsWidget::loadAppData()
     }
     {
         RecommendedAppInfo app;
-        app.name = "ShareX";
-        app.url = "https://getsharex.com/";
-        app.description = "强大的截图和录屏工具，功能极其丰富";
+        app.name = "7-Zip";
+        app.url = "https://www.7-zip.org/";
+        app.description = "开源压缩软件，支持多种格式，压缩率高";
+        app.iconEmoji = "📦";
+        app.category = "实用工具";
+        app.isFavorite = false;
+        cat3.apps.append(app);
+        allApps.append(app);
+    }
+    {
+        RecommendedAppInfo app;
+        app.name = "Greenshot";
+        app.url = "https://getgreenshot.org/";
+        app.description = "截图工具，功能强大，支持多种截图方式";
         app.iconEmoji = "📸";
         app.category = "实用工具";
         app.isFavorite = false;
         cat3.apps.append(app);
         allApps.append(app);
     }
-    {
-        RecommendedAppInfo app;
-        app.name = "Snipaste";
-        app.url = "https://www.snipaste.com/";
-        app.description = "快捷截图工具，支持贴图和标注";
-        app.iconEmoji = "✂️";
-        app.category = "实用工具";
-        app.isFavorite = false;
-        cat3.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "SpaceSniffer";
-        app.url = "http://www.uderzo.it/main_products/space_sniffer.html";
-        app.description = "磁盘空间分析工具，可视化展示文件大小";
-        app.iconEmoji = "💾";
-        app.category = "实用工具";
-        app.isFavorite = false;
-        cat3.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "Tablacus Explorer";
-        app.url = "https://tablacus.github.io/explorer.html";
-        app.description = "标签页多窗口文件管理器，高效办公";
-        app.iconEmoji = "📁";
-        app.category = "实用工具";
-        app.isFavorite = false;
-        cat3.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "PDFgear";
-        app.url = "https://www.pdfgear.com/";
-        app.description = "免费的 PDF 工具，阅读、编辑、转换一站式";
-        app.iconEmoji = "📄";
-        app.category = "实用工具";
-        app.isFavorite = false;
-        cat3.apps.append(app);
-        allApps.append(app);
-    }
     categories.append(cat3);
-    
-    CategoryInfo cat4;
-    cat4.name = "📄 办公与文档";
-    cat4.iconEmoji = "📑";
-    {
-        RecommendedAppInfo app;
-        app.name = "Typora";
-        app.url = "https://typora.io/";
-        app.description = "Markdown 编辑器，所见即所得，优雅简洁";
-        app.iconEmoji = "✏️";
-        app.category = "办公与文档";
-        app.isFavorite = true;
-        cat4.apps.append(app);
-        allApps.append(app);
-        favoriteApps.insert(app.name);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "Notepad++";
-        app.url = "https://notepad-plus-plus.org/";
-        app.description = "文本编辑器，轻量高效，插件丰富";
-        app.iconEmoji = "📝";
-        app.category = "办公与文档";
-        app.isFavorite = false;
-        cat4.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "Pandoc";
-        app.url = "https://pandoc.org/";
-        app.description = "文档格式转换工具，支持 Markdown、Word、PDF 等";
-        app.iconEmoji = "🔄";
-        app.category = "办公与文档";
-        app.isFavorite = false;
-        cat4.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "方方格子Excel工具箱";
-        app.url = "https://www.ffcell.com/";
-        app.description = "Excel 增强工具，大幅提升表格处理效率";
-        app.iconEmoji = "📊";
-        app.category = "办公与文档";
-        app.isFavorite = false;
-        cat4.apps.append(app);
-        allApps.append(app);
-    }
-    categories.append(cat4);
-    
-    CategoryInfo cat5;
-    cat5.name = "🌐 网站与资源";
-    cat5.iconEmoji = "🌍";
-    {
-        RecommendedAppInfo app;
-        app.name = "百度";
-        app.url = "https://www.baidu.com/";
-        app.description = "全球最大的中文搜索引擎";
-        app.iconEmoji = "🔍";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "Google";
-        app.url = "https://www.google.com/";
-        app.description = "全球领先的搜索引擎";
-        app.iconEmoji = "🔍";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "Bing";
-        app.url = "https://www.bing.com/";
-        app.description = "微软必应搜索引擎";
-        app.iconEmoji = "🔍";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "GitHub";
-        app.url = "https://github.com/";
-        app.description = "全球最大的代码托管平台";
-        app.iconEmoji = "🐙";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "Gitee";
-        app.url = "https://gitee.com/";
-        app.description = "国内代码托管平台，速度更快";
-        app.iconEmoji = "🐭";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "知乎";
-        app.url = "https://www.zhihu.com/";
-        app.description = "问答社区，知识分享平台";
-        app.iconEmoji = "❓";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "B站";
-        app.url = "https://www.bilibili.com/";
-        app.description = "视频分享网站，学习娱乐两不误";
-        app.iconEmoji = "📺";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "CSDN";
-        app.url = "https://www.csdn.net/";
-        app.description = "程序员社区，技术学习分享";
-        app.iconEmoji = "💻";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "掘金";
-        app.url = "https://juejin.cn/";
-        app.description = "帮助开发者成长的社区";
-        app.iconEmoji = "⛏️";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "微博";
-        app.url = "https://weibo.com/";
-        app.description = "社交媒体平台";
-        app.iconEmoji = "📱";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "实用网站汇总";
-        app.url = "https://haiezan.github.io/page/collections/";
-        app.description = "包含国家标准、图标下载、配色方案等实用网站";
-        app.iconEmoji = "🔗";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "百度云盘资源";
-        app.url = "https://pan.baidu.com/s/1YukU_ZY3LpNztvpANTd-9w";
-        app.description = "提取码：fvrs - 软件资源合集";
-        app.iconEmoji = "☁️";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "GitBook";
-        app.url = "https://www.gitbook.com/";
-        app.description = "电子书制作平台，技术文档首选";
-        app.iconEmoji = "📚";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "sm.ms 图床";
-        app.url = "https://sm.ms/";
-        app.description = "免费图床服务，稳定快速";
-        app.iconEmoji = "🖼️";
-        app.category = "网站与资源";
-        app.isFavorite = false;
-        cat5.apps.append(app);
-        allApps.append(app);
-    }
-    categories.append(cat5);
-    
-    CategoryInfo cat6;
-    cat6.name = "⚙️ Git与版本控制";
-    cat6.iconEmoji = "🔀";
-    {
-        RecommendedAppInfo app;
-        app.name = "GitHub Desktop";
-        app.url = "https://desktop.github.com/";
-        app.description = "GitHub 桌面客户端，图形化 Git 操作";
-        app.iconEmoji = "🐙";
-        app.category = "Git与版本控制";
-        app.isFavorite = false;
-        cat6.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "Git";
-        app.url = "https://git-scm.com/";
-        app.description = "版本控制系统，开发者必备";
-        app.iconEmoji = "📦";
-        app.category = "Git与版本控制";
-        app.isFavorite = false;
-        cat6.apps.append(app);
-        allApps.append(app);
-    }
-    categories.append(cat6);
-    
-    CategoryInfo cat7;
-    cat7.name = "🎵 生活与娱乐";
-    cat7.iconEmoji = "🎮";
-    {
-        RecommendedAppInfo app;
-        app.name = "Listen1";
-        app.url = "https://listen1.github.io/listen1/";
-        app.description = "音乐播放工具，聚合多平台音乐";
-        app.iconEmoji = "🎵";
-        app.category = "生活与娱乐";
-        app.isFavorite = false;
-        cat7.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "GitHub Games";
-        app.url = "https://haiezan.github.io/page/collections/";
-        app.description = "在线小游戏，休闲放松";
-        app.iconEmoji = "🎮";
-        app.category = "生活与娱乐";
-        app.isFavorite = false;
-        cat7.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "Agoda";
-        app.url = "https://www.agoda.com/";
-        app.description = "酒店预订平台，出行必备";
-        app.iconEmoji = "🏨";
-        app.category = "生活与娱乐";
-        app.isFavorite = false;
-        cat7.apps.append(app);
-        allApps.append(app);
-    }
-    categories.append(cat7);
-    
-    CategoryInfo cat8;
-    cat8.name = "🔌 Chrome 插件";
-    cat8.iconEmoji = "🧩";
-    {
-        RecommendedAppInfo app;
-        app.name = "Octotree";
-        app.url = "https://www.octotree.io/";
-        app.description = "GitHub 代码树插件，浏览代码更高效";
-        app.iconEmoji = "🌳";
-        app.category = "Chrome 插件";
-        app.isFavorite = false;
-        cat8.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "Gestures for Chrome";
-        app.url = "https://chrome.google.com/webstore";
-        app.description = "Chrome 浏览器手势插件，鼠标手势操作";
-        app.iconEmoji = "✋";
-        app.category = "Chrome 插件";
-        app.isFavorite = false;
-        cat8.apps.append(app);
-        allApps.append(app);
-    }
-    {
-        RecommendedAppInfo app;
-        app.name = "Dribbble New Tab";
-        app.url = "https://chrome.google.com/webstore";
-        app.description = "新建标签页显示 Dribbble 作品，美化新标签页";
-        app.iconEmoji = "🎨";
-        app.category = "Chrome 插件";
-        app.isFavorite = false;
-        cat8.apps.append(app);
-        allApps.append(app);
-    }
-    categories.append(cat8);
-    
-    CategoryInfo cat9;
-    cat9.name = "🖥️ 远程协助";
-    cat9.iconEmoji = "💻";
-    {
-        RecommendedAppInfo app;
-        app.name = "ToDesk";
-        app.url = "https://www.todesk.com/";
-        app.description = "免费远程协助软件，流畅稳定";
-        app.iconEmoji = "🔗";
-        app.category = "远程协助";
-        app.isFavorite = false;
-        cat9.apps.append(app);
-        allApps.append(app);
-    }
-    categories.append(cat9);
-    
-    CategoryInfo cat10;
-    cat10.name = "📊 数据与图表";
-    cat10.iconEmoji = "📈";
-    {
-        RecommendedAppInfo app;
-        app.name = "Gnuplot";
-        app.url = "http://www.gnuplot.info/";
-        app.description = "动态曲线绘制工具，科学绘图首选";
-        app.iconEmoji = "📉";
-        app.category = "数据与图表";
-        app.isFavorite = false;
-        cat10.apps.append(app);
-        allApps.append(app);
-    }
-    categories.append(cat10);
 }
 
 void RecommendedAppsWidget::openAppUrl(const QString &url)
 {
-    if (url.isEmpty()) {
-        return;
+    if (!url.isEmpty()) {
+        QDesktopServices::openUrl(QUrl(url));
     }
-    QDesktopServices::openUrl(QUrl(url));
 }
 
 void RecommendedAppsWidget::toggleFavorite(const QString &appName)
@@ -699,19 +380,20 @@ void RecommendedAppsWidget::onShowFavoritesChanged(int state)
 
 void RecommendedAppsWidget::refreshAllViews()
 {
+    applyFilter();
+    
     QLabel *statsLabel = findChild<QLabel*>("statsLabel");
     if (statsLabel) {
         statsLabel->setText(QString("📊 共 %1 个应用，%2 个已收藏").arg(allApps.size()).arg(favoriteApps.size()));
     }
-    
-    applyFilter();
 }
 
 void RecommendedAppsWidget::applyFilter()
 {
     QString searchText = searchEdit->text().toLower();
-    bool showFavorites = showFavoritesCheck->isChecked();
+    bool showFavoritesOnly = showFavoritesCheck->isChecked();
     
+    // 清空现有布局
     QLayout *oldLayout = allAppsWidget->layout();
     if (oldLayout) {
         QLayoutItem *item;
@@ -724,27 +406,160 @@ void RecommendedAppsWidget::applyFilter()
         delete oldLayout;
     }
     
+    // 创建新的网格布局
     QGridLayout *gridLayout = new QGridLayout(allAppsWidget);
     gridLayout->setSpacing(15);
     gridLayout->setContentsMargins(10, 10, 10, 10);
     
+    // 快速创建应用卡片
     int row = 0, col = 0;
     for (const auto &app : allApps) {
-        bool matchesSearch = searchText.isEmpty() || 
-                            app.name.toLower().contains(searchText) || 
-                            app.description.toLower().contains(searchText);
-        bool matchesFavorite = !showFavorites || favoriteApps.contains(app.name);
+        if (showFavoritesOnly && !favoriteApps.contains(app.name)) {
+            continue;
+        }
         
-        if (matchesSearch && matchesFavorite) {
-            QWidget *card = createAppCard(app);
-            gridLayout->addWidget(card, row, col);
-            col++;
-            if (col >= 2) {
-                col = 0;
-                row++;
+        if (!searchText.isEmpty()) {
+            if (!app.name.toLower().contains(searchText) && 
+                !app.description.toLower().contains(searchText)) {
+                continue;
             }
+        }
+        
+        QWidget *card = createAppCard(app);
+        gridLayout->addWidget(card, row, col);
+        col++;
+        if (col >= 2) {
+            col = 0;
+            row++;
         }
     }
     
     gridLayout->setRowStretch(row + 1, 1);
+}
+
+void RecommendedAppsWidget::updateTabs()
+{
+    int currentTab = tabWidget->currentIndex();
+    
+    while (tabWidget->count() > 1) {
+        tabWidget->removeTab(1);
+    }
+    
+    for (const auto &category : categories) {
+        QWidget *categoryWidget = createCategoryWidget(category);
+        tabWidget->addTab(categoryWidget, category.name);
+    }
+    
+    if (currentTab < tabWidget->count()) {
+        tabWidget->setCurrentIndex(currentTab);
+    }
+    
+    refreshAllViews();
+}
+
+void RecommendedAppsWidget::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    
+    // 第一次打开模块时执行更新检查
+    if (!m_hasOpened) {
+        m_hasOpened = true;
+        
+        // 延迟执行更新检查，确保界面完全显示
+        QTimer::singleShot(300, this, [this]() {
+            statusLabel->setText("🔄 正在加载推荐应用...");
+            updateProgressBar->setVisible(true);
+            updateProgressBar->setValue(10);
+            checkForUpdates();
+        });
+    }
+}
+
+void RecommendedAppsWidget::checkForUpdates()
+{
+    updater->checkForUpdates();
+}
+
+void RecommendedAppsWidget::onInitialLoad()
+{
+    statusLabel->setText("🔄 正在加载推荐应用...");
+    updateProgressBar->setVisible(true);
+    updateProgressBar->setValue(10);
+    
+    checkForUpdates();
+}
+
+void RecommendedAppsWidget::onUpdateCheckStarted()
+{
+    statusLabel->setText("🔄 正在检查更新...");
+    updateProgressBar->setVisible(true);
+    updateProgressBar->setValue(30);
+    updateButton->setEnabled(false);
+    updateButton->setText("⏳ 检查中...");
+}
+
+void RecommendedAppsWidget::onUpdateAvailable(int appCount)
+{
+    statusLabel->setText(QString("✅ 发现更新，共 %1 个应用").arg(appCount));
+    updateProgressBar->setValue(70);
+    updateButton->setText("📥 下载中...");
+    
+    categories = updater->categories();
+    allApps = updater->allApps();
+    
+    // 更新分类标签页，updateTabs() 内部会调用 refreshAllViews() 刷新【全部应用】标签页
+    updateTabs();
+    
+    updater->downloadUpdate();
+}
+
+void RecommendedAppsWidget::onNoUpdateAvailable()
+{
+    statusLabel->setText("✅ 当前已是最新版本");
+    updateProgressBar->setVisible(false);
+    updateProgressBar->setValue(0);
+    updateButton->setEnabled(true);
+    updateButton->setText("🔄 更新");
+    
+    // 即使没有更新，也要更新界面数据
+    categories = updater->categories();
+    allApps = updater->allApps();
+    
+    // 更新界面
+    updateTabs();
+}
+
+void RecommendedAppsWidget::onUpdateCheckFailed(const QString &error)
+{
+    statusLabel->setText(QString("❌ 更新失败: %1").arg(error));
+    updateProgressBar->setVisible(false);
+    updateProgressBar->setValue(0);
+    updateButton->setEnabled(true);
+    updateButton->setText("🔄 更新");
+}
+
+void RecommendedAppsWidget::onUpdateFinished()
+{
+    statusLabel->setText("✅ 更新完成");
+    updateProgressBar->setVisible(false);
+    updateProgressBar->setValue(0);
+    updateButton->setEnabled(true);
+    updateButton->setText("🔄 更新");
+    
+    // 更新完成后，确保界面显示最新数据
+    refreshAllViews();
+}
+
+void RecommendedAppsWidget::onUpdateFailed(const QString &error)
+{
+    statusLabel->setText(QString("❌ 更新失败: %1").arg(error));
+    updateProgressBar->setVisible(false);
+    updateProgressBar->setValue(0);
+    updateButton->setEnabled(true);
+    updateButton->setText("🔄 更新");
+}
+
+void RecommendedAppsWidget::onLogMessage(const QString &message)
+{
+    qDebug() << "[AppCollection]" << message;
 }

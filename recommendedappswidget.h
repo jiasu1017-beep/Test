@@ -17,27 +17,21 @@
 #include <QSet>
 #include <QToolButton>
 #include <QPropertyAnimation>
-
-struct RecommendedAppInfo {
-    QString name;
-    QString url;
-    QString description;
-    QString iconEmoji;
-    QString category;
-    bool isFavorite;
-};
-
-struct CategoryInfo {
-    QString name;
-    QString iconEmoji;
-    QVector<RecommendedAppInfo> apps;
-};
+#include <QProgressBar>
+#include <QTimer>
+#include "appcollectiontypes.h"
+#include "appcollectionupdater.h"
 
 class RecommendedAppsWidget : public QWidget
 {
     Q_OBJECT
 public:
     explicit RecommendedAppsWidget(QWidget *parent = nullptr);
+    
+    void checkForUpdates();
+
+protected:
+    void showEvent(QShowEvent *event) override;
 
 private slots:
     void openAppUrl(const QString &url);
@@ -45,6 +39,14 @@ private slots:
     void onSearchTextChanged(const QString &text);
     void onShowFavoritesChanged(int state);
     void refreshAllViews();
+    void onUpdateCheckStarted();
+    void onUpdateAvailable(int appCount);
+    void onNoUpdateAvailable();
+    void onUpdateCheckFailed(const QString &error);
+    void onUpdateFinished();
+    void onUpdateFailed(const QString &error);
+    void onLogMessage(const QString &message);
+    void onInitialLoad();
 
 private:
     void setupUI();
@@ -52,6 +54,7 @@ private:
     QWidget* createCategoryWidget(const CategoryInfo &category);
     QWidget* createAppCard(const RecommendedAppInfo &app);
     void applyFilter();
+    void updateTabs();
 
     QVector<CategoryInfo> categories;
     QVector<RecommendedAppInfo> allApps;
@@ -60,8 +63,14 @@ private:
     QTabWidget *tabWidget;
     QLineEdit *searchEdit;
     QCheckBox *showFavoritesCheck;
+    QPushButton *updateButton;
     QWidget *allAppsWidget;
     QScrollArea *allAppsScrollArea;
+    QLabel *statusLabel;
+    QProgressBar *updateProgressBar;
+    
+    AppCollectionUpdater *updater;
+    bool m_hasOpened;
 };
 
 #endif // RECOMMENDEDAPPSWIDGET_H

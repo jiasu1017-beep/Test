@@ -22,7 +22,8 @@ SOURCES += main.cpp \
            logger.cpp \
            remotedesktopwidget.cpp \
            desktopsnapshotdialog.cpp \
-           snapshotmanagerwidget.cpp
+           snapshotmanagerwidget.cpp \
+           appcollectionupdater.cpp
 
 HEADERS  += mainwindow.h \
             database.h \
@@ -38,7 +39,9 @@ HEADERS  += mainwindow.h \
             logger.h \
             remotedesktopwidget.h \
             desktopsnapshotdialog.h \
-            snapshotmanagerwidget.h
+            snapshotmanagerwidget.h \
+            appcollectionupdater.h \
+            appcollectiontypes.h
 
 FORMS += ui/appmanagerwidget.ui \
          ui/fishmodewidget.ui \
