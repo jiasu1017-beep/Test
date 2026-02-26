@@ -21,6 +21,11 @@
 #include <QTimer>
 #include <QFile>
 #include <QRegExp>
+#include <QDebug>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -69,6 +74,8 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowTitle(QString("小马办公 - PonyWork v%1").arg(version));
     setMinimumSize(1000, 700);
     resize(1100, 750);
+    
+    setupGlobalShortcut();
 }
 
 MainWindow::~MainWindow()
@@ -92,6 +99,7 @@ void MainWindow::setupUI()
     shutdownWidget = new ShutdownWidget(this);
     settingsWidget = new SettingsWidget(db, this);
     settingsWidget->setUpdateManager(updateManager);
+    settingsWidget->setMainWindow(this);
     recommendedAppsWidget = new RecommendedAppsWidget(this);
     
     connect(appManagerWidget, &AppManagerWidget::resetAppsRequested, this, &MainWindow::resetApps);
@@ -115,10 +123,38 @@ void MainWindow::setupUI()
     
     mainLayout->addWidget(tabWidget);
     
+    // 创建状态栏布局
+    QWidget *statusBarWidget = new QWidget();
+    QHBoxLayout *statusBarLayout = new QHBoxLayout(statusBarWidget);
+    statusBarLayout->setContentsMargins(5, 0, 5, 0);
+    
     statusLabel = new QLabel(this);
-    statusBar()->addWidget(statusLabel);
     QString version = qApp->applicationVersion();
     statusLabel->setText(QString("小马办公 v%1 - 就绪").arg(version));
+    
+    QPushButton *shortcutTipsBtn = new QPushButton("快捷键提示", this);
+    shortcutTipsBtn->setStyleSheet(
+        "QPushButton {"
+        "    background-color: #e0e0e0;"
+        "    border: 1px solid #cccccc;"
+        "    border-radius: 3px;"
+        "    padding: 2px 8px;"
+        "    font-size: 12px;"
+        "}"
+        "QPushButton:hover {"
+        "    background-color: #d0d0d0;"
+        "}"
+        "QPushButton:pressed {"
+        "    background-color: #c0c0c0;"
+        "}"
+    );
+    connect(shortcutTipsBtn, &QPushButton::clicked, this, &MainWindow::showShortcutTips);
+    
+    statusBarLayout->addWidget(statusLabel);
+    statusBarLayout->addStretch();
+    statusBarLayout->addWidget(shortcutTipsBtn);
+    
+    statusBar()->addPermanentWidget(statusBarWidget, 1);
 }
 
 void MainWindow::initPresetApps()
@@ -304,7 +340,132 @@ void MainWindow::onShowWindow()
 
 void MainWindow::onExitApp()
 {
+    HWND hwnd = reinterpret_cast<HWND>(winId());
+    UnregisterHotKey(hwnd, 1);
     QApplication::quit();
+}
+
+#ifdef _WIN32
+bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, long *result)
+{
+    Q_UNUSED(eventType);
+    MSG *msg = static_cast<MSG *>(message);
+    if (msg->message == WM_HOTKEY) {
+        int hotkeyId = msg->wParam;
+        if (hotkeyId == 1) {
+            QString shortcut = db->getShortcutKey();
+            db->recordShortcutUsage(shortcut);
+            QTimer::singleShot(0, this, &MainWindow::toggleWindow);
+            *result = 1;
+            return true;
+        }
+    }
+    return false;
+}
+#endif
+
+void MainWindow::setupGlobalShortcut()
+{
+    QString shortcutStr = db->getShortcutKey();
+    
+    UINT modifiers = 0;
+    UINT vk = 0;
+    
+    QStringList parts = shortcutStr.split("+");
+    for (int i = 0; i < parts.size() - 1; ++i) {
+        QString mod = parts[i].trimmed();
+        if (mod == "Ctrl" || mod == "Control") {
+            modifiers |= MOD_CONTROL;
+        } else if (mod == "Alt") {
+            modifiers |= MOD_ALT;
+        } else if (mod == "Shift") {
+            modifiers |= MOD_SHIFT;
+        } else if (mod == "Win" || mod == "Windows") {
+            modifiers |= MOD_WIN;
+        }
+    }
+    
+    QString key = parts.last().trimmed();
+    if (key.length() == 1) {
+        vk = VkKeyScanA(key[0].toLatin1()) & 0xFF;
+    } else if (key == "F1") vk = VK_F1;
+    else if (key == "F2") vk = VK_F2;
+    else if (key == "F3") vk = VK_F3;
+    else if (key == "F4") vk = VK_F4;
+    else if (key == "F5") vk = VK_F5;
+    else if (key == "F6") vk = VK_F6;
+    else if (key == "F7") vk = VK_F7;
+    else if (key == "F8") vk = VK_F8;
+    else if (key == "F9") vk = VK_F9;
+    else if (key == "F10") vk = VK_F10;
+    else if (key == "F11") vk = VK_F11;
+    else if (key == "F12") vk = VK_F12;
+    else if (key == "Space") vk = VK_SPACE;
+    else if (key == "Tab") vk = VK_TAB;
+    else if (key == "Escape" || key == "Esc") vk = VK_ESCAPE;
+    else if (key == "Enter" || key == "Return") vk = VK_RETURN;
+    else if (key == "0") vk = 0x30;
+    else if (key == "1") vk = 0x31;
+    else if (key == "2") vk = 0x32;
+    else if (key == "3") vk = 0x33;
+    else if (key == "4") vk = 0x34;
+    else if (key == "5") vk = 0x35;
+    else if (key == "6") vk = 0x36;
+    else if (key == "7") vk = 0x37;
+    else if (key == "8") vk = 0x38;
+    else if (key == "9") vk = 0x39;
+    
+    if (vk != 0) {
+        HWND hwnd = reinterpret_cast<HWND>(winId());
+        RegisterHotKey(hwnd, 1, modifiers, vk);
+    }
+}
+
+void MainWindow::toggleWindow()
+{
+    if (isVisible() && isActiveWindow()) {
+        showMinimized();
+    } else {
+        show();
+        activateWindow();
+        raise();
+        setWindowState((windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
+    }
+}
+
+void MainWindow::onShortcutActivated()
+{
+    toggleWindow();
+}
+
+void MainWindow::showShortcutTips()
+{
+    QString currentShortcut = db->getShortcutKey();
+    QList<ShortcutStat> stats = db->getShortcutStats();
+    
+    QString tipsText = QString("当前全局快捷键: %1\n\n").arg(currentShortcut);
+    tipsText += "快捷键使用统计:\n";
+    
+    if (stats.isEmpty()) {
+        tipsText += "暂无使用记录";
+    } else {
+        for (int i = 0; i < std::min(5, stats.size()); ++i) {  // 显示前5个最常用的快捷键
+            const ShortcutStat &stat = stats[i];
+            tipsText += QString("%1: %2次 (最后使用: %3)\n")
+                           .arg(stat.shortcut)
+                           .arg(stat.useCount)
+                           .arg(stat.lastUsed.toString("MM-dd hh:mm"));
+        }
+    }
+    
+    QMessageBox::information(this, "快捷键提示", tipsText);
+}
+
+void MainWindow::refreshGlobalShortcut()
+{
+    HWND hwnd = reinterpret_cast<HWND>(winId());
+    UnregisterHotKey(hwnd, 1);
+    setupGlobalShortcut();
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)

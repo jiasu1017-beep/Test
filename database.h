@@ -94,6 +94,12 @@ struct RemoteDesktopConnection {
     QDateTime lastUsedTime;
 };
 
+struct ShortcutStat {
+    QString shortcut;
+    int useCount;
+    QDateTime lastUsed;
+};
+
 class Database : public QObject
 {
     Q_OBJECT
@@ -127,6 +133,13 @@ public:
     
     bool setAutoCheckUpdate(bool enabled);
     bool getAutoCheckUpdate();
+    
+    bool setShortcutKey(const QString &key);
+    QString getShortcutKey();
+    
+    bool recordShortcutUsage(const QString &shortcut);
+    QList<ShortcutStat> getShortcutStats();
+    bool clearShortcutStats();
     
     bool setIgnoredVersion(const QString &version);
     QString getIgnoredVersion();

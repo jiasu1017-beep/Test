@@ -1,7 +1,7 @@
 # 小马办公 - PonyWork
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.0.5-green.svg)](https://github.com/jiasu1017-beep/Test/releases)
+[![Version](https://img.shields.io/badge/version-v0.0.6-green.svg)](https://github.com/jiasu1017-beep/Test/releases)
 [![Qt Version](https://img.shields.io/badge/Qt-5.15.2-orange.svg)](https://www.qt.io/)
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)](https://www.microsoft.com/windows)
 

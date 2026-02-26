@@ -1,4 +1,6 @@
 #include "settingswidget.h"
+#include "mainwindow.h"
+#include "shortcutdialog.h"
 #include <QApplication>
 #include <QStyle>
 #include <QDialog>
@@ -13,7 +15,7 @@
 #include "updateprogressdialog.h"
 
 SettingsWidget::SettingsWidget(Database *db, QWidget *parent)
-    : QWidget(parent), db(db), updateManager(nullptr), progressDialog(nullptr)
+    : QWidget(parent), db(db), mainWindow(nullptr), updateManager(nullptr), progressDialog(nullptr)
 {
     setupUI();
 }
@@ -26,6 +28,11 @@ void SettingsWidget::setUpdateManager(UpdateManager *manager)
         connect(updateManager, &UpdateManager::noUpdateAvailable, this, &SettingsWidget::onNoUpdateAvailable);
         connect(updateManager, &UpdateManager::updateCheckFailed, this, &SettingsWidget::onUpdateCheckFailed);
     }
+}
+
+void SettingsWidget::setMainWindow(MainWindow *mw)
+{
+    mainWindow = mw;
 }
 
 void SettingsWidget::setupUI()
@@ -110,15 +117,103 @@ void SettingsWidget::setupUI()
     updateGroup->setLayout(updateLayout);
     mainLayout->addWidget(updateGroup);
     
+    QGroupBox *shortcutGroup = new QGroupBox("全局快捷键", this);
+    QVBoxLayout *shortcutLayout = new QVBoxLayout();
+    
+    QLabel *shortcutDescLabel = new QLabel("设置用于调出窗口的全局快捷键，软件在后台运行时也能响应。", this);
+    shortcutDescLabel->setStyleSheet("padding: 5px; color: #666; font-size: 12px;");
+    shortcutDescLabel->setWordWrap(true);
+    
+    QHBoxLayout *shortcutInputLayout = new QHBoxLayout();
+    QLabel *shortcutLabel = new QLabel("快捷键:", this);
+    QLabel *currentShortcutLabel = new QLabel(db->getShortcutKey(), this);
+    currentShortcutLabel->setStyleSheet("padding: 5px; border: 1px solid #ddd; border-radius: 3px;");
+    
+    QPushButton *changeShortcutBtn = new QPushButton("修改");
+    changeShortcutBtn->setToolTip("点击修改全局快捷键");
+    connect(changeShortcutBtn, &QPushButton::clicked, this, [this, currentShortcutLabel]() {
+        ShortcutDialog dialog(db, this);
+        dialog.setShortcut(QKeySequence(db->getShortcutKey()));
+        
+        // 确保主窗口保持可见
+        if (mainWindow && !mainWindow->isVisible()) {
+            mainWindow->show();
+            mainWindow->activateWindow();
+        }
+        
+        if (dialog.exec() == QDialog::Accepted) {
+            QKeySequence newShortcut = dialog.getShortcut();
+            if (!newShortcut.isEmpty()) {
+                QString shortcutStr = newShortcut.toString();
+                if (db->setShortcutKey(shortcutStr)) {
+                    currentShortcutLabel->setText(shortcutStr);
+                    shortcutStatusLabel->setText("快捷键已保存: " + shortcutStr);
+                    shortcutStatusLabel->setStyleSheet("padding: 5px; color: #4caf50;");
+                    
+                    if (mainWindow) {
+                        mainWindow->refreshGlobalShortcut();
+                    }
+                    
+                    QTimer::singleShot(2000, this, [this, shortcutStr]() {
+                        shortcutStatusLabel->setText("当前快捷键: " + shortcutStr);
+                        shortcutStatusLabel->setStyleSheet("padding: 5px; color: #4caf50;");
+                    });
+                } else {
+                    shortcutStatusLabel->setText("保存失败: " + shortcutStr);
+                    shortcutStatusLabel->setStyleSheet("padding: 5px; color: #f44336;");
+                }
+            }
+        }
+    });
+    
+    QPushButton *resetShortcutBtn = new QPushButton("重置为默认");
+    resetShortcutBtn->setToolTip("将快捷键重置为默认的 Ctrl+W");
+    connect(resetShortcutBtn, &QPushButton::clicked, this, [this, currentShortcutLabel]() {
+        if (db->setShortcutKey("Ctrl+W")) {
+            currentShortcutLabel->setText("Ctrl+W");
+            shortcutStatusLabel->setText("快捷键已重置为默认: Ctrl+W");
+            shortcutStatusLabel->setStyleSheet("padding: 5px; color: #4caf50;");
+            
+            if (mainWindow) {
+                mainWindow->refreshGlobalShortcut();
+            }
+            
+            QTimer::singleShot(2000, this, []() {
+                // 不需要更新状态标签，因为下一次会自动更新
+            });
+        }
+    });
+    
+    shortcutInputLayout->addWidget(shortcutLabel);
+    shortcutInputLayout->addWidget(currentShortcutLabel);
+    shortcutInputLayout->addWidget(changeShortcutBtn);
+    shortcutInputLayout->addWidget(resetShortcutBtn);
+    
+    shortcutStatusLabel = new QLabel();
+    shortcutStatusLabel->setStyleSheet("padding: 5px;");
+    shortcutStatusLabel->setText("当前快捷键: " + db->getShortcutKey());
+    
+    QLabel *shortcutHintLabel = new QLabel("提示: 快捷键在软件最小化或处于后台时仍然有效。窗口激活时按快捷键会最小化窗口。", this);
+    shortcutHintLabel->setStyleSheet("padding: 5px; color: #999; font-size: 11px;");
+    shortcutHintLabel->setWordWrap(true);
+    
+    shortcutLayout->addWidget(shortcutDescLabel);
+    shortcutLayout->addLayout(shortcutInputLayout);
+    shortcutLayout->addWidget(shortcutStatusLabel);
+    shortcutLayout->addWidget(shortcutHintLabel);
+    shortcutGroup->setLayout(shortcutLayout);
+    mainLayout->addWidget(shortcutGroup);
+    
     QGroupBox *aboutGroup = new QGroupBox("关于", this);
     QVBoxLayout *aboutLayout = new QVBoxLayout();
     
-    QLabel *aboutLabel = new QLabel("小马办公 v0.0\n\n"
+    QLabel *aboutLabel = new QLabel("小马办公 v0.0.6\n\n"
                                       "一个功能完善的桌面办公助手应用\n"
                                       "• 应用管理模块\n"
                                       "• 摸鱼模式模块\n"
                                       "• 定时关机模块\n"
-                                      "• 开机自动启动\n\n"
+                                      "• 开机自动启动\n"
+                                      "• 全局快捷键\n\n"
                                       "使用 Qt 5.15.2 开发", this);
     aboutLabel->setStyleSheet("padding: 10px; line-height: 1.6;");
     aboutLabel->setWordWrap(true);
@@ -180,7 +275,7 @@ void SettingsWidget::onAboutClicked()
     contentLayout->setSpacing(12);
     contentLayout->setContentsMargins(20, 20, 20, 20);
     
-    QLabel *titleLabel = new QLabel("小马办公 v0.0", contentWidget);
+    QLabel *titleLabel = new QLabel("小马办公 v0.0.6", contentWidget);
     titleLabel->setStyleSheet("font-size: 24px; font-weight: bold; color: #6200ea; padding: 10px;");
     titleLabel->setAlignment(Qt::AlignCenter);
     contentLayout->addWidget(titleLabel);
@@ -375,6 +470,43 @@ void SettingsWidget::onCheckUpdateClicked()
     checkUpdateButton->setEnabled(false);
     updateManager->checkForUpdates();
 }
+
+bool SettingsWidget::isShortcutConflict(const QString &shortcut)
+{
+    QStringList conflictShortcuts = {
+        "Ctrl+Alt+Del", "Ctrl+Shift+Esc", "Alt+F4", "Alt+Tab", 
+        "Ctrl+Esc", "Win+E", "Win+D", "Win+L", "PrintScreen",
+        "Win+R", "Win+Pause", "Ctrl+C", "Ctrl+V", "Ctrl+X", 
+        "Ctrl+A", "Ctrl+Z", "Ctrl+Y", "F1", "F12", "Win+Tab"
+    };
+    
+    QString normalizedShortcut = shortcut.toUpper().replace(" ", "");
+    for (const QString &conflict : conflictShortcuts) {
+        if (normalizedShortcut == conflict.toUpper().replace(" ", "")) {
+            return true;
+        }
+    }
+    
+    // 检查是否包含危险组合
+    if (shortcut.contains("Ctrl+Alt+", Qt::CaseInsensitive) || 
+        shortcut.contains("Ctrl+Shift+Alt+", Qt::CaseInsensitive) ||
+        shortcut.contains("Win+Ctrl", Qt::CaseInsensitive) ||
+        shortcut.contains("Win+Alt", Qt::CaseInsensitive)) {
+        return true;
+    }
+    
+    // 检查是否与其他应用常用快捷键冲突
+    if (shortcut.contains("Ctrl+Shift", Qt::CaseInsensitive) && 
+        (shortcut.endsWith("T", Qt::CaseInsensitive) || 
+         shortcut.endsWith("N", Qt::CaseInsensitive) ||
+         shortcut.endsWith("W", Qt::CaseInsensitive))) {
+        return true; // 可能与浏览器标签页快捷键冲突
+    }
+    
+    return false;
+}
+
+
 
 void SettingsWidget::onUpdateAvailable(const UpdateInfo &info)
 {

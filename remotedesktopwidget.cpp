@@ -17,6 +17,8 @@
 #include <QEventLoop>
 #include <QStandardPaths>
 #include <QTextStream>
+#include <QPropertyAnimation>
+#include <algorithm>
 
 RemoteDesktopWidget::RemoteDesktopWidget(Database *db, QWidget *parent)
     : QWidget(parent), db(db)
@@ -118,10 +120,27 @@ void RemoteDesktopWidget::setupUI()
     exportButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_DialogSaveButton));
     connect(exportButton, &QPushButton::clicked, this, &RemoteDesktopWidget::onExportConnections);
 
+    QFrame *separator = new QFrame();
+    separator->setFrameShape(QFrame::VLine);
+    separator->setStyleSheet("background-color: #ccc;");
+
+    moveUpButton = new QPushButton("上移");
+    moveUpButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_ArrowUp));
+    moveUpButton->setEnabled(false);
+    connect(moveUpButton, &QPushButton::clicked, this, &RemoteDesktopWidget::onMoveUp);
+
+    moveDownButton = new QPushButton("下移");
+    moveDownButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_ArrowDown));
+    moveDownButton->setEnabled(false);
+    connect(moveDownButton, &QPushButton::clicked, this, &RemoteDesktopWidget::onMoveDown);
+
     buttonLayout->addWidget(connectButton);
     buttonLayout->addWidget(testButton);
     buttonLayout->addWidget(importButton);
     buttonLayout->addWidget(exportButton);
+    buttonLayout->addWidget(separator);
+    buttonLayout->addWidget(moveUpButton);
+    buttonLayout->addWidget(moveDownButton);
 
     mainLayout->addLayout(buttonLayout);
 }
@@ -147,6 +166,10 @@ void RemoteDesktopWidget::refreshConnectionList()
         }
         connections = filtered;
     }
+    
+    std::sort(connections.begin(), connections.end(), [](const RemoteDesktopConnection &a, const RemoteDesktopConnection &b) {
+        return a.sortOrder < b.sortOrder;
+    });
 
     loadConnections(connections);
 }
@@ -184,6 +207,16 @@ void RemoteDesktopWidget::onAddConnection()
     RemoteDesktopDialog dialog(db, this);
     if (dialog.exec() == QDialog::Accepted) {
         RemoteDesktopConnection conn = dialog.getConnection();
+        
+        QList<RemoteDesktopConnection> allConnections = db->getAllRemoteDesktops();
+        int maxOrder = 0;
+        for (const RemoteDesktopConnection &c : allConnections) {
+            if (c.sortOrder > maxOrder) {
+                maxOrder = c.sortOrder;
+            }
+        }
+        conn.sortOrder = maxOrder + 1;
+        
         if (db->addRemoteDesktop(conn)) {
             refreshConnectionList();
             QMessageBox::information(this, "成功", "连接添加成功！");
@@ -229,6 +262,57 @@ void RemoteDesktopWidget::onDeleteConnection()
             QMessageBox::warning(this, "错误", "删除连接失败！");
         }
     }
+}
+
+void RemoteDesktopWidget::onMoveUp()
+{
+    int currentRow = connectionTable->currentRow();
+    if (currentRow <= 0) return;
+
+    int currentId = connectionTable->item(currentRow, 0)->data(Qt::UserRole).toInt();
+    int prevId = connectionTable->item(currentRow - 1, 0)->data(Qt::UserRole).toInt();
+
+    RemoteDesktopConnection currentConn = db->getRemoteDesktopById(currentId);
+    RemoteDesktopConnection prevConn = db->getRemoteDesktopById(prevId);
+
+    int tempOrder = currentConn.sortOrder;
+    currentConn.sortOrder = prevConn.sortOrder;
+    prevConn.sortOrder = tempOrder;
+
+    db->updateRemoteDesktop(currentConn);
+    db->updateRemoteDesktop(prevConn);
+
+    QTimer::singleShot(0, this, [this, currentRow]() {
+        refreshConnectionList();
+        connectionTable->selectRow(currentRow - 1);
+        updateConnectionButtons();
+    });
+}
+
+void RemoteDesktopWidget::onMoveDown()
+{
+    int currentRow = connectionTable->currentRow();
+    int totalRows = connectionTable->rowCount();
+    if (currentRow < 0 || currentRow >= totalRows - 1) return;
+
+    int currentId = connectionTable->item(currentRow, 0)->data(Qt::UserRole).toInt();
+    int nextId = connectionTable->item(currentRow + 1, 0)->data(Qt::UserRole).toInt();
+
+    RemoteDesktopConnection currentConn = db->getRemoteDesktopById(currentId);
+    RemoteDesktopConnection nextConn = db->getRemoteDesktopById(nextId);
+
+    int tempOrder = currentConn.sortOrder;
+    currentConn.sortOrder = nextConn.sortOrder;
+    nextConn.sortOrder = tempOrder;
+
+    db->updateRemoteDesktop(currentConn);
+    db->updateRemoteDesktop(nextConn);
+
+    QTimer::singleShot(0, this, [this, currentRow]() {
+        refreshConnectionList();
+        connectionTable->selectRow(currentRow + 1);
+        updateConnectionButtons();
+    });
 }
 
 void RemoteDesktopWidget::onConnect()
@@ -373,6 +457,16 @@ void RemoteDesktopWidget::importFromRDPFile(const QString &filePath) {
     
     // 分类默认为"工作"
     conn.category = "工作";
+    
+    // 设置排序序号
+    QList<RemoteDesktopConnection> allConnections = db->getAllRemoteDesktops();
+    int maxOrder = 0;
+    for (const RemoteDesktopConnection &c : allConnections) {
+        if (c.sortOrder > maxOrder) {
+            maxOrder = c.sortOrder;
+        }
+    }
+    conn.sortOrder = maxOrder + 1;
 
     RemoteDesktopDialog dialog(db, conn, this);
     dialog.setWindowTitle("导入RDP连接 - 确认并编辑");
@@ -835,6 +929,13 @@ void RemoteDesktopWidget::updateConnectionButtons()
     connectButton->setEnabled(hasSelection);
     testButton->setEnabled(hasSelection);
     favoriteButton->setEnabled(hasSelection);
+    
+    int currentRow = connectionTable->currentRow();
+    int totalRows = connectionTable->rowCount();
+    bool canMoveUp = hasSelection && currentRow > 0;
+    bool canMoveDown = hasSelection && currentRow < totalRows - 1;
+    moveUpButton->setEnabled(canMoveUp);
+    moveDownButton->setEnabled(canMoveDown);
 
     if (hasSelection) {
         RemoteDesktopConnection conn = getSelectedConnection();
@@ -1014,6 +1115,7 @@ void RemoteDesktopWidget::onTableContextMenuRequested(const QPoint &pos)
     
     RemoteDesktopConnection selectedConn = getSelectedConnection();
     bool hasSelection = (selectedConn.id != -1);
+    int currentRow = connectionTable->currentRow();
     
     QAction *connectAction = contextMenu.addAction(QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "连接");
     connectAction->setEnabled(hasSelection);
@@ -1032,6 +1134,17 @@ void RemoteDesktopWidget::onTableContextMenuRequested(const QPoint &pos)
     QAction *deleteAction = contextMenu.addAction(QApplication::style()->standardIcon(QStyle::SP_TrashIcon), "删除连接");
     deleteAction->setEnabled(hasSelection);
     connect(deleteAction, &QAction::triggered, this, &RemoteDesktopWidget::onDeleteConnection);
+    
+    contextMenu.addSeparator();
+    
+    QAction *moveUpAction = contextMenu.addAction(QApplication::style()->standardIcon(QStyle::SP_ArrowUp), "上移");
+    moveUpAction->setEnabled(hasSelection && currentRow > 0);
+    connect(moveUpAction, &QAction::triggered, this, &RemoteDesktopWidget::onMoveUp);
+    
+    QAction *moveDownAction = contextMenu.addAction(QApplication::style()->standardIcon(QStyle::SP_ArrowDown), "下移");
+    int totalRows = connectionTable->rowCount();
+    moveDownAction->setEnabled(hasSelection && currentRow < totalRows - 1);
+    connect(moveDownAction, &QAction::triggered, this, &RemoteDesktopWidget::onMoveDown);
     
     contextMenu.addSeparator();
     

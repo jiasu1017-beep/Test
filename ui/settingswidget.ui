@@ -82,7 +82,7 @@
       <item>
        <widget class="QLabel" name="aboutLabel">
         <property name="text">
-         <string>小马办公 v0.0.5
+         <string>小马办公 v0.0.6
 一款简单易用的桌面办公助手应用
 
 功能特点：

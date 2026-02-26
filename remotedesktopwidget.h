@@ -63,6 +63,8 @@ private slots:
     void onTableContextMenuRequested(const QPoint &pos);
     void onAddToAppList();
     void onAddToCollection();
+    void onMoveUp();
+    void onMoveDown();
     void importFromRDPFile(const QString &filePath);
     void importFromJSONFile(const QString &filePath);
 
@@ -87,6 +89,8 @@ private:
     QPushButton *favoriteButton;
     QPushButton *importButton;
     QPushButton *exportButton;
+    QPushButton *moveUpButton;
+    QPushButton *moveDownButton;
     QComboBox *categoryFilter;
 };
 

@@ -2,7 +2,7 @@ QT       += core gui network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-win32: LIBS += -lpsapi -lshell32 -lole32 -loleaut32 -lshlwapi -luuid
+win32: LIBS += -lpsapi -lshell32 -lole32 -loleaut32 -lshlwapi -luuid -luser32
 
 TARGET = PonyWork
 TEMPLATE = app
@@ -23,7 +23,8 @@ SOURCES += main.cpp \
            remotedesktopwidget.cpp \
            desktopsnapshotdialog.cpp \
            snapshotmanagerwidget.cpp \
-           appcollectionupdater.cpp
+           appcollectionupdater.cpp \
+           shortcutdialog.cpp
 
 HEADERS  += mainwindow.h \
             database.h \
@@ -41,7 +42,8 @@ HEADERS  += mainwindow.h \
             desktopsnapshotdialog.h \
             snapshotmanagerwidget.h \
             appcollectionupdater.h \
-            appcollectiontypes.h
+            appcollectiontypes.h \
+            shortcutdialog.h
 
 FORMS += ui/appmanagerwidget.ui \
          ui/fishmodewidget.ui \

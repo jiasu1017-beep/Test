@@ -10,10 +10,13 @@
 #include <QGroupBox>
 #include <QMessageBox>
 #include <QProgressDialog>
+#include <QKeySequenceEdit>
+#include <QListWidget>
 #include "database.h"
 #include "updatemanager.h"
 
 class UpdateProgressDialog;
+class MainWindow;
 
 class SettingsWidget : public QWidget
 {
@@ -22,6 +25,7 @@ public:
     explicit SettingsWidget(Database *db, QWidget *parent = nullptr);
     
     void setUpdateManager(UpdateManager *manager);
+    void setMainWindow(MainWindow *mainWindow);
 
 private slots:
     void onAutoStartToggled(int state);
@@ -36,8 +40,10 @@ private slots:
 
 private:
     void setupUI();
+    bool isShortcutConflict(const QString &shortcut);
     
     Database *db;
+    MainWindow *mainWindow;
     UpdateManager *updateManager;
     QCheckBox *autoStartCheck;
     QCheckBox *minimizeToTrayCheck;
@@ -47,6 +53,8 @@ private:
     QLabel *statusLabel;
     QProgressDialog *progressDialog;
     UpdateProgressDialog *updateProgressDialog;
+
+    QLabel *shortcutStatusLabel;
 };
 
 #endif

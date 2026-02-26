@@ -11,8 +11,14 @@
 #include <QEvent>
 #include <QLabel>
 #include <QStatusBar>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QHBoxLayout>
 #include "database.h"
 #include "updatemanager.h"
+
+// Forward declarations
+struct ShortcutStat;
 
 class AppManagerWidget;
 class FishModeWidget;
@@ -35,12 +41,14 @@ public:
 public slots:
     void setStatusText(const QString &text);
     void resetApps();
+    void refreshGlobalShortcut();
     
 private slots:
     void onTabChanged(int index);
     void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
     void onShowWindow();
     void onExitApp();
+    void onShortcutActivated();
     void onUpdateAvailable(const UpdateInfo &info);
     void onNoUpdateAvailable();
     void onUpdateCheckFailed(const QString &error);
@@ -61,6 +69,10 @@ private slots:
 protected:
     void closeEvent(QCloseEvent *event) override;
     void changeEvent(QEvent *event) override;
+    
+#ifdef _WIN32
+    bool nativeEvent(const QByteArray &eventType, void *message, long *result) override;
+#endif
     
 private:
     void setupUI();
@@ -87,6 +99,10 @@ private:
     UpdateProgressDialog *updateProgressDialog;
     RemoteDesktopWidget *remoteDesktopWidget;
     QLabel *statusLabel;
+    
+    void setupGlobalShortcut();
+    void toggleWindow();
+    void showShortcutTips();
 };
 
 #endif

@@ -467,6 +467,82 @@ bool Database::getAutoCheckUpdate()
     return settingsObj["auto_check_update"].toString("1") == "1";
 }
 
+bool Database::setShortcutKey(const QString &key)
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    settingsObj["shortcut_key"] = key;
+    rootObject["settings"] = settingsObj;
+    
+    return saveData();
+}
+
+QString Database::getShortcutKey()
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    return settingsObj["shortcut_key"].toString("Ctrl+W");
+}
+
+bool Database::recordShortcutUsage(const QString &shortcut)
+{
+    QJsonArray statsArray = rootObject["shortcut_stats"].toArray();
+    
+    QDateTime now = QDateTime::currentDateTime();
+    bool found = false;
+    
+    for (int i = 0; i < statsArray.size(); ++i) {
+        QJsonObject statObj = statsArray[i].toObject();
+        if (statObj["shortcut"].toString() == shortcut) {
+            statObj["use_count"] = statObj["use_count"].toInt(0) + 1;
+            statObj["last_used"] = now.toString(Qt::ISODate);
+            statsArray[i] = statObj;
+            found = true;
+            break;
+        }
+    }
+    
+    if (!found) {
+        QJsonObject newStat;
+        newStat["shortcut"] = shortcut;
+        newStat["use_count"] = 1;
+        newStat["last_used"] = now.toString(Qt::ISODate);
+        statsArray.append(newStat);
+    }
+    
+    rootObject["shortcut_stats"] = statsArray;
+    return saveData();
+}
+
+QList<ShortcutStat> Database::getShortcutStats()
+{
+    QList<ShortcutStat> stats;
+    QJsonArray statsArray = rootObject["shortcut_stats"].toArray();
+    
+    for (const auto &value : statsArray) {
+        QJsonObject statObj = value.toObject();
+        ShortcutStat stat;
+        stat.shortcut = statObj["shortcut"].toString();
+        stat.useCount = statObj["use_count"].toInt(0);
+        QString lastUsedStr = statObj["last_used"].toString();
+        if (!lastUsedStr.isEmpty()) {
+            stat.lastUsed = QDateTime::fromString(lastUsedStr, Qt::ISODate);
+        }
+        stats.append(stat);
+    }
+    
+    // Sort by use count descending
+    std::sort(stats.begin(), stats.end(), [](const ShortcutStat &a, const ShortcutStat &b) {
+        return a.useCount > b.useCount;
+    });
+    
+    return stats;
+}
+
+bool Database::clearShortcutStats()
+{
+    rootObject["shortcut_stats"] = QJsonArray();
+    return saveData();
+}
+
 bool Database::setIgnoredVersion(const QString &version)
 {
     QJsonObject settingsObj = rootObject["settings"].toObject();
