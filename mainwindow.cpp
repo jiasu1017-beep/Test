@@ -320,7 +320,7 @@ void MainWindow::setupTrayIcon()
 
 void MainWindow::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason)
 {
-    if (reason == QSystemTrayIcon::DoubleClick) {
+    if (reason == QSystemTrayIcon::DoubleClick || reason == QSystemTrayIcon::Trigger) {
         onShowWindow();
     }
 }
@@ -477,9 +477,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
         if (minimizeToTray) {
             hide();
             QString version = qApp->applicationVersion();
+            QString shortcut = db->getShortcutKey();
             trayIcon->showMessage(
                 "小马办公",
-                "已最小化到系统托盘\n双击托盘图标可重新打开窗口",
+                QString("已最小化到系统托盘\n点击托盘图标或按 %1 可重新打开窗口").arg(shortcut),
                 QSystemTrayIcon::Information,
                 4000
             );
@@ -513,9 +514,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
             }
             hide();
             QString version = qApp->applicationVersion();
+            QString shortcut = db->getShortcutKey();
             trayIcon->showMessage(
                 "小马办公",
-                "已最小化到系统托盘\n双击托盘图标可重新打开窗口",
+                QString("已最小化到系统托盘\n点击托盘图标或按 %1 可重新打开窗口").arg(shortcut),
                 QSystemTrayIcon::Information,
                 4000
             );
@@ -655,9 +657,10 @@ void MainWindow::changeEvent(QEvent *event)
             if (minimizeToTray) {
                 hide();
                 QString version = qApp->applicationVersion();
+                QString shortcut = db->getShortcutKey();
                 trayIcon->showMessage(
                     "小马办公",
-                    "已最小化到系统托盘\n双击托盘图标可重新打开窗口",
+                    QString("已最小化到系统托盘\n点击托盘图标或按 %1 可重新打开窗口").arg(shortcut),
                     QSystemTrayIcon::Information,
                     4000
                 );

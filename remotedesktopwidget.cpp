@@ -42,6 +42,8 @@ void RemoteDesktopWidget::setupUI()
     categoryFilter = new QComboBox();
     categoryFilter->addItem("全部", "");
     categoryFilter->addItem("未分类", "未分类");
+    categoryFilter->addItem("内网", "内网");
+    categoryFilter->addItem("外网", "外网");
     categoryFilter->addItem("工作", "工作");
     categoryFilter->addItem("个人", "个人");
     categoryFilter->addItem("测试", "测试");
@@ -58,9 +60,18 @@ void RemoteDesktopWidget::setupUI()
     mainLayout->addLayout(topLayout);
 
     connectionTable = new QTableWidget();
-    connectionTable->setColumnCount(7);
-    connectionTable->setHorizontalHeaderLabels(QStringList() << "名称" << "主机地址" << "端口" << "用户名" << "分类" << "收藏" << "最后使用");
-    connectionTable->horizontalHeader()->setStretchLastSection(true);
+    connectionTable->setColumnCount(8);
+    connectionTable->setHorizontalHeaderLabels(QStringList() << "名称" << "主机地址" << "端口" << "用户名" << "分类" << "备注" << "收藏" << "最后使用");
+    connectionTable->horizontalHeader()->setStretchLastSection(false);
+    connectionTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    connectionTable->setColumnWidth(0, 150);
+    connectionTable->setColumnWidth(1, 250);
+    connectionTable->setColumnWidth(2, 60);
+    connectionTable->setColumnWidth(3, 100);
+    connectionTable->setColumnWidth(4, 80);
+    connectionTable->setColumnWidth(5, 150);
+    connectionTable->setColumnWidth(6, 50);
+    connectionTable->horizontalHeader()->setSectionResizeMode(7, QHeaderView::Stretch);
     connectionTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     connectionTable->setSelectionMode(QAbstractItemView::SingleSelection);
     connectionTable->setAlternatingRowColors(true);
@@ -200,8 +211,9 @@ void RemoteDesktopWidget::loadConnections(const QList<RemoteDesktopConnection> &
         connectionTable->setItem(row, 2, new QTableWidgetItem(QString::number(conn.port)));
         connectionTable->setItem(row, 3, new QTableWidgetItem(conn.username));
         connectionTable->setItem(row, 4, new QTableWidgetItem(conn.category));
-        connectionTable->setItem(row, 5, new QTableWidgetItem(conn.isFavorite ? "★" : ""));
-        connectionTable->setItem(row, 6, new QTableWidgetItem(conn.lastUsedTime.toString("yyyy-MM-dd hh:mm")));
+        connectionTable->setItem(row, 5, new QTableWidgetItem(conn.notes));
+        connectionTable->setItem(row, 6, new QTableWidgetItem(conn.isFavorite ? "★" : ""));
+        connectionTable->setItem(row, 7, new QTableWidgetItem(conn.lastUsedTime.toString("yyyy-MM-dd hh:mm")));
 
         connectionTable->item(row, 0)->setData(Qt::UserRole, conn.id);
     }
@@ -1002,6 +1014,8 @@ void RemoteDesktopDialog::setupUI()
     domainEdit->setPlaceholderText("域（可选）");
     categoryCombo = new QComboBox();
     categoryCombo->addItem("未分类", "未分类");
+    categoryCombo->addItem("内网", "内网");
+    categoryCombo->addItem("外网", "外网");
     categoryCombo->addItem("工作", "工作");
     categoryCombo->addItem("个人", "个人");
     categoryCombo->addItem("测试", "测试");
