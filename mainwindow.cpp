@@ -423,8 +423,30 @@ void MainWindow::setupGlobalShortcut()
 
 void MainWindow::toggleWindow()
 {
-    if (isVisible() && isActiveWindow()) {
-        showMinimized();
+    if (isVisible()) {
+        if (isMinimized()) {
+            showNormal();
+            activateWindow();
+            raise();
+            setWindowState((windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
+        } else if (isActiveWindow()) {
+            if (db->getMinimizeToTray()) {
+                hide();
+                QString shortcut = db->getShortcutKey();
+                trayIcon->showMessage(
+                    "小马办公",
+                    QString("已最小化到系统托盘\n点击托盘图标或按 %1 可重新打开窗口").arg(shortcut),
+                    QSystemTrayIcon::Information,
+                    4000
+                );
+            } else {
+                showMinimized();
+            }
+        } else {
+            activateWindow();
+            raise();
+            setWindowState((windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
+        }
     } else {
         show();
         activateWindow();
