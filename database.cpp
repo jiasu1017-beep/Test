@@ -648,6 +648,11 @@ bool Database::addRemoteDesktop(const RemoteDesktopConnection &connection)
     newConn.lastUsedTime = QDateTime::currentDateTime();
     
     QJsonArray rdsArray = rootObject["remoteDesktops"].toArray();
+    
+    if (newConn.sortOrder < 0 || newConn.sortOrder >= rdsArray.count()) {
+        newConn.sortOrder = rdsArray.count();
+    }
+    
     rdsArray.append(remoteDesktopToJson(newConn));
     rootObject["remoteDesktops"] = rdsArray;
     

@@ -66,6 +66,19 @@ void RemoteDesktopWidget::setupUI()
     connectionTable->setAlternatingRowColors(true);
     connectionTable->verticalHeader()->setVisible(false);
     connectionTable->setContextMenuPolicy(Qt::CustomContextMenu);
+    connectionTable->setStyleSheet(
+        "QTableWidget::item:selected {"
+        "   background-color: #2196F3;"
+        "   color: white;"
+        "   font-weight: bold;"
+        "}"
+        "QTableWidget::item:selected:hover {"
+        "   background-color: #1976D2;"
+        "}"
+        "QTableWidget::item:hover:!selected {"
+        "   background-color: #E3F2FD;"
+        "}"
+    );
     connect(connectionTable, &QTableWidget::itemSelectionChanged, this, &RemoteDesktopWidget::onConnectionSelectionChanged);
     connect(connectionTable, &QTableWidget::doubleClicked, this, [this](const QModelIndex &index) {
         Q_UNUSED(index);
@@ -269,8 +282,13 @@ void RemoteDesktopWidget::onMoveUp()
     int currentRow = connectionTable->currentRow();
     if (currentRow <= 0) return;
 
-    int currentId = connectionTable->item(currentRow, 0)->data(Qt::UserRole).toInt();
-    int prevId = connectionTable->item(currentRow - 1, 0)->data(Qt::UserRole).toInt();
+    QTableWidgetItem *currentItem = connectionTable->item(currentRow, 0);
+    QTableWidgetItem *prevItem = connectionTable->item(currentRow - 1, 0);
+    
+    if (!currentItem || !prevItem) return;
+
+    int currentId = currentItem->data(Qt::UserRole).toInt();
+    int prevId = prevItem->data(Qt::UserRole).toInt();
 
     RemoteDesktopConnection currentConn = db->getRemoteDesktopById(currentId);
     RemoteDesktopConnection prevConn = db->getRemoteDesktopById(prevId);
@@ -282,11 +300,9 @@ void RemoteDesktopWidget::onMoveUp()
     db->updateRemoteDesktop(currentConn);
     db->updateRemoteDesktop(prevConn);
 
-    QTimer::singleShot(0, this, [this, currentRow]() {
-        refreshConnectionList();
-        connectionTable->selectRow(currentRow - 1);
-        updateConnectionButtons();
-    });
+    refreshConnectionList();
+    connectionTable->selectRow(currentRow - 1);
+    updateConnectionButtons();
 }
 
 void RemoteDesktopWidget::onMoveDown()
@@ -295,8 +311,13 @@ void RemoteDesktopWidget::onMoveDown()
     int totalRows = connectionTable->rowCount();
     if (currentRow < 0 || currentRow >= totalRows - 1) return;
 
-    int currentId = connectionTable->item(currentRow, 0)->data(Qt::UserRole).toInt();
-    int nextId = connectionTable->item(currentRow + 1, 0)->data(Qt::UserRole).toInt();
+    QTableWidgetItem *currentItem = connectionTable->item(currentRow, 0);
+    QTableWidgetItem *nextItem = connectionTable->item(currentRow + 1, 0);
+    
+    if (!currentItem || !nextItem) return;
+
+    int currentId = currentItem->data(Qt::UserRole).toInt();
+    int nextId = nextItem->data(Qt::UserRole).toInt();
 
     RemoteDesktopConnection currentConn = db->getRemoteDesktopById(currentId);
     RemoteDesktopConnection nextConn = db->getRemoteDesktopById(nextId);
@@ -308,11 +329,9 @@ void RemoteDesktopWidget::onMoveDown()
     db->updateRemoteDesktop(currentConn);
     db->updateRemoteDesktop(nextConn);
 
-    QTimer::singleShot(0, this, [this, currentRow]() {
-        refreshConnectionList();
-        connectionTable->selectRow(currentRow + 1);
-        updateConnectionButtons();
-    });
+    refreshConnectionList();
+    connectionTable->selectRow(currentRow + 1);
+    updateConnectionButtons();
 }
 
 void RemoteDesktopWidget::onConnect()
