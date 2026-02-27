@@ -3,5 +3,6 @@
 
 #include "shortcutdialog.h"
 #include "desktopsnapshotdialog.h"
+#include "iconselectordialog.h"
 
 #endif

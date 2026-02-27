@@ -20,6 +20,7 @@
 #include <QPainter>
 #include <QStandardItemModel>
 #include "modules/core/database.h"
+#include "modules/dialogs/iconselectordialog.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class AppManagerWidget; }

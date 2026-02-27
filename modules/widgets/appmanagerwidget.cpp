@@ -636,21 +636,22 @@ void AppManagerWidget::onChangeIcon()
 {
     QModelIndex index = ui->appListView->currentIndex();
     if (!index.isValid()) return;
-    
+
     QStandardItem *item = appModel->itemFromIndex(index);
     if (!item) return;
-    
+
     int appId = item->data(Qt::UserRole).toInt();
     AppInfo app = db->getAppById(appId);
     if (app.id <= 0) return;
-    
-    QString defaultPath = app.iconPath;
-    QString iconPath = QFileDialog::getOpenFileName(this, "选择图标", defaultPath, 
-                                                   "图标文件 (*.ico *.png *.jpg *.bmp);;所有文件 (*.*)");
-    if (!iconPath.isEmpty()) {
-        app.iconPath = iconPath;
-        db->updateApp(app);
-        refreshAppList();
+
+    IconSelectorDialog iconDialog(this);
+    if (iconDialog.exec() == QDialog::Accepted) {
+        QString iconPath = iconDialog.getSelectedIconPath();
+        if (!iconPath.isEmpty()) {
+            app.iconPath = iconPath;
+            db->updateApp(app);
+            refreshAppList();
+        }
     }
 }
 
