@@ -93,12 +93,16 @@ void ShutdownWidget::setupUI()
     QHBoxLayout *presetLayout = new QHBoxLayout();
     presetLayout->addWidget(new QLabel("预设时间:", this));
     
+    QPushButton *oneMinBtn = new QPushButton("1分钟", this);
+    QPushButton *tenMinBtn = new QPushButton("10分钟", this);
     QPushButton *thirtyMinBtn = new QPushButton("30分钟", this);
     QPushButton *oneHourBtn = new QPushButton("1小时", this);
     QPushButton *twoHoursBtn = new QPushButton("2小时", this);
     QPushButton *fourHoursBtn = new QPushButton("4小时", this);
     QPushButton *sixHoursBtn = new QPushButton("6小时", this);
     
+    presetLayout->addWidget(oneMinBtn);
+    presetLayout->addWidget(tenMinBtn);
     presetLayout->addWidget(thirtyMinBtn);
     presetLayout->addWidget(oneHourBtn);
     presetLayout->addWidget(twoHoursBtn);
@@ -127,6 +131,18 @@ void ShutdownWidget::setupUI()
     customLayout->addWidget(new QLabel("秒:", this));
     
     // Connect preset buttons
+    connect(oneMinBtn, &QPushButton::clicked, [this]() {
+        hourSpin->setValue(0);
+        minuteSpin->setValue(1);
+        secondSpin->setValue(0);
+    });
+    
+    connect(tenMinBtn, &QPushButton::clicked, [this]() {
+        hourSpin->setValue(0);
+        minuteSpin->setValue(10);
+        secondSpin->setValue(0);
+    });
+    
     connect(thirtyMinBtn, &QPushButton::clicked, [this]() {
         hourSpin->setValue(0);
         minuteSpin->setValue(30);
