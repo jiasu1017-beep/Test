@@ -19,7 +19,7 @@
 #include <QStyledItemDelegate>
 #include <QPainter>
 #include <QStandardItemModel>
-#include "database.h"
+#include "modules/core/database.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class AppManagerWidget; }

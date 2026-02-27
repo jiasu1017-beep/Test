@@ -1,5 +1,5 @@
 #include "updatemanager.h"
-#include "logger.h"
+#include "modules/core/logger.h"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>

@@ -9,47 +9,51 @@ TEMPLATE = app
 
 SOURCES += main.cpp \
            mainwindow.cpp \
-           database.cpp \
-           appmanagerwidget.cpp \
-           fishmodewidget.cpp \
-           shutdownwidget.cpp \
-           settingswidget.cpp \
-           collectionmanagerwidget.cpp \
-           recommendedappswidget.cpp \
-           updatemanager.cpp \
-           updatedialog.cpp \
-           updateprogressdialog.cpp \
-           logger.cpp \
-           remotedesktopwidget.cpp \
-           desktopsnapshotdialog.cpp \
-           snapshotmanagerwidget.cpp \
-           appcollectionupdater.cpp \
-           shortcutdialog.cpp
+           modules/core/database.cpp \
+           modules/core/logger.cpp \
+           modules/widgets/appmanagerwidget.cpp \
+           modules/widgets/fishmodewidget.cpp \
+           modules/widgets/shutdownwidget.cpp \
+           modules/widgets/settingswidget.cpp \
+           modules/widgets/collectionmanagerwidget.cpp \
+           modules/widgets/recommendedappswidget.cpp \
+           modules/widgets/remotedesktopwidget.cpp \
+           modules/widgets/snapshotmanagerwidget.cpp \
+           modules/widgets/appcollectionupdater.cpp \
+           modules/update/updatemanager.cpp \
+           modules/update/updatedialog.cpp \
+           modules/update/updateprogressdialog.cpp \
+           modules/dialogs/desktopsnapshotdialog.cpp \
+           modules/dialogs/shortcutdialog.cpp
 
 HEADERS  += mainwindow.h \
-            database.h \
-            appmanagerwidget.h \
-            fishmodewidget.h \
-            shutdownwidget.h \
-            settingswidget.h \
-            collectionmanagerwidget.h \
-            recommendedappswidget.h \
-            updatemanager.h \
-            updatedialog.h \
-            updateprogressdialog.h \
-            logger.h \
-            remotedesktopwidget.h \
-            desktopsnapshotdialog.h \
-            snapshotmanagerwidget.h \
-            appcollectionupdater.h \
-            appcollectiontypes.h \
-            shortcutdialog.h
+            modules/core/database.h \
+            modules/core/logger.h \
+            modules/widgets/appmanagerwidget.h \
+            modules/widgets/fishmodewidget.h \
+            modules/widgets/shutdownwidget.h \
+            modules/widgets/settingswidget.h \
+            modules/widgets/collectionmanagerwidget.h \
+            modules/widgets/recommendedappswidget.h \
+            modules/widgets/remotedesktopwidget.h \
+            modules/widgets/snapshotmanagerwidget.h \
+            modules/widgets/appcollectionupdater.h \
+            modules/core/appcollectiontypes.h \
+            modules/update/updatemanager.h \
+            modules/update/updatedialog.h \
+            modules/update/updateprogressdialog.h \
+            modules/dialogs/desktopsnapshotdialog.h \
+            modules/dialogs/shortcutdialog.h \
+            modules/core/core.h \
+            modules/update/update_module.h \
+            modules/widgets/widgets_module.h \
+            modules/dialogs/dialogs_module.h
 
-FORMS += ui/appmanagerwidget.ui \
-         ui/fishmodewidget.ui \
-         ui/shutdownwidget.ui \
-         ui/settingswidget.ui \
-         ui/mainwindow.ui
+FORMS += modules/ui/appmanagerwidget.ui \
+         modules/ui/fishmodewidget.ui \
+         modules/ui/shutdownwidget.ui \
+         modules/ui/settingswidget.ui \
+         modules/ui/mainwindow.ui
 
 RESOURCES += resources.qrc
 

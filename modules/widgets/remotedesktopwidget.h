@@ -16,7 +16,7 @@
 #include <QDialogButtonBox>
 #include <QMenu>
 #include <QAction>
-#include "database.h"
+#include "modules/core/database.h"
 
 struct RDPConnectionInfo {
     QString serverAddress;

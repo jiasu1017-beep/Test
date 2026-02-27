@@ -16,8 +16,8 @@
 #include <QPainter>
 #include <QComboBox>
 #include <QSpinBox>
-#include "database.h"
-#include "appmanagerwidget.h"
+#include "modules/core/database.h"
+#include "modules/widgets/appmanagerwidget.h"
 
 struct TagInfo {
     QString name;

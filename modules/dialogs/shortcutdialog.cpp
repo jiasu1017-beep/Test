@@ -1,5 +1,5 @@
 #include "shortcutdialog.h"
-#include "database.h"
+#include "modules/core/database.h"
 #include <QTimer>
 
 ShortcutDialog::ShortcutDialog(Database *db, QWidget *parent)

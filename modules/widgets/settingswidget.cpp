@@ -1,6 +1,6 @@
 #include "settingswidget.h"
 #include "mainwindow.h"
-#include "shortcutdialog.h"
+#include "modules/dialogs/shortcutdialog.h"
 #include <QApplication>
 #include <QStyle>
 #include <QDialog>
@@ -11,8 +11,8 @@
 #include <QFrame>
 #include <QPixmap>
 #include <QScrollArea>
-#include "updatedialog.h"
-#include "updateprogressdialog.h"
+#include "modules/update/updatedialog.h"
+#include "modules/update/updateprogressdialog.h"
 
 SettingsWidget::SettingsWidget(Database *db, QWidget *parent)
     : QWidget(parent), db(db), mainWindow(nullptr), updateManager(nullptr), progressDialog(nullptr)

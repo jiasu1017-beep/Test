@@ -14,8 +14,8 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QHBoxLayout>
-#include "database.h"
-#include "updatemanager.h"
+#include "modules/core/database.h"
+#include "modules/update/updatemanager.h"
 
 // Forward declarations
 struct ShortcutStat;

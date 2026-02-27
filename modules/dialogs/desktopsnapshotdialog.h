@@ -10,7 +10,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
-#include "database.h"
+#include "modules/core/database.h"
 
 struct SnapshotWindowInfo {
     QString title;

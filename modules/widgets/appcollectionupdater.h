@@ -7,7 +7,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVector>
-#include "appcollectiontypes.h"
+#include "../core/appcollectiontypes.h"
 
 class AppCollectionUpdater : public QObject
 {

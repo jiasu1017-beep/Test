@@ -12,8 +12,8 @@
 #include <QProgressDialog>
 #include <QKeySequenceEdit>
 #include <QListWidget>
-#include "database.h"
-#include "updatemanager.h"
+#include "modules/core/database.h"
+#include "modules/update/updatemanager.h"
 
 class UpdateProgressDialog;
 class MainWindow;

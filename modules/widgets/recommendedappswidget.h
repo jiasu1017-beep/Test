@@ -19,8 +19,8 @@
 #include <QPropertyAnimation>
 #include <QProgressBar>
 #include <QTimer>
-#include "appcollectiontypes.h"
-#include "appcollectionupdater.h"
+#include "modules/core/appcollectiontypes.h"
+#include "modules/widgets/appcollectionupdater.h"
 
 class RecommendedAppsWidget : public QWidget
 {

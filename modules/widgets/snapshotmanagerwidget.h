@@ -23,7 +23,7 @@
 #include <QStandardItemModel>
 #include <QDesktopServices>
 #include <QUrl>
-#include "database.h"
+#include "modules/core/database.h"
 
 class SnapshotIconDelegate : public QStyledItemDelegate
 {

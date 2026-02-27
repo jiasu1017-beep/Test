@@ -1,5 +1,5 @@
 #include "collectionmanagerwidget.h"
-#include "desktopsnapshotdialog.h"
+#include "modules/dialogs/desktopsnapshotdialog.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
