@@ -6,6 +6,43 @@
 #include <shellapi.h>
 #include <QDebug>
 
+// 定义必要的Windows API常量
+#ifndef SE_SHUTDOWN_NAME
+#define SE_SHUTDOWN_NAME TEXT("SeShutdownPrivilege")
+#endif
+
+#ifndef TOKEN_ADJUST_PRIVILEGES
+#define TOKEN_ADJUST_PRIVILEGES (0x0020)
+#endif
+
+#ifndef TOKEN_QUERY
+#define TOKEN_QUERY (0x0008)
+#endif
+
+#ifndef EWX_SHUTDOWN
+#define EWX_SHUTDOWN 0x00000001
+#endif
+
+#ifndef EWX_REBOOT
+#define EWX_REBOOT 0x00000002
+#endif
+
+#ifndef EWX_FORCE
+#define EWX_FORCE 0x00000004
+#endif
+
+#ifndef SHTDN_REASON_MAJOR_OPERATINGSYSTEM
+#define SHTDN_REASON_MAJOR_OPERATINGSYSTEM 0x00020000
+#endif
+
+#ifndef SHTDN_REASON_MINOR_UPGRADE
+#define SHTDN_REASON_MINOR_UPGRADE 0x00000003
+#endif
+
+#ifndef SHTDN_REASON_FLAG_PLANNED
+#define SHTDN_REASON_FLAG_PLANNED 0x80000000
+#endif
+
 ShutdownWidget::ShutdownWidget(QWidget *parent)
     : QWidget(parent), remainingSeconds(0), currentAction(0)
 {
@@ -249,10 +286,10 @@ void ShutdownWidget::executeAction(int action)
     
     switch (action) {
         case 0: // 关机
-            command = "shutdown /s /t 0";
+            command = "shutdown /s /t 0 /f";
             break;
         case 1: // 重启
-            command = "shutdown /r /t 0";
+            command = "shutdown /r /t 0 /f";
             break;
         case 2: // 休眠
             command = "rundll32.exe powrprof.dll,SetSuspendState 0,1,0";
@@ -267,24 +304,15 @@ void ShutdownWidget::executeAction(int action)
 
 void ShutdownWidget::onShutdownNow()
 {
-    QProcess process;
-    process.setProgram("cmd.exe");
-    process.setArguments(QStringList() << "/c" << "shutdown /s /t 0");
-    process.startDetached();
+    executeAction(0);
 }
 
 void ShutdownWidget::onRestartNow()
 {
-    QProcess process;
-    process.setProgram("cmd.exe");
-    process.setArguments(QStringList() << "/c" << "shutdown /r /t 0");
-    process.startDetached();
+    executeAction(1);
 }
 
 void ShutdownWidget::onSleepNow()
 {
-    QProcess process;
-    process.setProgram("cmd.exe");
-    process.setArguments(QStringList() << "/c" << "rundll32.exe powrprof.dll,SetSuspendState 0,1,0");
-    process.startDetached();
+    executeAction(2);
 }
