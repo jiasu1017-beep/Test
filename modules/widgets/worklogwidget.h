@@ -28,6 +28,11 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QtCharts>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSettings>
 #include "modules/core/database.h"
 
 class WorkLogWidget : public QWidget
@@ -89,6 +94,31 @@ private:
     bool exportToMarkdown(const QString &content, const QString &fileName);
     bool exportToText(const QString &content, const QString &fileName);
     void updateTaskRow(int row, const Task &task);
+    void analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit, 
+                           QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
+                           QLabel *aiStatusLabel, QPushButton *aiBtn, QLineEdit *tagsEdit = nullptr);
+    void onAIAnalysisFinished(const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
+                               QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
+                               QLabel *aiStatusLabel, QPushButton *aiBtn);
+    QString getExistingCategories();
+    QString getAIServiceKey();
+    void handleAIResponse(QNetworkReply *reply, const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
+                          QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
+                          QLabel *aiStatusLabel, QPushButton *aiBtn, const QString &logFileName,
+                          QLineEdit *tagsEdit = nullptr);
+    void analyzeWithLocalAI(const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
+                             QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
+                             QLabel *aiStatusLabel);
+    void parseAIResponse(const QString &response, QLineEdit *titleEdit, QTextEdit *descEdit,
+                         QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
+                         QLineEdit *tagsEdit);
+    
+    void setSettingsWidget(void *settings);
+    QString getCurrentAIModel();
+    QString getAPIKey();
+    QString getAPIEndpoint();
+    QString getDefaultEndpoint(const QString &model);
+    QString getModelNameForAPI(const QString &model);
 
     Database *db;
     
@@ -150,6 +180,8 @@ private:
     Task *currentRunningTask;
     QTimer *taskTimer;
     QDateTime taskStartTime;
+    
+    QNetworkAccessManager *networkManager;
 };
 
 #endif

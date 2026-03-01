@@ -15,6 +15,14 @@
 #include <QSet>
 #include <algorithm>
 #include <QtCharts>
+#include <QHostInfo>
+#include <QCryptographicHash>
+#include <QSettings>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QPointer>
+#include <QFile>
+#include <QDir>
 using namespace QtCharts;
 
 WorkLogWidget::WorkLogWidget(Database *database, QWidget *parent)
@@ -57,6 +65,7 @@ WorkLogWidget::WorkLogWidget(Database *database, QWidget *parent)
     pieChartView = nullptr;
     pieChart = nullptr;
     taskTimer = nullptr;
+    networkManager = nullptr;
 
     // 初始化统计标签数组
     for (int i = 0; i < 4; i++) {
@@ -70,6 +79,7 @@ WorkLogWidget::WorkLogWidget(Database *database, QWidget *parent)
     updateStatistics();
 
     taskTimer = new QTimer(this);
+    networkManager = new QNetworkAccessManager(this);
     connect(taskTimer, &QTimer::timeout, this, [this]() {
         if (currentRunningTask) {
             QDateTime now = QDateTime::currentDateTime();
@@ -1734,10 +1744,41 @@ void WorkLogWidget::showTaskDialog(Task *task)
 
     QLineEdit *titleEdit = new QLineEdit(&dialog);
     titleEdit->setPlaceholderText("请输入任务标题");
+    
+    QHBoxLayout *titleLayout = new QHBoxLayout();
+    titleLayout->addWidget(titleEdit);
+    
+    QPushButton *aiBtn = new QPushButton("🤖 AI", &dialog);
+    aiBtn->setToolTip("点击使用AI分析任务标题");
+    aiBtn->setStyleSheet(R"(
+        QPushButton {
+            background-color: #9b59b6;
+            color: white;
+            font-weight: bold;
+            padding: 6px 12px;
+            border-radius: 4px;
+            min-width: 50px;
+        }
+        QPushButton:hover {
+            background-color: #8e44ad;
+        }
+        QPushButton:pressed {
+            background-color: #7d3c98;
+        }
+        QPushButton:disabled {
+            background-color: #bdc3c7;
+        }
+    )");
+    titleLayout->addWidget(aiBtn);
+    
+    QLabel *aiStatusLabel = new QLabel("", &dialog);
+    aiStatusLabel->setStyleSheet("font-size: 11px; color: #7f8c8d;");
+    titleLayout->addWidget(aiStatusLabel);
+    
     QTextEdit *descEdit = new QTextEdit(&dialog);
     descEdit->setPlaceholderText("请输入任务描述");
 
-    basicLayout->addRow("标题:", titleEdit);
+    basicLayout->addRow("标题:", titleLayout);
     basicLayout->addRow("描述:", descEdit);
 
     mainLayout->addWidget(basicGroup);
@@ -1840,6 +1881,15 @@ void WorkLogWidget::showTaskDialog(Task *task)
         tagsEdit->setText(task->tags.join(", "));
     }
 
+    connect(aiBtn, &QPushButton::clicked, this, [this, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, tagsEdit, &dialog]() {
+        QString title = titleEdit->text().trimmed();
+        if (title.isEmpty()) {
+            QMessageBox::warning(&dialog, "提示", "请先输入任务标题");
+            return;
+        }
+        analyzeTaskWithAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, tagsEdit);
+    });
+    
     connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
     connect(cancelBtn, &QPushButton::clicked, &dialog, &QDialog::reject);
 
@@ -2116,6 +2166,557 @@ bool WorkLogWidget::exportToMarkdown(const QString &content, const QString &file
 
     QMessageBox::information(this, "成功", "报告已成功导出");
     return true;
+}
+
+void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
+                                       QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
+                                       QLabel *aiStatusLabel, QPushButton *aiBtn, QLineEdit *tagsEdit)
+{
+    QString currentModel = getCurrentAIModel();
+    
+    if (currentModel == "local") {
+        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel);
+        return;
+    }
+    
+    if (!networkManager) {
+        networkManager = new QNetworkAccessManager(this);
+    }
+    
+    aiBtn->setEnabled(false);
+    aiStatusLabel->setText("🤖 AI分析中...");
+    
+    QString prompt = QString("你是一个专业的任务管理助手。请根据任务标题进行深度分析，生成详细的任务信息。\n\n"
+                            "任务标题：%1\n\n"
+                            "现有分类：%2\n\n"
+                            "请返回以下JSON格式的分析结果（只返回JSON，不要有任何其他内容）：\n"
+                            "{\n"
+                            "  \"description\": \"详细的任务描述（50-100字），说明任务的目标、背景和重要性\",\n"
+                            "  \"priority\": \"高或中或低，根据任务紧急程度和重要性判断\",\n"
+                            "  \"estimated_hours\": \"预计工时（数字，如0.5,1,2,4,8），根据任务复杂度估算\",\n"
+                            "  \"category\": \"从现有分类中选择最匹配的分类名称\",\n"
+                            "  \"subtasks\": [\n"
+                            "    \"子任务1：具体的执行步骤\",\n"
+                            "    \"子任务2：具体的执行步骤\",\n"
+                            "    \"子任务3：具体的执行步骤\"\n"
+                            "  ],\n"
+                            "  \"tags\": [\"标签1\", \"标签2\", \"标签3\"],\n"
+                            "  \"notes\": \"补充说明、注意事项或建议\"\n"
+                            "}\n\n"
+                            "判断规则：\n"
+                            "1. priority=高: 包含'紧急'、'重要'、'urgent'、'critical'、'asap'、'bug'、'修复'等关键词\n"
+                            "2. priority=低: 包含'简单'、'快速'、'easy'、'minor'、'整理'、'学习'等关键词\n"
+                            "3. estimated_hours: 根据任务复杂度估算，简单任务0.5-1小时，中等任务2-4小时，复杂任务4-8小时\n"
+                            "4. subtasks: 将任务分解为3-5个具体的、可执行的子任务，每个子任务应该清晰明确\n"
+                            "5. tags: 根据任务内容提取3-5个相关标签，如技术栈、项目名称、功能模块等\n"
+                            "6. category: 根据任务主题从现有分类中选择最匹配的一个\n\n"
+                            "要求：\n"
+                            "- 描述要具体、有价值，不要只是重复标题\n"
+                            "- 子任务要可执行、可衡量、有时间限制\n"
+                            "- 标签要准确反映任务特征\n"
+                            "- 确保返回的JSON格式正确，可以被解析\n\n"
+                            "只返回JSON，不要其他文字。")
+                            .arg(title)
+                            .arg(getExistingCategories());
+    
+    QString apiKey = getAPIKey();
+    if (apiKey.isEmpty()) {
+        aiStatusLabel->setText("⚠️ 请先配置API Key");
+        aiBtn->setEnabled(true);
+        QMessageBox::warning(nullptr, "提示", "请先在设置中配置AI API Key");
+        return;
+    }
+    
+    QString endpoint = getAPIEndpoint();
+    if (endpoint.isEmpty()) {
+        endpoint = getDefaultEndpoint(currentModel);
+    }
+    
+    QString modelName = getModelNameForAPI(currentModel);
+    
+    QJsonObject json;
+    json["model"] = modelName;
+    json["stream"] = false;
+    
+    QJsonArray messages;
+    QJsonObject msg;
+    msg["role"] = "user";
+    msg["content"] = prompt;
+    messages.append(msg);
+    json["messages"] = messages;
+    
+    if (currentModel == "minimax" || currentModel == "qwen" || currentModel == "spark") {
+        json["max_tokens"] = 1024;
+    }
+    
+    if (currentModel == "qwen") {
+        QJsonObject input;
+        input["messages"] = json.take("messages");
+        json["input"] = input;
+        json.remove("max_tokens");
+        json.remove("stream");
+        json["parameters"] = QJsonObject({
+            {"temperature", 0.7},
+            {"max_tokens", 1024},
+            {"result_format", "message"}
+        });
+    }
+    
+    if (currentModel == "spark") {
+        json["max_tokens"] = 1024;
+    }
+    
+    QJsonDocument doc(json);
+    QByteArray postData = doc.toJson();
+    
+    QString logDir = QCoreApplication::applicationDirPath() + "/logs";
+    QDir dir(logDir);
+    if (!dir.exists()) {
+        dir.mkpath(logDir);
+    }
+    
+    QString logFileName = logDir + "/ai_request_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".log";
+    QFile logFile(logFileName);
+    if (logFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&logFile);
+        out.setCodec("UTF-8");
+        out << "=== AI Request ===" << "\n";
+        out << "Time: " << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << "\n";
+        out << "Model: " << currentModel << "\n";
+        out << "Endpoint: " << endpoint << "\n";
+        out << "Request JSON:\n" << doc.toJson(QJsonDocument::Indented) << "\n\n";
+        logFile.close();
+    }
+    
+    QNetworkRequest request;
+    request.setUrl(QUrl(endpoint));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setRawHeader("Authorization", QString("Bearer %1").arg(apiKey).toUtf8());
+    
+    QNetworkReply *reply = networkManager->post(request, postData);
+    
+    connect(reply, &QNetworkReply::finished, this, [this, reply, title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, logFileName, tagsEdit]() {
+        handleAIResponse(reply, title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, logFileName, tagsEdit);
+    });
+    
+    QTimer::singleShot(10000, this, [this, reply, aiStatusLabel, aiBtn]() {
+        if (reply && reply->isRunning()) {
+            reply->abort();
+            aiStatusLabel->setText("❌ 请求超时");
+            aiBtn->setEnabled(true);
+            QMessageBox::warning(this, "超时", "AI服务响应超时，请检查网络连接");
+        }
+    });
+}
+
+QString WorkLogWidget::getExistingCategories()
+{
+    QStringList categories;
+    QList<Category> allCategories = db->getAllCategories();
+    for (const Category &cat : allCategories) {
+        categories.append(cat.name);
+    }
+    if (categories.isEmpty()) {
+        categories << "工作" << "学习" << "生活" << "其他";
+    }
+    return categories.join("、");
+}
+
+QString WorkLogWidget::getAIServiceKey()
+{
+    QSettings settings("PonyWork", "WorkLog");
+    QString encryptedKey = settings.value("ai_api_key", "").toString();
+    if (encryptedKey.isEmpty()) {
+        return qgetenv("AI_API_KEY");
+    }
+    QByteArray data = QByteArray::fromBase64(encryptedKey.toUtf8());
+    QByteArray key = QCryptographicHash::hash(QByteArray("PonyWorkAI").append(QHostInfo::localHostName().toUtf8()), QCryptographicHash::Sha256);
+    QByteArray decrypted;
+    for (int i = 0; i < data.size(); ++i) {
+        decrypted.append(data.at(i) ^ key.at(i % key.size()));
+    }
+    return QString::fromUtf8(decrypted);
+}
+
+QString WorkLogWidget::getAPIKey()
+{
+    return getAIServiceKey();
+}
+
+QString WorkLogWidget::getCurrentAIModel()
+{
+    QSettings settings("PonyWork", "WorkLog");
+    return settings.value("ai_model", "qwen").toString();
+}
+
+QString WorkLogWidget::getAPIEndpoint()
+{
+    QSettings settings("PonyWork", "WorkLog");
+    return settings.value("ai_endpoint", "").toString();
+}
+
+void WorkLogWidget::setSettingsWidget(void *settings)
+{
+    Q_UNUSED(settings);
+}
+
+QString WorkLogWidget::getDefaultEndpoint(const QString &model)
+{
+    static QMap<QString, QString> endpoints = {
+        {"minimax", "https://api.minimax.chat/v1/text/chatcompletion_v2"},
+        {"gpt35", "https://api.openai.com/v1/chat/completions"},
+        {"gpt4", "https://api.openai.com/v1/chat/completions"},
+        {"claude", "https://api.anthropic.com/v1/messages"},
+        {"gemini", "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"},
+        {"qwen", "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"},
+        {"spark", "https://spark-api.xfyun.com/v3.5/chat"},
+        {"deepseek", "https://api.siliconflow.cn/v1/chat/completions"}
+    };
+    return endpoints.value(model, "");
+}
+
+QString WorkLogWidget::getModelNameForAPI(const QString &model)
+{
+    static QMap<QString, QString> models = {
+        {"minimax", "abab6.5s-chat"},
+        {"gpt35", "gpt-3.5-turbo"},
+        {"gpt4", "gpt-4"},
+        {"claude", "claude-3-opus-20240229"},
+        {"gemini", "gemini-pro"},
+        {"qwen", "qwen-turbo"},
+        {"spark", "generalv3.5"},
+        {"deepseek", "deepseek-ai/DeepSeek-V2-Chat"}
+    };
+    return models.value(model, "");
+}
+
+void WorkLogWidget::handleAIResponse(QNetworkReply *reply, const QString &title, QLineEdit *titleEdit, 
+                                      QTextEdit *descEdit, QComboBox *categoryCombo, QComboBox *priorityCombo,
+                                      QDoubleSpinBox *durationSpin, QLabel *aiStatusLabel, QPushButton *aiBtn,
+                                      const QString &logFileName, QLineEdit *tagsEdit)
+{
+    aiBtn->setEnabled(true);
+    
+    if (reply->error() != QNetworkReply::NoError) {
+        QString errorMsg = reply->errorString();
+        aiStatusLabel->setText("❌ 调用失败");
+        qDebug() << "AI API Error:" << errorMsg;
+        
+        QFile logFile(logFileName);
+        if (logFile.open(QIODevice::Append | QIODevice::Text)) {
+            QTextStream out(&logFile);
+            out.setCodec("UTF-8");
+            out << "=== AI Response ===" << "\n";
+            out << "Time: " << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << "\n";
+            out << "HTTP Status: " << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() << "\n";
+            out << "Error: " << reply->error() << " - " << reply->errorString() << "\n";
+            out << "\n========================================\n\n";
+            logFile.close();
+        }
+        
+        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel);
+        return;
+    }
+    
+    QByteArray responseData = reply->readAll();
+    qDebug() << "AI Response:" << responseData;
+    
+    QFile logFile(logFileName);
+    if (logFile.open(QIODevice::Append | QIODevice::Text)) {
+        QTextStream out(&logFile);
+        out.setCodec("UTF-8");
+        out << "=== AI Response ===" << "\n";
+        out << "Time: " << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << "\n";
+        out << "HTTP Status: " << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() << "\n";
+        out << "Response Data:\n" << responseData << "\n";
+        out << "Response JSON:\n" << QJsonDocument::fromJson(responseData).toJson(QJsonDocument::Indented) << "\n";
+        out << "\n========================================\n\n";
+        logFile.close();
+    }
+    
+    QJsonDocument doc = QJsonDocument::fromJson(responseData);
+    
+    if (doc.isNull()) {
+        aiStatusLabel->setText("⚠️ 解析失败");
+        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel);
+        return;
+    }
+    
+    QJsonObject rootObj = doc.object();
+    
+    if (rootObj.contains("base_resp")) {
+        int statusCode = rootObj["base_resp"].toObject()["status_code"].toInt();
+        if (statusCode != 0) {
+            QString errorMsg = rootObj["base_resp"].toObject()["status_msg"].toString();
+            aiStatusLabel->setText("❌ API错误: " + errorMsg);
+            qDebug() << "AI API Error:" << errorMsg;
+            analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel);
+            return;
+        }
+    }
+    
+    QJsonObject choicesObj;
+    
+    if (rootObj.contains("output") && rootObj["output"].toObject().contains("choices")) {
+        choicesObj = rootObj["output"].toObject()["choices"].toArray()[0].toObject();
+    } else if (rootObj.contains("choices")) {
+        choicesObj = rootObj["choices"].toArray()[0].toObject();
+    } else {
+        aiStatusLabel->setText("⚠️ 无返回内容");
+        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel);
+        return;
+    }
+    
+    QString content = choicesObj["message"].toObject()["content"].toString();
+    
+    if (content.isEmpty()) {
+        aiStatusLabel->setText("⚠️ 内容为空");
+        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel);
+        return;
+    }
+    
+    parseAIResponse(content, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, tagsEdit);
+    
+    aiStatusLabel->setText("✅ 已填充");
+    QTimer::singleShot(2000, aiStatusLabel, [aiStatusLabel]() {
+        aiStatusLabel->setText("");
+    });
+    
+    reply->deleteLater();
+}
+
+void WorkLogWidget::analyzeWithLocalAI(const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
+                                         QComboBox *categoryCombo, QComboBox *priorityCombo, 
+                                         QDoubleSpinBox *durationSpin, QLabel *aiStatusLabel)
+{
+    QString lowerTitle = title.toLower();
+    QString description;
+    QString priorityStr = "中";
+    double hours = 1.0;
+    QString categoryName = "其他";
+    QStringList subtasks;
+    QStringList tags;
+    QString notes;
+    
+    if (lowerTitle.contains("会议") || lowerTitle.contains("meeting")) {
+        categoryName = "会议";
+        description = "参加相关会议，讨论项目进展和问题";
+        hours = 1.0;
+        subtasks << "准备会议材料" << "参加会议讨论" << "整理会议纪要";
+        tags << "会议" << "沟通" << "协作";
+    } else if (lowerTitle.contains("代码") || lowerTitle.contains("开发") || lowerTitle.contains("bug") || 
+               lowerTitle.contains("debug") || lowerTitle.contains("code") || lowerTitle.contains("编程")) {
+        categoryName = "开发";
+        description = "进行代码开发工作，实现功能需求或修复问题";
+        hours = 2.0;
+        if (lowerTitle.contains("紧急") || lowerTitle.contains("重要") || lowerTitle.contains("critical")) {
+            priorityStr = "高";
+        }
+        if (lowerTitle.contains("bug") || lowerTitle.contains("修复")) {
+            subtasks << "分析问题原因" << "定位代码位置" << "修复bug" << "测试验证";
+            tags << "bug" << "修复" << "调试";
+            notes = "修复后需要进行回归测试";
+        } else {
+            subtasks << "分析需求" << "编写代码" << "单元测试" << "代码审查";
+            tags << "开发" << "编码" << "测试";
+        }
+    } else if (lowerTitle.contains("学习") || lowerTitle.contains("培训") || lowerTitle.contains("study") || 
+               lowerTitle.contains("课程") || lowerTitle.contains("读书")) {
+        categoryName = "学习";
+        description = "进行学习培训，提升专业技能和知识储备";
+        hours = 1.5;
+        subtasks << "阅读资料" << "做笔记" << "实践练习" << "总结心得";
+        tags << "学习" << "培训" << "提升";
+        notes = "建议定期复习巩固";
+    } else if (lowerTitle.contains("文档") || lowerTitle.contains("报告") || lowerTitle.contains("write") || 
+               lowerTitle.contains("撰写") || lowerTitle.contains("整理")) {
+        categoryName = "文档";
+        description = "撰写文档报告，记录项目信息和技术细节";
+        hours = 2.0;
+        subtasks << "收集资料" << "编写大纲" << "撰写内容" << "校对修改";
+        tags << "文档" << "写作" << "整理";
+    } else if (lowerTitle.contains("测试") || lowerTitle.contains("test") || lowerTitle.contains("验证")) {
+        categoryName = "测试";
+        description = "进行测试验证工作，确保功能正常和质量达标";
+        hours = 1.5;
+        subtasks << "编写测试用例" << "执行测试" << "记录结果" << "提交bug";
+        tags << "测试" << "验证" << "质量";
+    } else if (lowerTitle.contains("维护") || lowerTitle.contains("部署") || lowerTitle.contains("运维") || 
+               lowerTitle.contains("deploy") || lowerTitle.contains("maintain")) {
+        categoryName = "运维";
+        description = "系统维护部署工作，保障系统稳定运行";
+        hours = 1.0;
+        subtasks << "检查系统状态" << "执行维护操作" << "监控运行情况" << "记录日志";
+        tags << "运维" << "维护" << "部署";
+    } else if (lowerTitle.contains("设计") || lowerTitle.contains("design") || lowerTitle.contains("规划")) {
+        categoryName = "设计";
+        description = "进行设计规划工作，制定技术方案和架构";
+        hours = 2.0;
+        subtasks << "需求分析" << "方案设计" << "原型制作" << "评审确认";
+        tags << "设计" << "规划" << "架构";
+    } else if (lowerTitle.contains("review") || lowerTitle.contains("评审") || lowerTitle.contains("检查")) {
+        categoryName = "评审";
+        description = "进行代码评审或检查，确保代码质量";
+        hours = 1.0;
+        subtasks << "阅读代码" << "检查规范" << "提出建议" << "确认修改";
+        tags << "评审" << "检查" << "质量";
+    } else if (lowerTitle.contains("紧急") || lowerTitle.contains("urgent") || lowerTitle.contains("重要")) {
+        priorityStr = "高";
+        hours = 1.0;
+        description = "紧急重要任务，需要优先处理";
+        subtasks << "评估影响" << "制定计划" << "执行处理" << "跟踪结果";
+        tags << "紧急" << "重要" << "优先";
+        notes = "需要密切关注进展";
+    } else if (lowerTitle.contains("简单") || lowerTitle.contains("快速") || lowerTitle.contains("easy")) {
+        hours = 0.5;
+        description = "简单快速任务，可以快速完成";
+        subtasks << "执行任务" << "验证结果";
+        tags << "简单" << "快速";
+    } else if (lowerTitle.contains("复杂") || lowerTitle.contains("困难") || lowerTitle.contains("hard")) {
+        hours = 4.0;
+        priorityStr = "高";
+        description = "复杂困难任务，需要仔细规划和执行";
+        subtasks << "分析需求" << "制定方案" << "分步实施" << "测试验证" << "总结优化";
+        tags << "复杂" << "困难" << "重要";
+        notes = "建议分阶段完成";
+    } else {
+        subtasks << "明确目标" << "执行任务" << "检查结果";
+        tags << "任务" << "执行";
+    }
+    
+    if (lowerTitle.contains("早上") || lowerTitle.contains("上午")) {
+        notes += "（建议上午完成）";
+    } else if (lowerTitle.contains("下午") || lowerTitle.contains("下班")) {
+        notes += "（建议下午完成）";
+    }
+    
+    if (lowerTitle.contains("2小时") || lowerTitle.contains("两小时")) {
+        hours = 2.0;
+    } else if (lowerTitle.contains("3小时") || lowerTitle.contains("三小时")) {
+        hours = 3.0;
+    } else if (lowerTitle.contains("半天")) {
+        hours = 4.0;
+    } else if (lowerTitle.contains("一天")) {
+        hours = 8.0;
+    }
+    
+    QString fullDescription = description;
+    if (!subtasks.isEmpty()) {
+        fullDescription += "\n\n子任务：\n";
+        for (const QString &subtask : subtasks) {
+            fullDescription += "• " + subtask + "\n";
+        }
+    }
+    
+    if (!notes.isEmpty()) {
+        fullDescription += "\n备注：\n" + notes;
+    }
+    
+    descEdit->setPlainText(fullDescription.trimmed());
+    
+    if (priorityStr == "高") {
+        priorityCombo->setCurrentIndex(priorityCombo->findData(static_cast<int>(TaskPriority_High)));
+    } else if (priorityStr == "中") {
+        priorityCombo->setCurrentIndex(priorityCombo->findData(static_cast<int>(TaskPriority_Medium)));
+    } else {
+        priorityCombo->setCurrentIndex(priorityCombo->findData(static_cast<int>(TaskPriority_Low)));
+    }
+    
+    durationSpin->setValue(hours);
+    
+    int categoryIndex = categoryCombo->findText(categoryName);
+    if (categoryIndex >= 0) {
+        categoryCombo->setCurrentIndex(categoryIndex);
+    }
+    
+    QLineEdit *tagsEdit = qobject_cast<QLineEdit*>(descEdit->parent()->findChild<QLineEdit*>());
+    if (tagsEdit && !tags.isEmpty()) {
+        tagsEdit->setText(tags.join(", "));
+    }
+    
+    aiStatusLabel->setText("✅ 已填充");
+    QTimer::singleShot(2000, aiStatusLabel, [aiStatusLabel]() {
+        aiStatusLabel->setText("");
+    });
+}
+
+void WorkLogWidget::parseAIResponse(const QString &response, QLineEdit *titleEdit, QTextEdit *descEdit,
+                                    QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
+                                    QLineEdit *tagsEdit)
+{
+    QString jsonStr = response;
+    jsonStr = jsonStr.replace("```json", "").replace("```", "").trimmed();
+    
+    QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8());
+    if (doc.isNull() || !doc.isObject()) {
+        analyzeWithLocalAI(titleEdit->text(), titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, nullptr);
+        return;
+    }
+    
+    QJsonObject obj = doc.object();
+    
+    QString description = "";
+    if (obj.contains("description")) {
+        description = obj["description"].toString();
+    }
+    
+    if (obj.contains("subtasks") && obj["subtasks"].isArray()) {
+        QJsonArray subtasks = obj["subtasks"].toArray();
+        if (!subtasks.isEmpty()) {
+            description += "\n\n子任务：\n";
+            for (int i = 0; i < subtasks.size(); ++i) {
+                description += QString("• %1\n").arg(subtasks[i].toString());
+            }
+        }
+    }
+    
+    if (obj.contains("notes")) {
+        QString notes = obj["notes"].toString();
+        if (!notes.isEmpty()) {
+            description += "\n备注：\n" + notes;
+        }
+    }
+    
+    if (!description.isEmpty()) {
+        descEdit->setPlainText(description.trimmed());
+    }
+    
+    if (obj.contains("priority")) {
+        QString priority = obj["priority"].toString();
+        if (priority.contains("高") || priority.contains("high")) {
+            priorityCombo->setCurrentIndex(priorityCombo->findData(static_cast<int>(TaskPriority_High)));
+        } else if (priority.contains("低") || priority.contains("low")) {
+            priorityCombo->setCurrentIndex(priorityCombo->findData(static_cast<int>(TaskPriority_Low)));
+        } else {
+            priorityCombo->setCurrentIndex(priorityCombo->findData(static_cast<int>(TaskPriority_Medium)));
+        }
+    }
+    
+    if (obj.contains("estimated_hours")) {
+        double hours = obj["estimated_hours"].toDouble();
+        if (hours > 0) {
+            durationSpin->setValue(hours);
+        }
+    }
+    
+    if (obj.contains("category")) {
+        QString category = obj["category"].toString();
+        int index = categoryCombo->findText(category);
+        if (index >= 0) {
+            categoryCombo->setCurrentIndex(index);
+        }
+    }
+    
+    if (obj.contains("tags") && obj["tags"].isArray() && tagsEdit) {
+        QJsonArray tags = obj["tags"].toArray();
+        QStringList tagList;
+        for (const QJsonValue &tag : tags) {
+            tagList << tag.toString();
+        }
+        if (!tagList.isEmpty()) {
+            tagsEdit->setText(tagList.join(", "));
+        }
+    }
 }
 
 void WorkLogWidget::onTimeFilterChanged(int index)

@@ -26,7 +26,9 @@ SOURCES += main.cpp \
            modules/update/updateprogressdialog.cpp \
            modules/dialogs/desktopsnapshotdialog.cpp \
            modules/dialogs/shortcutdialog.cpp \
-           modules/dialogs/iconselectordialog.cpp
+           modules/dialogs/iconselectordialog.cpp \
+           modules/dialogs/chattestdialog.cpp \
+           modules/dialogs/aisettingsdialog.cpp
 
 HEADERS  += mainwindow.h \
             modules/core/database.h \
@@ -48,6 +50,8 @@ HEADERS  += mainwindow.h \
             modules/dialogs/desktopsnapshotdialog.h \
             modules/dialogs/shortcutdialog.h \
             modules/dialogs/iconselectordialog.h \
+            modules/dialogs/chattestdialog.h \
+            modules/dialogs/aisettingsdialog.h \
             modules/core/core.h \
             modules/update/update_module.h \
             modules/widgets/widgets_module.h \

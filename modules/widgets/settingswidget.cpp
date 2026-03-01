@@ -1,6 +1,7 @@
 #include "settingswidget.h"
 #include "mainwindow.h"
 #include "modules/dialogs/shortcutdialog.h"
+#include "modules/dialogs/aisettingsdialog.h"
 #include <QApplication>
 #include <QStyle>
 #include <QDialog>
@@ -11,6 +12,7 @@
 #include <QFrame>
 #include <QPixmap>
 #include <QScrollArea>
+#include <QMessageBox>
 #include "modules/update/updatedialog.h"
 #include "modules/update/updateprogressdialog.h"
 
@@ -226,6 +228,24 @@ void SettingsWidget::setupUI()
     aboutLayout->addWidget(aboutButton);
     aboutGroup->setLayout(aboutLayout);
     mainLayout->addWidget(aboutGroup);
+    
+    QGroupBox *aiGroup = new QGroupBox("🤖 AI设置", this);
+    QVBoxLayout *aiLayout = new QVBoxLayout();
+    
+    QLabel *aiDescLabel = new QLabel("配置AI模型以启用智能任务分析功能", this);
+    aiDescLabel->setStyleSheet("padding: 5px; color: #666; font-size: 12px;");
+    aiLayout->addWidget(aiDescLabel);
+    
+    QPushButton *openAISettingsBtn = new QPushButton("🔧 打开AI设置", this);
+    openAISettingsBtn->setStyleSheet(
+        "QPushButton { background-color: #3498db; color: white; padding: 12px; border-radius: 4px; font-size: 13px; } "
+        "QPushButton:hover { background-color: #2980b9; }"
+    );
+    connect(openAISettingsBtn, &QPushButton::clicked, this, &SettingsWidget::onOpenAISettings);
+    aiLayout->addWidget(openAISettingsBtn);
+    
+    aiGroup->setLayout(aiLayout);
+    mainLayout->addWidget(aiGroup);
     
     mainLayout->addStretch();
     
@@ -523,4 +543,10 @@ void SettingsWidget::onUpdateCheckFailed(const QString &error)
 {
     Q_UNUSED(error);
     checkUpdateButton->setEnabled(true);
+}
+
+void SettingsWidget::onOpenAISettings()
+{
+    AISettingsDialog dialog(this);
+    dialog.exec();
 }

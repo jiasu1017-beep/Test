@@ -12,6 +12,10 @@
 #include <QProgressDialog>
 #include <QKeySequenceEdit>
 #include <QListWidget>
+#include <QComboBox>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QTabWidget>
 #include "modules/core/database.h"
 #include "modules/update/updatemanager.h"
 
@@ -37,6 +41,7 @@ private slots:
     void onUpdateAvailable(const UpdateInfo &info);
     void onNoUpdateAvailable();
     void onUpdateCheckFailed(const QString &error);
+    void onOpenAISettings();
 
 private:
     void setupUI();
