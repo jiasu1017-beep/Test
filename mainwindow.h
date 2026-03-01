@@ -29,6 +29,7 @@ class RecommendedAppsWidget;
 class UpdateDialog;
 class UpdateProgressDialog;
 class RemoteDesktopWidget;
+class WorkLogWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -98,6 +99,7 @@ private:
     UpdateDialog *updateDialog;
     UpdateProgressDialog *updateProgressDialog;
     RemoteDesktopWidget *remoteDesktopWidget;
+    WorkLogWidget *workLogWidget;
     QLabel *statusLabel;
     
     void setupGlobalShortcut();

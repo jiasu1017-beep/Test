@@ -100,6 +100,39 @@ struct ShortcutStat {
     QDateTime lastUsed;
 };
 
+enum TaskPriority {
+    TaskPriority_Low,
+    TaskPriority_Medium,
+    TaskPriority_High
+};
+
+enum TaskStatus {
+    TaskStatus_Todo,
+    TaskStatus_InProgress,
+    TaskStatus_Paused,
+    TaskStatus_Completed
+};
+
+struct Task {
+    QString id;
+    QString title;
+    QString description;
+    int categoryId;
+    TaskPriority priority;
+    TaskStatus status;
+    double workDuration;
+    QStringList tags;
+};
+
+struct Category {
+    int id;
+    QString name;
+    QString description;
+    int parentId;
+    QString color;
+    int sortOrder;
+};
+
 class Database : public QObject
 {
     Q_OBJECT
@@ -161,6 +194,32 @@ public:
     SnapshotInfo getSnapshotById(int id);
     QList<SnapshotInfo> searchSnapshots(const QString &keyword);
 
+    bool addTask(const Task &task);
+    bool updateTask(const Task &task);
+    bool deleteTask(const QString &id);
+    QList<Task> getAllTasks();
+    QList<Task> getTasksByStatus(TaskStatus status);
+    QList<Task> getTasksByCategory(int categoryId);
+    QList<Task> getTasksByDateRange(const QDateTime &startDate, const QDateTime &endDate);
+    QList<Task> searchTasks(const QString &keyword);
+    Task getTaskById(const QString &id);
+    bool updateTaskStatus(const QString &id, TaskStatus status);
+    bool updateTaskDuration(const QString &id, double duration);
+
+    bool addCategory(const Category &category);
+    bool updateCategory(const Category &category);
+    bool deleteCategory(int id);
+    QList<Category> getAllCategories();
+    QList<Category> getRootCategories();
+    QList<Category> getSubCategories(int parentId);
+    Category getCategoryById(int id);
+    Category getCategoryByName(const QString &name);
+
+    QHash<QString, double> getCategoryWorkHours(const QDateTime &startDate, const QDateTime &endDate);
+    QHash<QString, int> getCategoryTaskCount(const QDateTime &startDate, const QDateTime &endDate);
+    double getTotalWorkHours(const QDateTime &startDate, const QDateTime &endDate);
+    int getTotalTaskCount(const QDateTime &startDate, const QDateTime &endDate);
+
 private:
     QString dataFilePath;
     QJsonObject rootObject;
@@ -168,6 +227,7 @@ private:
     int nextCollectionId;
     int nextRemoteDesktopId;
     int nextSnapshotId;
+    int nextCategoryId;
     
     bool loadData();
     bool saveData();
@@ -179,8 +239,15 @@ private:
     RemoteDesktopConnection jsonToRemoteDesktop(const QJsonObject &obj);
     QJsonObject snapshotToJson(const SnapshotInfo &snapshot);
     SnapshotInfo jsonToSnapshot(const QJsonObject &obj);
+    QJsonObject taskToJson(const Task &task);
+    Task jsonToTask(const QJsonObject &obj);
+    QJsonObject categoryToJson(const Category &category);
+    Category jsonToCategory(const QJsonObject &obj);
     QString encryptPassword(const QString &password);
     QString decryptPassword(const QString &encrypted);
+    QString generateTaskId();
+    int getDailyTaskCount(const QString &dateStr);
+    bool taskExists(const QString &taskId);
 };
 
 #endif

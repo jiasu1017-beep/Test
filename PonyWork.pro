@@ -1,4 +1,4 @@
-QT       += core gui network
+QT       += core gui network charts
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -20,6 +20,7 @@ SOURCES += main.cpp \
            modules/widgets/remotedesktopwidget.cpp \
            modules/widgets/snapshotmanagerwidget.cpp \
            modules/widgets/appcollectionupdater.cpp \
+           modules/widgets/worklogwidget.cpp \
            modules/update/updatemanager.cpp \
            modules/update/updatedialog.cpp \
            modules/update/updateprogressdialog.cpp \
@@ -39,6 +40,7 @@ HEADERS  += mainwindow.h \
             modules/widgets/remotedesktopwidget.h \
             modules/widgets/snapshotmanagerwidget.h \
             modules/widgets/appcollectionupdater.h \
+            modules/widgets/worklogwidget.h \
             modules/core/appcollectiontypes.h \
             modules/update/updatemanager.h \
             modules/update/updatedialog.h \
