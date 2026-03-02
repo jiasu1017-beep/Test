@@ -16,11 +16,22 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QTabWidget>
+#include <QLabel>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QSettings>
+#include <QCryptographicHash>
+#include <QHostInfo>
+#include <QJsonObject>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QDebug>
 #include "modules/core/database.h"
 #include "modules/update/updatemanager.h"
 
 class UpdateProgressDialog;
 class MainWindow;
+class ChatTestDialog;
 
 class SettingsWidget : public QWidget
 {
@@ -42,6 +53,10 @@ private slots:
     void onNoUpdateAvailable();
     void onUpdateCheckFailed(const QString &error);
     void onOpenAISettings();
+    void onAISettingsChanged();
+    void onSaveAIConfig();
+    void onTestAIConnection();
+    void onChatTestClicked();
 
 private:
     void setupUI();
@@ -52,10 +67,16 @@ private:
     QWidget* createUpdatePage();
     QWidget* createAboutPage();
     bool isShortcutConflict(const QString &shortcut);
+    void loadAISettings();
+    QString loadSavedAPIKey();
+    QString getDefaultEndpoint(const QString &model);
+    QString getModelName(const QString &model);
     
     Database *db;
     MainWindow *mainWindow;
     UpdateManager *updateManager;
+    QNetworkAccessManager *networkManager;
+    
     QCheckBox *autoStartCheck;
     QCheckBox *minimizeToTrayCheck;
     QCheckBox *showClosePromptCheck;
@@ -64,8 +85,15 @@ private:
     QLabel *statusLabel;
     QProgressDialog *progressDialog;
     UpdateProgressDialog *updateProgressDialog;
-
     QLabel *shortcutStatusLabel;
+    
+    QComboBox *aiModelCombo;
+    QLineEdit *apiKeyEdit;
+    QLineEdit *apiEndpointEdit;
+    QPushButton *testAiBtn;
+    QPushButton *saveAiBtn;
+    QPushButton *chatTestBtn;
+    QLabel *aiStatusLabel;
 };
 
 #endif

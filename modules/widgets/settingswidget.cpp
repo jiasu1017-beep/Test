@@ -2,6 +2,7 @@
 #include "mainwindow.h"
 #include "modules/dialogs/shortcutdialog.h"
 #include "modules/dialogs/aisettingsdialog.h"
+#include "modules/dialogs/chattestdialog.h"
 #include <QApplication>
 #include <QStyle>
 #include <QDialog>
@@ -20,11 +21,27 @@
 #include <QSpinBox>
 #include <QSlider>
 #include <QRadioButton>
+#include <QComboBox>
+#include <QLineEdit>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QSettings>
+#include <QCryptographicHash>
+#include <QHostInfo>
+#include <QJsonObject>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonValue>
+#include <QDebug>
+#include <QTimer>
+#include <QMap>
+#include <QUrl>
 #include "modules/update/updatedialog.h"
 #include "modules/update/updateprogressdialog.h"
 
 SettingsWidget::SettingsWidget(Database *db, QWidget *parent)
-    : QWidget(parent), db(db), mainWindow(nullptr), updateManager(nullptr), progressDialog(nullptr)
+    : QWidget(parent), db(db), mainWindow(nullptr), updateManager(nullptr), progressDialog(nullptr), networkManager(nullptr)
 {
     setupUI();
 }
@@ -299,80 +316,389 @@ QWidget *SettingsWidget::createShortcutPage()
 QWidget *SettingsWidget::createAIPage()
 {
     QWidget *page = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(page);
+    QScrollArea *scrollArea = new QScrollArea(page);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    
+    QWidget *contentWidget = new QWidget();
+    QVBoxLayout *layout = new QVBoxLayout(contentWidget);
     layout->setContentsMargins(30, 30, 30, 30);
     layout->setSpacing(20);
 
-    QLabel *title = new QLabel("AI设置", page);
+    QLabel *title = new QLabel("AI设置", contentWidget);
     title->setStyleSheet("font-size: 24px; font-weight: bold; color: #333;");
     layout->addWidget(title);
 
-    QFrame *line = new QFrame(page);
+    QFrame *line = new QFrame(contentWidget);
     line->setFrameShape(QFrame::HLine);
     line->setStyleSheet("color: #e0e0e0;");
     layout->addWidget(line);
 
-    QGroupBox *aiConfigGroup = new QGroupBox("AI配置", page);
-    QVBoxLayout *aiConfigLayout = new QVBoxLayout(aiConfigGroup);
-    aiConfigLayout->setSpacing(15);
+    QGroupBox *aiModelGroup = new QGroupBox("🤖 AI模型配置", contentWidget);
+    QVBoxLayout *aiModelLayout = new QVBoxLayout(aiModelGroup);
+    aiModelLayout->setSpacing(15);
 
-    QLabel *aiDescLabel = new QLabel("配置AI模型以启用智能任务分析和报告生成功能", page);
+    QLabel *aiDescLabel = new QLabel("配置AI模型以启用智能任务分析和报告生成功能", contentWidget);
     aiDescLabel->setStyleSheet("color: #666; font-size: 13px; padding: 5px;");
     aiDescLabel->setWordWrap(true);
-    aiConfigLayout->addWidget(aiDescLabel);
+    aiModelLayout->addWidget(aiDescLabel);
 
-    QPushButton *openAISettingsBtn = new QPushButton("🔧 打开AI设置", page);
-    openAISettingsBtn->setStyleSheet(
-        "QPushButton { background-color: #3498db; color: white; padding: 12px 24px; border-radius: 5px; font-size: 14px; } "
-        "QPushButton:hover { background-color: #2980b9; }"
+    QHBoxLayout *modelLayout = new QHBoxLayout();
+    QLabel *modelLabel = new QLabel("AI模型:", contentWidget);
+    modelLabel->setMinimumWidth(80);
+    aiModelCombo = new QComboBox(contentWidget);
+    aiModelCombo->addItem("🤖 MiniMax", "minimax");
+    aiModelCombo->addItem("🔵 OpenAI GPT-3.5", "gpt35");
+    aiModelCombo->addItem("🔷 OpenAI GPT-4", "gpt4");
+    aiModelCombo->addItem("🦊 Anthropic Claude-3", "claude");
+    aiModelCombo->addItem("💎 Google Gemini", "gemini");
+    aiModelCombo->addItem("🟢 通义千问", "qwen");
+    aiModelCombo->addItem("🔶 讯飞星火", "spark");
+    aiModelCombo->addItem("🚀 DeepSeek (硅基流动)", "deepseek");
+    aiModelCombo->addItem("💻 本地关键词匹配", "local");
+    connect(aiModelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SettingsWidget::onAISettingsChanged);
+    modelLayout->addWidget(modelLabel);
+    modelLayout->addWidget(aiModelCombo);
+    modelLayout->addStretch();
+    aiModelLayout->addLayout(modelLayout);
+
+    QHBoxLayout *apiKeyLayout = new QHBoxLayout();
+    QLabel *apiKeyLabel = new QLabel("API Key:", contentWidget);
+    apiKeyLabel->setMinimumWidth(80);
+    apiKeyEdit = new QLineEdit(contentWidget);
+    apiKeyEdit->setPlaceholderText("请输入API Key");
+    apiKeyEdit->setEchoMode(QLineEdit::Password);
+    apiKeyLayout->addWidget(apiKeyLabel);
+    apiKeyLayout->addWidget(apiKeyEdit);
+    aiModelLayout->addLayout(apiKeyLayout);
+
+    QHBoxLayout *endpointLayout = new QHBoxLayout();
+    QLabel *endpointLabel = new QLabel("API地址:", contentWidget);
+    endpointLabel->setMinimumWidth(80);
+    apiEndpointEdit = new QLineEdit(contentWidget);
+    apiEndpointEdit->setPlaceholderText("留空使用默认地址");
+    endpointLayout->addWidget(endpointLabel);
+    endpointLayout->addWidget(apiEndpointEdit);
+    aiModelLayout->addLayout(endpointLayout);
+
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    buttonLayout->setSpacing(10);
+    
+    testAiBtn = new QPushButton("🔗 测试连接", contentWidget);
+    testAiBtn->setStyleSheet(
+        "QPushButton { background-color: #9b59b6; color: white; padding: 10px 20px; border-radius: 5px; } "
+        "QPushButton:hover { background-color: #8e44ad; }"
     );
-    connect(openAISettingsBtn, &QPushButton::clicked, this, &SettingsWidget::onOpenAISettings);
-    aiConfigLayout->addWidget(openAISettingsBtn);
+    connect(testAiBtn, &QPushButton::clicked, this, &SettingsWidget::onTestAIConnection);
+    buttonLayout->addWidget(testAiBtn);
 
-    layout->addWidget(aiConfigGroup);
+    saveAiBtn = new QPushButton("💾 保存配置", contentWidget);
+    saveAiBtn->setStyleSheet(
+        "QPushButton { background-color: #27ae60; color: white; padding: 10px 20px; border-radius: 5px; } "
+        "QPushButton:hover { background-color: #229954; }"
+    );
+    connect(saveAiBtn, &QPushButton::clicked, this, &SettingsWidget::onSaveAIConfig);
+    buttonLayout->addWidget(saveAiBtn);
 
-    QGroupBox *aiFeaturesGroup = new QGroupBox("AI功能", page);
+    chatTestBtn = new QPushButton("💬 Chat测试", contentWidget);
+    chatTestBtn->setStyleSheet(
+        "QPushButton { background-color: #e67e22; color: white; padding: 10px 20px; border-radius: 5px; } "
+        "QPushButton:hover { background-color: #d35400; }"
+    );
+    connect(chatTestBtn, &QPushButton::clicked, this, &SettingsWidget::onChatTestClicked);
+    buttonLayout->addWidget(chatTestBtn);
+    
+    buttonLayout->addStretch();
+    aiModelLayout->addLayout(buttonLayout);
+
+    aiStatusLabel = new QLabel("", contentWidget);
+    aiStatusLabel->setStyleSheet("padding: 8px; border-radius: 4px;");
+    aiModelLayout->addWidget(aiStatusLabel);
+
+    QLabel *aiHelpLabel = new QLabel(
+        "📖 API Key获取指南:\n"
+        "• MiniMax: https://platform.minimaxi.com\n"
+        "• DeepSeek: https://siliconflow.cn (推荐，免费100万tokens)\n"
+        "• 通义千问: https://dashscope.aliyun.com\n"
+        "• 讯飞星火: https://console.xfyun.cn\n"
+        "• OpenAI: https://platform.openai.com (需代理)\n"
+        "• Claude: https://console.anthropic.com (需代理)\n"
+        "• Gemini: https://aistudio.google.com/app/apikey (需代理)\n\n"
+        "💡 安全提示: API Key将加密存储在本地配置文件中"
+    );
+    aiHelpLabel->setStyleSheet("padding: 12px; color: #666; font-size: 11px; background-color: #f5f5f5; border-radius: 5px;");
+    aiHelpLabel->setWordWrap(true);
+    aiModelLayout->addWidget(aiHelpLabel);
+
+    layout->addWidget(aiModelGroup);
+
+    QGroupBox *aiFeaturesGroup = new QGroupBox("⚡ AI功能开关", contentWidget);
     QVBoxLayout *aiFeaturesLayout = new QVBoxLayout(aiFeaturesGroup);
     aiFeaturesLayout->setSpacing(10);
 
     QCheckBox *taskAnalysisCheck = new QCheckBox("启用智能任务分析", aiFeaturesGroup);
     taskAnalysisCheck->setChecked(true);
+    taskAnalysisCheck->setToolTip("在新建任务时启用AI分析功能");
     aiFeaturesLayout->addWidget(taskAnalysisCheck);
 
     QCheckBox *reportGenCheck = new QCheckBox("启用AI报告生成", aiFeaturesGroup);
     reportGenCheck->setChecked(true);
+    reportGenCheck->setToolTip("在生成周报/月报/季报时启用AI内容生成");
     aiFeaturesLayout->addWidget(reportGenCheck);
 
     QCheckBox *autoSuggestCheck = new QCheckBox("启用智能建议", aiFeaturesGroup);
     autoSuggestCheck->setChecked(false);
+    autoSuggestCheck->setToolTip("根据工作日志智能推荐下一步操作");
     aiFeaturesLayout->addWidget(autoSuggestCheck);
 
     layout->addWidget(aiFeaturesGroup);
 
-    QGroupBox *aiPromptGroup = new QGroupBox("提示词模板", page);
-    QVBoxLayout *promptLayout = new QVBoxLayout(aiPromptGroup);
-    promptLayout->setSpacing(10);
-
-    QLabel *promptHint = new QLabel("自定义AI提示词模板", page);
-    promptHint->setStyleSheet("color: #666; font-size: 12px;");
-    promptLayout->addWidget(promptHint);
-
-    QTextEdit *promptEdit = new QTextEdit(page);
-    promptEdit->setPlaceholderText("在此输入自定义提示词模板...");
-    promptEdit->setMaximumHeight(150);
-    promptLayout->addWidget(promptEdit);
-
-    QPushButton *savePromptBtn = new QPushButton("保存模板", page);
-    savePromptBtn->setStyleSheet(
-        "QPushButton { background-color: #4caf50; color: white; padding: 8px 20px; border-radius: 5px; } "
-        "QPushButton:hover { background-color: #43a047; }"
-    );
-    promptLayout->addWidget(savePromptBtn, 0, Qt::AlignRight);
-
-    layout->addWidget(aiPromptGroup);
-
     layout->addStretch();
+    
+    scrollArea->setWidget(contentWidget);
+    
+    QVBoxLayout *pageLayout = new QVBoxLayout(page);
+    pageLayout->setContentsMargins(0, 0, 0, 0);
+    pageLayout->addWidget(scrollArea);
+    
+    loadAISettings();
+    
     return page;
+}
+
+void SettingsWidget::loadAISettings()
+{
+    QSettings settings("PonyWork", "WorkLog");
+    QString model = settings.value("ai_model", "qwen").toString();
+    QString endpoint = settings.value("ai_endpoint", "").toString();
+
+    int index = aiModelCombo->findData(model);
+    if (index >= 0) {
+        aiModelCombo->setCurrentIndex(index);
+    }
+
+    apiEndpointEdit->setText(endpoint);
+
+    QString apiKey = loadSavedAPIKey();
+    if (!apiKey.isEmpty()) {
+        apiKeyEdit->setText(apiKey);
+    }
+}
+
+QString SettingsWidget::loadSavedAPIKey()
+{
+    QSettings settings("PonyWork", "WorkLog");
+    QString encryptedKey = settings.value("ai_api_key", "").toString();
+    if (encryptedKey.isEmpty()) {
+        return "";
+    }
+    QByteArray data = QByteArray::fromBase64(encryptedKey.toUtf8());
+    QByteArray key = QCryptographicHash::hash(QByteArray("PonyWorkAI").append(QHostInfo::localHostName().toUtf8()), QCryptographicHash::Sha256);
+    QByteArray decrypted;
+    for (int i = 0; i < data.size(); ++i) {
+        decrypted.append(data.at(i) ^ key.at(i % key.size()));
+    }
+    return QString::fromUtf8(decrypted);
+}
+
+void SettingsWidget::onAISettingsChanged()
+{
+    QString model = aiModelCombo->currentData().toString();
+    QString endpoint = getDefaultEndpoint(model);
+    apiEndpointEdit->setPlaceholderText(endpoint.isEmpty() ? "留空使用默认地址" : endpoint);
+}
+
+void SettingsWidget::onSaveAIConfig()
+{
+    QString model = aiModelCombo->currentData().toString();
+    QString apiKey = apiKeyEdit->text().trimmed();
+    QString endpoint = apiEndpointEdit->text().trimmed();
+
+    if (apiKey.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请输入API Key");
+        return;
+    }
+
+    QSettings settings("PonyWork", "WorkLog");
+    settings.setValue("ai_model", model);
+
+    QByteArray key = QCryptographicHash::hash(QByteArray("PonyWorkAI").append(QHostInfo::localHostName().toUtf8()), QCryptographicHash::Sha256);
+    QByteArray data = apiKey.toUtf8();
+    QByteArray encrypted;
+    for (int i = 0; i < data.size(); ++i) {
+        encrypted.append(data.at(i) ^ key.at(i % key.size()));
+    }
+    settings.setValue("ai_api_key", QString::fromUtf8(encrypted.toBase64()));
+
+    settings.setValue("ai_endpoint", endpoint);
+
+    aiStatusLabel->setText("✅ 配置已保存");
+    aiStatusLabel->setStyleSheet("padding: 8px; color: #27ae60; background-color: #e8f5e9; border-radius: 4px;");
+    QTimer::singleShot(2000, this, [this]() {
+        aiStatusLabel->setText("");
+    });
+}
+
+void SettingsWidget::onTestAIConnection()
+{
+    QString model = aiModelCombo->currentData().toString();
+    QString apiKey = apiKeyEdit->text().trimmed();
+    QString endpoint = apiEndpointEdit->text().trimmed();
+
+    if (apiKey.isEmpty()) {
+        aiStatusLabel->setText("❌ 请先输入API Key");
+        aiStatusLabel->setStyleSheet("padding: 8px; color: #e74c3c; background-color: #ffebee; border-radius: 4px;");
+        return;
+    }
+
+    if (model == "local") {
+        aiStatusLabel->setText("ℹ️ 使用本地关键词匹配，无需测试");
+        aiStatusLabel->setStyleSheet("padding: 8px; color: #3498db; background-color: #e3f2fd; border-radius: 4px;");
+        return;
+    }
+
+    if (endpoint.isEmpty()) {
+        endpoint = getDefaultEndpoint(model);
+    }
+
+    if (endpoint.isEmpty()) {
+        aiStatusLabel->setText("❌ 未配置API地址");
+        aiStatusLabel->setStyleSheet("padding: 8px; color: #e74c3c; background-color: #ffebee; border-radius: 4px;");
+        return;
+    }
+
+    testAiBtn->setEnabled(false);
+    aiStatusLabel->setText("🔄 测试连接中...");
+    aiStatusLabel->setStyleSheet("padding: 8px; color: #3498db; background-color: #e3f2fd; border-radius: 4px;");
+
+    if (!networkManager) {
+        networkManager = new QNetworkAccessManager(this);
+    }
+
+    QNetworkRequest request;
+    QUrl url(endpoint);
+    if (!url.isValid()) {
+        aiStatusLabel->setText("❌ API地址无效");
+        aiStatusLabel->setStyleSheet("padding: 8px; color: #e74c3c; background-color: #ffebee; border-radius: 4px;");
+        testAiBtn->setEnabled(true);
+        return;
+    }
+    request.setUrl(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setRawHeader("Authorization", QString("Bearer %1").arg(apiKey).toUtf8());
+
+    QJsonObject json;
+    json["model"] = getModelName(model);
+    QJsonArray messages;
+    QJsonObject msg;
+    msg["role"] = "user";
+    msg["content"] = "Hello";
+    messages.append(msg);
+    json["messages"] = messages;
+    json["max_tokens"] = 10;
+    json["stream"] = false;
+
+    if (model == "qwen") {
+        QJsonObject input;
+        input["messages"] = json.take("messages");
+        json["input"] = input;
+        json.remove("max_tokens");
+        json.remove("stream");
+        json["parameters"] = QJsonObject({
+            {"temperature", 0.7},
+            {"max_tokens", 10},
+            {"result_format", "message"}
+        });
+    }
+
+    QJsonDocument doc(json);
+    qDebug() << "AI Test Request JSON:" << doc.toJson(QJsonDocument::Indented);
+
+    QPointer<QNetworkReply> reply = networkManager->post(request, doc.toJson());
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, endpoint, apiKey, model]() {
+        if (!reply) return;
+
+        testAiBtn->setEnabled(true);
+
+        qDebug() << "AI Test connection response:";
+        qDebug() << "  URL:" << endpoint;
+        qDebug() << "  Error:" << reply->error();
+        qDebug() << "  ErrorString:" << reply->errorString();
+
+        if (reply->error() != QNetworkReply::NoError) {
+            QString errorMsg = reply->errorString();
+            aiStatusLabel->setText(QString("❌ 连接失败: %1").arg(errorMsg));
+            aiStatusLabel->setStyleSheet("padding: 8px; color: #e74c3c; background-color: #ffebee; border-radius: 4px;");
+        } else {
+            int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            qDebug() << "  StatusCode:" << statusCode;
+
+            if (statusCode == 200) {
+                aiStatusLabel->setText("✅ 连接成功!");
+                aiStatusLabel->setStyleSheet("padding: 8px; color: #27ae60; background-color: #e8f5e9; border-radius: 4px;");
+            } else {
+                QByteArray data = reply->readAll();
+                qDebug() << "  Response:" << data;
+                aiStatusLabel->setText(QString("❌ 错误码: %1").arg(statusCode));
+                aiStatusLabel->setStyleSheet("padding: 8px; color: #e74c3c; background-color: #ffebee; border-radius: 4px;");
+            }
+        }
+        reply->deleteLater();
+    });
+
+    QTimer::singleShot(10000, this, [this, reply]() {
+        if (reply && reply->isRunning()) {
+            reply->abort();
+            testAiBtn->setEnabled(true);
+            aiStatusLabel->setText("❌ 连接超时");
+            aiStatusLabel->setStyleSheet("padding: 8px; color: #e74c3c; background-color: #ffebee; border-radius: 4px;");
+        }
+    });
+}
+
+void SettingsWidget::onChatTestClicked()
+{
+    QString apiKey = apiKeyEdit->text().trimmed();
+    if (apiKey.isEmpty()) {
+        QMessageBox::warning(this, "提示", "请先配置API Key");
+        return;
+    }
+
+    ChatTestDialog *chatDialog = new ChatTestDialog(this);
+    chatDialog->exec();
+    delete chatDialog;
+}
+
+QString SettingsWidget::getDefaultEndpoint(const QString &model)
+{
+    static QMap<QString, QString> endpoints = {
+        {"minimax", "https://api.minimax.chat/v1/text/chatcompletion_v2"},
+        {"gpt35", "https://api.openai.com/v1/chat/completions"},
+        {"gpt4", "https://api.openai.com/v1/chat/completions"},
+        {"claude", "https://api.anthropic.com/v1/messages"},
+        {"gemini", "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"},
+        {"qwen", "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"},
+        {"spark", "https://spark-api.xfyun.com/v3.5/chat"},
+        {"deepseek", "https://api.siliconflow.cn/v1/chat/completions"}
+    };
+    return endpoints.value(model, "");
+}
+
+QString SettingsWidget::getModelName(const QString &model)
+{
+    static QMap<QString, QString> models = {
+        {"minimax", "abab6.5s-chat"},
+        {"gpt35", "gpt-3.5-turbo"},
+        {"gpt4", "gpt-4"},
+        {"claude", "claude-3-opus-20240229"},
+        {"gemini", "gemini-pro"},
+        {"qwen", "qwen-turbo"},
+        {"spark", "generalv3.5"},
+        {"deepseek", "deepseek-ai/DeepSeek-V2-Chat"}
+    };
+    return models.value(model, "");
 }
 
 QWidget *SettingsWidget::createStartupPage()
