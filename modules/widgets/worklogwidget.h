@@ -102,13 +102,13 @@ private:
                                QLabel *aiStatusLabel, QPushButton *aiBtn);
     QString getExistingCategories();
     QString getAIServiceKey();
-    void handleAIResponse(QNetworkReply *reply, const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
+    void handleAIResponse(QPointer<QNetworkReply> reply, const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
                           QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
                           QLabel *aiStatusLabel, QPushButton *aiBtn, const QString &logFileName,
                           QLineEdit *tagsEdit = nullptr);
     void analyzeWithLocalAI(const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
                              QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
-                             QLabel *aiStatusLabel);
+                             QLabel *aiStatusLabel, QLineEdit *tagsEdit = nullptr);
     void parseAIResponse(const QString &response, QLineEdit *titleEdit, QTextEdit *descEdit,
                          QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
                          QLineEdit *tagsEdit);

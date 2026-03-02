@@ -2175,7 +2175,7 @@ void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit
     QString currentModel = getCurrentAIModel();
     
     if (currentModel == "local") {
-        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel);
+        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, tagsEdit);
         return;
     }
     
@@ -2294,14 +2294,17 @@ void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit
     request.setRawHeader("Authorization", QString("Bearer %1").arg(apiKey).toUtf8());
     
     QNetworkReply *reply = networkManager->post(request, postData);
+    QPointer<QNetworkReply> replyPtr(reply);
     
-    connect(reply, &QNetworkReply::finished, this, [this, reply, title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, logFileName, tagsEdit]() {
-        handleAIResponse(reply, title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, logFileName, tagsEdit);
+    connect(reply, &QNetworkReply::finished, this, [this, replyPtr, title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, logFileName, tagsEdit]() {
+        if (replyPtr) {
+            handleAIResponse(replyPtr, title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, logFileName, tagsEdit);
+        }
     });
     
-    QTimer::singleShot(10000, this, [this, reply, aiStatusLabel, aiBtn]() {
-        if (reply && reply->isRunning()) {
-            reply->abort();
+    QTimer::singleShot(10000, this, [this, replyPtr, aiStatusLabel, aiBtn]() {
+        if (replyPtr && replyPtr->isRunning()) {
+            replyPtr->abort();
             aiStatusLabel->setText("❌ 请求超时");
             aiBtn->setEnabled(true);
             QMessageBox::warning(this, "超时", "AI服务响应超时，请检查网络连接");
@@ -2390,11 +2393,15 @@ QString WorkLogWidget::getModelNameForAPI(const QString &model)
     return models.value(model, "");
 }
 
-void WorkLogWidget::handleAIResponse(QNetworkReply *reply, const QString &title, QLineEdit *titleEdit, 
+void WorkLogWidget::handleAIResponse(QPointer<QNetworkReply> reply, const QString &title, QLineEdit *titleEdit, 
                                       QTextEdit *descEdit, QComboBox *categoryCombo, QComboBox *priorityCombo,
                                       QDoubleSpinBox *durationSpin, QLabel *aiStatusLabel, QPushButton *aiBtn,
                                       const QString &logFileName, QLineEdit *tagsEdit)
 {
+    if (!reply) {
+        return;
+    }
+    
     aiBtn->setEnabled(true);
     
     if (reply->error() != QNetworkReply::NoError) {
@@ -2414,7 +2421,7 @@ void WorkLogWidget::handleAIResponse(QNetworkReply *reply, const QString &title,
             logFile.close();
         }
         
-        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel);
+        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, tagsEdit);
         return;
     }
     
@@ -2438,7 +2445,7 @@ void WorkLogWidget::handleAIResponse(QNetworkReply *reply, const QString &title,
     
     if (doc.isNull()) {
         aiStatusLabel->setText("⚠️ 解析失败");
-        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel);
+        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, tagsEdit);
         return;
     }
     
@@ -2450,7 +2457,7 @@ void WorkLogWidget::handleAIResponse(QNetworkReply *reply, const QString &title,
             QString errorMsg = rootObj["base_resp"].toObject()["status_msg"].toString();
             aiStatusLabel->setText("❌ API错误: " + errorMsg);
             qDebug() << "AI API Error:" << errorMsg;
-            analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel);
+            analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, tagsEdit);
             return;
         }
     }
@@ -2463,7 +2470,7 @@ void WorkLogWidget::handleAIResponse(QNetworkReply *reply, const QString &title,
         choicesObj = rootObj["choices"].toArray()[0].toObject();
     } else {
         aiStatusLabel->setText("⚠️ 无返回内容");
-        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel);
+        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, tagsEdit);
         return;
     }
     
@@ -2471,7 +2478,7 @@ void WorkLogWidget::handleAIResponse(QNetworkReply *reply, const QString &title,
     
     if (content.isEmpty()) {
         aiStatusLabel->setText("⚠️ 内容为空");
-        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel);
+        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, tagsEdit);
         return;
     }
     
@@ -2479,7 +2486,9 @@ void WorkLogWidget::handleAIResponse(QNetworkReply *reply, const QString &title,
     
     aiStatusLabel->setText("✅ 已填充");
     QTimer::singleShot(2000, aiStatusLabel, [aiStatusLabel]() {
-        aiStatusLabel->setText("");
+        if (aiStatusLabel) {
+            aiStatusLabel->setText("");
+        }
     });
     
     reply->deleteLater();
@@ -2487,7 +2496,7 @@ void WorkLogWidget::handleAIResponse(QNetworkReply *reply, const QString &title,
 
 void WorkLogWidget::analyzeWithLocalAI(const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
                                          QComboBox *categoryCombo, QComboBox *priorityCombo, 
-                                         QDoubleSpinBox *durationSpin, QLabel *aiStatusLabel)
+                                         QDoubleSpinBox *durationSpin, QLabel *aiStatusLabel, QLineEdit *tagsEdit)
 {
     QString lowerTitle = title.toLower();
     QString description;
@@ -2624,12 +2633,14 @@ void WorkLogWidget::analyzeWithLocalAI(const QString &title, QLineEdit *titleEdi
     
     durationSpin->setValue(hours);
     
-    int categoryIndex = categoryCombo->findText(categoryName);
+    int categoryIndex = categoryCombo->findText("📁 " + categoryName);
+    if (categoryIndex < 0) {
+        categoryIndex = categoryCombo->findText(categoryName);
+    }
     if (categoryIndex >= 0) {
         categoryCombo->setCurrentIndex(categoryIndex);
     }
     
-    QLineEdit *tagsEdit = qobject_cast<QLineEdit*>(descEdit->parent()->findChild<QLineEdit*>());
     if (tagsEdit && !tags.isEmpty()) {
         tagsEdit->setText(tags.join(", "));
     }
@@ -2644,12 +2655,16 @@ void WorkLogWidget::parseAIResponse(const QString &response, QLineEdit *titleEdi
                                     QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
                                     QLineEdit *tagsEdit)
 {
+    if (!descEdit || !categoryCombo || !priorityCombo || !durationSpin) {
+        return;
+    }
+    
     QString jsonStr = response;
     jsonStr = jsonStr.replace("```json", "").replace("```", "").trimmed();
     
     QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8());
     if (doc.isNull() || !doc.isObject()) {
-        analyzeWithLocalAI(titleEdit->text(), titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, nullptr);
+        analyzeWithLocalAI(titleEdit ? titleEdit->text() : QString(), titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, nullptr, tagsEdit);
         return;
     }
     
@@ -2701,7 +2716,10 @@ void WorkLogWidget::parseAIResponse(const QString &response, QLineEdit *titleEdi
     
     if (obj.contains("category")) {
         QString category = obj["category"].toString();
-        int index = categoryCombo->findText(category);
+        int index = categoryCombo->findText("📁 " + category);
+        if (index < 0) {
+            index = categoryCombo->findText(category);
+        }
         if (index >= 0) {
             categoryCombo->setCurrentIndex(index);
         }
