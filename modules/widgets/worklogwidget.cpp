@@ -2172,6 +2172,10 @@ void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit
                                        QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
                                        QLabel *aiStatusLabel, QPushButton *aiBtn, QLineEdit *tagsEdit)
 {
+    if (!titleEdit || !descEdit || !categoryCombo || !priorityCombo || !durationSpin) {
+        return;
+    }
+    
     QString currentModel = getCurrentAIModel();
     
     if (currentModel == "local") {
@@ -2183,8 +2187,12 @@ void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit
         networkManager = new QNetworkAccessManager(this);
     }
     
-    aiBtn->setEnabled(false);
-    aiStatusLabel->setText("🤖 AI分析中...");
+    if (aiBtn) {
+        aiBtn->setEnabled(false);
+    }
+    if (aiStatusLabel) {
+        aiStatusLabel->setText("🤖 AI分析中...");
+    }
     
     QString prompt = QString("你是一个专业的任务管理助手。请根据任务标题进行深度分析，生成详细的任务信息。\n\n"
                             "任务标题：%1\n\n"
@@ -2221,8 +2229,12 @@ void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit
     
     QString apiKey = getAPIKey();
     if (apiKey.isEmpty()) {
-        aiStatusLabel->setText("⚠️ 请先配置API Key");
-        aiBtn->setEnabled(true);
+        if (aiStatusLabel) {
+            aiStatusLabel->setText("⚠️ 请先配置API Key");
+        }
+        if (aiBtn) {
+            aiBtn->setEnabled(true);
+        }
         QMessageBox::warning(nullptr, "提示", "请先在设置中配置AI API Key");
         return;
     }
@@ -2305,8 +2317,12 @@ void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit
     QTimer::singleShot(10000, this, [this, replyPtr, aiStatusLabel, aiBtn]() {
         if (replyPtr && replyPtr->isRunning()) {
             replyPtr->abort();
-            aiStatusLabel->setText("❌ 请求超时");
-            aiBtn->setEnabled(true);
+            if (aiStatusLabel) {
+                aiStatusLabel->setText("❌ 请求超时");
+            }
+            if (aiBtn) {
+                aiBtn->setEnabled(true);
+            }
             QMessageBox::warning(this, "超时", "AI服务响应超时，请检查网络连接");
         }
     });
@@ -2402,11 +2418,15 @@ void WorkLogWidget::handleAIResponse(QPointer<QNetworkReply> reply, const QStrin
         return;
     }
     
-    aiBtn->setEnabled(true);
+    if (aiBtn) {
+        aiBtn->setEnabled(true);
+    }
     
     if (reply->error() != QNetworkReply::NoError) {
         QString errorMsg = reply->errorString();
-        aiStatusLabel->setText("❌ 调用失败");
+        if (aiStatusLabel) {
+            aiStatusLabel->setText("❌ 调用失败");
+        }
         qDebug() << "AI API Error:" << errorMsg;
         
         QFile logFile(logFileName);
@@ -2444,7 +2464,9 @@ void WorkLogWidget::handleAIResponse(QPointer<QNetworkReply> reply, const QStrin
     QJsonDocument doc = QJsonDocument::fromJson(responseData);
     
     if (doc.isNull()) {
-        aiStatusLabel->setText("⚠️ 解析失败");
+        if (aiStatusLabel) {
+            aiStatusLabel->setText("⚠️ 解析失败");
+        }
         analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, tagsEdit);
         return;
     }
@@ -2455,7 +2477,9 @@ void WorkLogWidget::handleAIResponse(QPointer<QNetworkReply> reply, const QStrin
         int statusCode = rootObj["base_resp"].toObject()["status_code"].toInt();
         if (statusCode != 0) {
             QString errorMsg = rootObj["base_resp"].toObject()["status_msg"].toString();
-            aiStatusLabel->setText("❌ API错误: " + errorMsg);
+            if (aiStatusLabel) {
+                aiStatusLabel->setText("❌ API错误: " + errorMsg);
+            }
             qDebug() << "AI API Error:" << errorMsg;
             analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, tagsEdit);
             return;
@@ -2469,7 +2493,9 @@ void WorkLogWidget::handleAIResponse(QPointer<QNetworkReply> reply, const QStrin
     } else if (rootObj.contains("choices")) {
         choicesObj = rootObj["choices"].toArray()[0].toObject();
     } else {
-        aiStatusLabel->setText("⚠️ 无返回内容");
+        if (aiStatusLabel) {
+            aiStatusLabel->setText("⚠️ 无返回内容");
+        }
         analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, tagsEdit);
         return;
     }
@@ -2477,19 +2503,23 @@ void WorkLogWidget::handleAIResponse(QPointer<QNetworkReply> reply, const QStrin
     QString content = choicesObj["message"].toObject()["content"].toString();
     
     if (content.isEmpty()) {
-        aiStatusLabel->setText("⚠️ 内容为空");
+        if (aiStatusLabel) {
+            aiStatusLabel->setText("⚠️ 内容为空");
+        }
         analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, tagsEdit);
         return;
     }
     
     parseAIResponse(content, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, tagsEdit);
     
-    aiStatusLabel->setText("✅ 已填充");
-    QTimer::singleShot(2000, aiStatusLabel, [aiStatusLabel]() {
-        if (aiStatusLabel) {
-            aiStatusLabel->setText("");
-        }
-    });
+    if (aiStatusLabel) {
+        aiStatusLabel->setText("✅ 已填充");
+        QTimer::singleShot(2000, aiStatusLabel, [aiStatusLabel]() {
+            if (aiStatusLabel) {
+                aiStatusLabel->setText("");
+            }
+        });
+    }
     
     reply->deleteLater();
 }
@@ -2498,6 +2528,10 @@ void WorkLogWidget::analyzeWithLocalAI(const QString &title, QLineEdit *titleEdi
                                          QComboBox *categoryCombo, QComboBox *priorityCombo, 
                                          QDoubleSpinBox *durationSpin, QLabel *aiStatusLabel, QLineEdit *tagsEdit)
 {
+    if (!descEdit || !categoryCombo || !priorityCombo || !durationSpin) {
+        return;
+    }
+    
     QString lowerTitle = title.toLower();
     QString description;
     QString priorityStr = "中";
@@ -2645,10 +2679,14 @@ void WorkLogWidget::analyzeWithLocalAI(const QString &title, QLineEdit *titleEdi
         tagsEdit->setText(tags.join(", "));
     }
     
-    aiStatusLabel->setText("✅ 已填充");
-    QTimer::singleShot(2000, aiStatusLabel, [aiStatusLabel]() {
-        aiStatusLabel->setText("");
-    });
+    if (aiStatusLabel) {
+        aiStatusLabel->setText("✅ 已填充");
+        QTimer::singleShot(2000, aiStatusLabel, [aiStatusLabel]() {
+            if (aiStatusLabel) {
+                aiStatusLabel->setText("");
+            }
+        });
+    }
 }
 
 void WorkLogWidget::parseAIResponse(const QString &response, QLineEdit *titleEdit, QTextEdit *descEdit,
