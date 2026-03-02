@@ -23,6 +23,13 @@
 #include <QPointer>
 #include <QFile>
 #include <QDir>
+#include <QPrinter>
+#include <QTextDocument>
+#include <QMarginsF>
+#include <QPageSize>
+#include <QPageLayout>
+#include <QRegularExpression>
+#include <QCoreApplication>
 using namespace QtCharts;
 
 WorkLogWidget::WorkLogWidget(Database *database, QWidget *parent)
@@ -731,7 +738,7 @@ void WorkLogWidget::setupUI()
     // 报告按钮
     QHBoxLayout *reportBtnLayout = new QHBoxLayout();
     reportBtnLayout->setSpacing(6);
-    generateReportBtn = new QPushButton("📊 生成周报/月报", this);
+    generateReportBtn = new QPushButton("📊 生成报告", this);
     generateReportBtn->setProperty("cssClass", "btn-primary");
     exportBtn = new QPushButton("💾 导出报告", this);
     exportBtn->setProperty("cssClass", "btn-secondary");
@@ -1420,9 +1427,14 @@ void WorkLogWidget::onCategorySelectionChanged()
 
 void WorkLogWidget::onGenerateReport()
 {
+    if (!checkPermission("generate_report")) {
+        QMessageBox::warning(this, "权限不足", "您没有生成报告的权限");
+        return;
+    }
+    
     bool ok;
     QString reportType = QInputDialog::getItem(this, "选择报告类型", "请选择要生成的报告类型:",
-                                               {"周报", "月报"}, 0, false, &ok);
+                                               {"周报", "月报", "季报"}, 0, false, &ok);
     if (!ok) return;
 
     QDate startDate, endDate;
@@ -1431,36 +1443,106 @@ void WorkLogWidget::onGenerateReport()
         int dayOfWeek = today.dayOfWeek();
         startDate = today.addDays(-(dayOfWeek - 1));
         endDate = startDate.addDays(6);
-    } else {
+    } else if (reportType == "月报") {
         QDate today = QDate::currentDate();
         startDate = QDate(today.year(), today.month(), 1);
         endDate = QDate(today.year(), today.month(), today.daysInMonth());
+    } else {
+        QDate today = QDate::currentDate();
+        int currentMonth = today.month();
+        int quarter = (currentMonth - 1) / 3 + 1;
+        int startMonth = (quarter - 1) * 3 + 1;
+        startDate = QDate(today.year(), startMonth, 1);
+        endDate = QDate(today.year(), startMonth + 2, 1).addDays(-1);
     }
 
-    QString reportContent;
-    if (reportType == "周报") {
-        reportContent = generateWeeklyReport(QDateTime(startDate), QDateTime(endDate));
-    } else {
-        reportContent = generateMonthlyReport(QDateTime(startDate), QDateTime(endDate));
+    QString cacheKey = QString("%1_%2_%3").arg(reportType).arg(startDate.toString("yyyyMMdd")).arg(endDate.toString("yyyyMMdd"));
+    QString reportContent = getCachedReport(cacheKey);
+    
+    bool fromCache = !reportContent.isEmpty();
+    
+    if (!fromCache) {
+        if (reportType == "周报") {
+            reportContent = generateWeeklyReport(QDateTime(startDate), QDateTime(endDate));
+        } else if (reportType == "月报") {
+            reportContent = generateMonthlyReport(QDateTime(startDate), QDateTime(endDate));
+        } else {
+            reportContent = generateQuarterlyReport(QDateTime(startDate), QDateTime(endDate));
+        }
+        cacheReport(cacheKey, reportContent);
+        logOperation("generate_report", QString("类型: %1, 时间范围: %2 - %3, 来源: %4")
+                    .arg(reportType)
+                    .arg(startDate.toString("yyyy-MM-dd"))
+                    .arg(endDate.toString("yyyy-MM-dd"))
+                    .arg(fromCache ? "缓存" : "新生成"));
     }
 
     QDialog reportDialog(this);
     reportDialog.setWindowTitle(reportType);
-    reportDialog.resize(800, 600);
+    reportDialog.resize(900, 700);
 
     QVBoxLayout *layout = new QVBoxLayout(&reportDialog);
 
-    QTextEdit *reportEdit = new QTextEdit(&reportDialog);
-    reportEdit->setPlainText(reportContent);
-    reportEdit->setReadOnly(true);
-    layout->addWidget(reportEdit);
-
     QHBoxLayout *btnLayout = new QHBoxLayout();
+    QPushButton *aiGenerateBtn = new QPushButton("🤖 AI生成分析", &reportDialog);
+    QPushButton *exportPDFBtn = new QPushButton("📄 导出PDF", &reportDialog);
+    QPushButton *exportWordBtn = new QPushButton("📝 导出Word", &reportDialog);
+    QPushButton *exportMarkdownBtn = new QPushButton("📋 导出Markdown", &reportDialog);
     QPushButton *copyBtn = new QPushButton("复制", &reportDialog);
     QPushButton *closeBtn = new QPushButton("关闭", &reportDialog);
+    btnLayout->addWidget(aiGenerateBtn);
+    btnLayout->addWidget(exportPDFBtn);
+    btnLayout->addWidget(exportWordBtn);
+    btnLayout->addWidget(exportMarkdownBtn);
     btnLayout->addWidget(copyBtn);
     btnLayout->addWidget(closeBtn);
     layout->addLayout(btnLayout);
+
+    QLabel *cacheLabel = new QLabel(&reportDialog);
+    if (fromCache) {
+        cacheLabel->setText("💾 从缓存加载");
+        cacheLabel->setStyleSheet("color: #666; font-size: 11px;");
+    }
+    layout->addWidget(cacheLabel);
+
+    QTextEdit *reportEdit = new QTextEdit(&reportDialog);
+    reportEdit->setPlainText(reportContent);
+    layout->addWidget(reportEdit);
+
+    connect(reportEdit, &QTextEdit::textChanged, [this, cacheLabel, cacheKey]() {
+        clearReportCache();
+        if (cacheLabel) {
+            cacheLabel->setText("✏️ 已编辑");
+        }
+    });
+
+    connect(aiGenerateBtn, &QPushButton::clicked, [this, reportEdit, reportType, reportContent]() {
+        onAIGenerateReport(reportEdit, reportType, reportContent);
+    });
+
+    connect(exportPDFBtn, &QPushButton::clicked, [this, reportEdit, reportType]() {
+        QString defaultName = reportType + "_" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") + ".pdf";
+        QString fileName = QFileDialog::getSaveFileName(this, "导出PDF", defaultName, "PDF文件 (*.pdf)");
+        if (!fileName.isEmpty()) {
+            exportToPDF(reportEdit->toPlainText(), fileName);
+        }
+    });
+
+    connect(exportWordBtn, &QPushButton::clicked, [this, reportEdit, reportType]() {
+        QString defaultName = reportType + "_" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") + ".docx";
+        QString fileName = QFileDialog::getSaveFileName(this, "导出Word", defaultName, "Word文件 (*.docx)");
+        if (!fileName.isEmpty()) {
+            exportToWord(reportEdit->toPlainText(), fileName);
+        }
+    });
+
+    connect(exportMarkdownBtn, &QPushButton::clicked, [this, reportEdit, reportType]() {
+        QString defaultName = reportType + "_" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") + ".md";
+        QString fileName = QFileDialog::getSaveFileName(this, "导出Markdown", defaultName, "Markdown文件 (*.md)");
+        if (!fileName.isEmpty()) {
+            exportToMarkdown(reportEdit->toPlainText(), fileName);
+        }
+    });
 
     connect(copyBtn, &QPushButton::clicked, [reportEdit, this]() {
         reportEdit->selectAll();
@@ -1477,7 +1559,7 @@ void WorkLogWidget::onExportReport()
 {
     bool ok;
     QString reportType = QInputDialog::getItem(this, "选择报告类型", "请选择要导出的报告类型:",
-                                               {"周报", "月报"}, 0, false, &ok);
+                                               {"周报", "月报", "季报"}, 0, false, &ok);
     if (!ok) return;
 
     QDate startDate, endDate;
@@ -1486,17 +1568,26 @@ void WorkLogWidget::onExportReport()
         int dayOfWeek = today.dayOfWeek();
         startDate = today.addDays(-(dayOfWeek - 1));
         endDate = startDate.addDays(6);
-    } else {
+    } else if (reportType == "月报") {
         QDate today = QDate::currentDate();
         startDate = QDate(today.year(), today.month(), 1);
         endDate = QDate(today.year(), today.month(), today.daysInMonth());
+    } else {
+        QDate today = QDate::currentDate();
+        int currentMonth = today.month();
+        int quarter = (currentMonth - 1) / 3 + 1;
+        int startMonth = (quarter - 1) * 3 + 1;
+        startDate = QDate(today.year(), startMonth, 1);
+        endDate = QDate(today.year(), startMonth + 2, 1).addDays(-1);
     }
 
     QString reportContent;
     if (reportType == "周报") {
         reportContent = generateWeeklyReport(QDateTime(startDate), QDateTime(endDate));
-    } else {
+    } else if (reportType == "月报") {
         reportContent = generateMonthlyReport(QDateTime(startDate), QDateTime(endDate));
+    } else {
+        reportContent = generateQuarterlyReport(QDateTime(startDate), QDateTime(endDate));
     }
 
     QString fileName = QFileDialog::getSaveFileName(this, "保存报告",
@@ -2044,7 +2135,13 @@ QString WorkLogWidget::generateWeeklyReport(const QDateTime &startDate, const QD
     report += QString("\n- 完成任务总数：%1\n").arg(totalTasks);
     report += QString("- 总工作时长：%1\n\n").arg(getDurationString(totalHours));
 
-    report += "## 三、下周计划\n\n";
+    report += "## 三、本周工作亮点\n\n";
+    report += "（待补充）\n\n";
+
+    report += "## 四、存在问题与改进\n\n";
+    report += "（待补充）\n\n";
+
+    report += "## 五、下周计划\n\n";
 
     QList<Task> todoTasks = db->getTasksByStatus(TaskStatus_Todo);
     if (todoTasks.isEmpty()) {
@@ -2131,7 +2228,13 @@ QString WorkLogWidget::generateMonthlyReport(const QDateTime &startDate, const Q
     report += QString("\n- 完成任务总数：%1\n").arg(totalTasks);
     report += QString("- 总工作时长：%1\n\n").arg(getDurationString(totalHours));
 
-    report += "## 三、下月计划\n\n";
+    report += "## 三、月度工作亮点\n\n";
+    report += "（待补充）\n\n";
+
+    report += "## 四、存在问题与改进\n\n";
+    report += "（待补充）\n\n";
+
+    report += "## 五、下月计划\n\n";
 
     QList<Task> todoTasks = db->getTasksByStatus(TaskStatus_Todo);
     if (todoTasks.isEmpty()) {
@@ -2152,6 +2255,103 @@ QString WorkLogWidget::generateMonthlyReport(const QDateTime &startDate, const Q
     return report;
 }
 
+QString WorkLogWidget::generateQuarterlyReport(const QDateTime &startDate, const QDateTime &endDate)
+{
+    QString report;
+
+    QDate start = startDate.date();
+    QDate end = endDate.date();
+
+    int quarter = (start.month() - 1) / 3 + 1;
+    QString quarterName = QString("第%1季度").arg(quarter);
+
+    report += QString("# %1工作总结（%2-%3）\n\n")
+        .arg(quarterName)
+        .arg(start.toString("yyyy.MM.dd"))
+        .arg(end.toString("yyyy.MM.dd"));
+
+    QList<Task> tasks = db->getTasksByDateRange(startDate, endDate);
+
+    QHash<QString, QList<Task>> categoryTasks;
+    
+    for (const Task &task : tasks) {
+        if (task.status == TaskStatus_Completed) {
+            Category cat = db->getCategoryById(task.categoryId);
+            QString categoryName = cat.id != -1 ? cat.name : "未分类";
+            categoryTasks[categoryName].append(task);
+        }
+    }
+
+    report += "## 一、季度完成工作\n\n";
+
+    QStringList categoryNames = categoryTasks.keys();
+    std::sort(categoryNames.begin(), categoryNames.end());
+
+    for (const QString &categoryName : categoryNames) {
+        report += QString("### 【%1】\n").arg(categoryName);
+        int index = 1;
+        for (const Task &task : categoryTasks[categoryName]) {
+            report += QString("%1. %2").arg(index).arg(task.title);
+            if (!task.description.isEmpty()) {
+                report += QString(" - %1").arg(task.description);
+            }
+            report += QString("（%1）\n").arg(getDurationString(task.workDuration));
+            index++;
+        }
+        report += "\n";
+    }
+
+    report += "## 二、季度工作统计\n\n";
+
+    int totalTasks = 0;
+    double totalHours = 0.0;
+
+    for (const QString &categoryName : categoryNames) {
+        int count = categoryTasks[categoryName].size();
+        double hours = 0.0;
+        for (const Task &task : categoryTasks[categoryName]) {
+            hours += task.workDuration;
+        }
+
+        report += QString("- %1类：%2个任务，%3\n")
+            .arg(categoryName)
+            .arg(count)
+            .arg(getDurationString(hours));
+
+        totalTasks += count;
+        totalHours += hours;
+    }
+
+    report += QString("\n- 完成任务总数：%1\n").arg(totalTasks);
+    report += QString("- 总工作时长：%1\n\n").arg(getDurationString(totalHours));
+
+    report += "## 四、季度工作亮点\n\n";
+    report += "（待补充）\n\n";
+
+    report += "## 五、存在问题与改进\n\n";
+    report += "（待补充）\n\n";
+
+    report += "## 六、下季度计划\n\n";
+
+    QList<Task> todoTasks = db->getTasksByStatus(TaskStatus_Todo);
+    if (todoTasks.isEmpty()) {
+        report += "暂无待办任务\n";
+    } else {
+        int index = 1;
+        for (const Task &task : todoTasks) {
+            report += QString("%1. %2").arg(index).arg(task.title);
+            if (!task.description.isEmpty()) {
+                report += QString(" - %1").arg(task.description);
+            }
+            report += "\n";
+            index++;
+            if (index > 15) break;
+        }
+    }
+
+    return report;
+}
+
 bool WorkLogWidget::exportToMarkdown(const QString &content, const QString &fileName)
 {
     QFile file(fileName);
@@ -2166,6 +2366,292 @@ bool WorkLogWidget::exportToMarkdown(const QString &content, const QString &file
 
     QMessageBox::information(this, "成功", "报告已成功导出");
     return true;
+}
+
+QString WorkLogWidget::generateReportWithAI(const QString &reportType, const QString &reportData)
+{
+    QString prompt;
+    
+    if (reportType == "季报") {
+        prompt = QString("你是一个专业的项目管理助手。请根据以下季度工作报告数据，生成专业的季度总结分析。\n\n"
+                        "报告数据：\n%1\n\n"
+                        "请生成以下内容（只返回内容，不要有任何其他文字）：\n"
+                        "1. 季度工作亮点：总结本季度的重要成果、突破性进展、关键项目完成情况等（3-5点）\n"
+                        "2. 存在问题与改进：分析工作中遇到的问题、挑战，提出具体的改进措施和建议（3-5点）\n"
+                        "3. 季度总结：对本季度整体工作进行评价，包括工作质量、效率、团队协作等方面（2-3段）\n\n"
+                        "要求：\n"
+                        "- 内容要具体、有数据支撑\n"
+                        "- 语言要专业、简洁\n"
+                        "- 突出重点，避免空泛\n"
+                        "- 每个要点都要有实际意义\n\n"
+                        "只返回内容，不要其他文字。")
+                        .arg(reportData);
+    } else if (reportType == "月报") {
+        prompt = QString("你是一个专业的项目管理助手。请根据以下月度工作报告数据，生成专业的月度总结分析。\n\n"
+                        "报告数据：\n%1\n\n"
+                        "请生成以下内容（只返回内容，不要有任何其他文字）：\n"
+                        "1. 月度工作亮点：总结本月的重要成果、突破性进展、关键项目完成情况等（3-5点）\n"
+                        "2. 存在问题与改进：分析工作中遇到的问题、挑战，提出具体的改进措施和建议（3-5点）\n"
+                        "3. 月度总结：对本月整体工作进行评价，包括工作质量、效率、团队协作等方面（2-3段）\n\n"
+                        "要求：\n"
+                        "- 内容要具体、有数据支撑\n"
+                        "- 语言要专业、简洁\n"
+                        "- 突出重点，避免空泛\n"
+                        "- 每个要点都要有实际意义\n\n"
+                        "只返回内容，不要其他文字。")
+                        .arg(reportData);
+    } else {
+        prompt = QString("你是一个专业的项目管理助手。请根据以下周工作报告数据，生成专业的周总结分析。\n\n"
+                        "报告数据：\n%1\n\n"
+                        "请生成以下内容（只返回内容，不要有任何其他文字）：\n"
+                        "1. 本周工作亮点：总结本周的重要成果、突破性进展、关键项目完成情况等（3-5点）\n"
+                        "2. 存在问题与改进：分析工作中遇到的问题、挑战，提出具体的改进措施和建议（3-5点）\n"
+                        "3. 本周总结：对本周整体工作进行评价，包括工作质量、效率、团队协作等方面（2-3段）\n\n"
+                        "要求：\n"
+                        "- 内容要具体、有数据支撑\n"
+                        "- 语言要专业、简洁\n"
+                        "- 突出重点，避免空泛\n"
+                        "- 每个要点都要有实际意义\n\n"
+                        "只返回内容，不要其他文字。")
+                        .arg(reportData);
+    }
+    
+    return prompt;
+}
+
+void WorkLogWidget::onAIGenerateReport(QTextEdit *reportEdit, const QString &reportType, const QString &reportData)
+{
+    if (!reportEdit) {
+        return;
+    }
+    
+    QString currentModel = getCurrentAIModel();
+    
+    if (currentModel == "local") {
+        QMessageBox::information(this, "提示", "本地AI模式不支持报告生成，请配置在线AI服务");
+        return;
+    }
+    
+    if (!networkManager) {
+        networkManager = new QNetworkAccessManager(this);
+    }
+    
+    QString apiKey = getAPIKey();
+    if (apiKey.isEmpty()) {
+        QMessageBox::warning(this, "提示", "请先在设置中配置AI API Key");
+        return;
+    }
+    
+    QString endpoint = getAPIEndpoint();
+    if (endpoint.isEmpty()) {
+        endpoint = getDefaultEndpoint(currentModel);
+    }
+    
+    QString modelName = getModelNameForAPI(currentModel);
+    QString prompt = generateReportWithAI(reportType, reportData);
+    
+    QJsonObject json;
+    json["model"] = modelName;
+    json["stream"] = false;
+    
+    QJsonArray messages;
+    QJsonObject msg;
+    msg["role"] = "user";
+    msg["content"] = prompt;
+    messages.append(msg);
+    json["messages"] = messages;
+    
+    if (currentModel == "minimax" || currentModel == "qwen" || currentModel == "spark") {
+        json["max_tokens"] = 1024;
+    }
+    
+    if (currentModel == "qwen") {
+        QJsonObject input;
+        input["messages"] = json.take("messages");
+        json["input"] = input;
+        json.remove("max_tokens");
+        json.remove("stream");
+        json["parameters"] = QJsonObject({
+            {"temperature", 0.7},
+            {"max_tokens", 1024},
+            {"result_format", "message"}
+        });
+    }
+    
+    if (currentModel == "spark") {
+        json["max_tokens"] = 1024;
+    }
+    
+    QJsonDocument doc(json);
+    QByteArray postData = doc.toJson();
+    
+    QString logDir = QCoreApplication::applicationDirPath() + "/logs";
+    QDir dir(logDir);
+    if (!dir.exists()) {
+        dir.mkpath(logDir);
+    }
+    
+    QString logFileName = logDir + "/ai_report_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".log";
+    QFile logFile(logFileName);
+    if (logFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&logFile);
+        out.setCodec("UTF-8");
+        out << "=== AI Report Request ===" << "\n";
+        out << "Time: " << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << "\n";
+        out << "Model: " << currentModel << "\n";
+        out << "Endpoint: " << endpoint << "\n";
+        out << "Request JSON:\n" << doc.toJson(QJsonDocument::Indented) << "\n\n";
+        logFile.close();
+    }
+    
+    QNetworkRequest request;
+    request.setUrl(QUrl(endpoint));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setRawHeader("Authorization", QString("Bearer %1").arg(apiKey).toUtf8());
+    
+    QProgressDialog *progressDialog = new QProgressDialog("AI正在生成报告分析...", "取消", 0, 0, this);
+    progressDialog->setWindowModality(Qt::WindowModal);
+    progressDialog->setCancelButton(nullptr);
+    progressDialog->setAttribute(Qt::WA_DeleteOnClose);
+    progressDialog->show();
+    
+    QPointer<QProgressDialog> progressDialogPtr(progressDialog);
+    QNetworkReply *reply = networkManager->post(request, postData);
+    QPointer<QNetworkReply> replyPtr(reply);
+    
+    connect(reply, &QNetworkReply::finished, this, [this, replyPtr, reportEdit, reportType, progressDialogPtr, currentModel, logFileName]() {
+        if (progressDialogPtr) {
+            progressDialogPtr->close();
+        }
+        
+        if (!replyPtr) {
+            return;
+        }
+        
+        if (replyPtr->error() != QNetworkReply::NoError) {
+            QString errorMsg = replyPtr->errorString();
+            QByteArray responseData = replyPtr->readAll();
+            
+            QFile logFile(logFileName);
+            if (logFile.open(QIODevice::Append | QIODevice::Text)) {
+                QTextStream out(&logFile);
+                out.setCodec("UTF-8");
+                out << "\n=== AI Report Response (ERROR) ===" << "\n";
+                out << "Error: " << errorMsg << "\n";
+                out << "Response:\n" << responseData << "\n\n";
+                logFile.close();
+            }
+            
+            QMessageBox::warning(this, "错误", "AI生成失败：" + errorMsg);
+            return;
+        }
+        
+        QByteArray responseData = replyPtr->readAll();
+        
+        {
+            QFile logFile(logFileName);
+            if (logFile.open(QIODevice::Append | QIODevice::Text)) {
+                QTextStream out(&logFile);
+                out.setCodec("UTF-8");
+                out << "\n=== AI Report Response ===" << "\n";
+                out << "Response:\n" << responseData << "\n\n";
+                logFile.close();
+            }
+        }
+        
+        QJsonDocument doc = QJsonDocument::fromJson(responseData);
+        if (doc.isNull()) {
+            QMessageBox::warning(this, "错误", "AI响应解析失败");
+            return;
+        }
+        
+        QJsonObject rootObj = doc.object();
+        
+        QString content;
+        
+        if (currentModel == "qwen") {
+            if (rootObj.contains("output") && rootObj["output"].toObject().contains("choices")) {
+                QJsonArray choices = rootObj["output"].toObject()["choices"].toArray();
+                if (!choices.isEmpty()) {
+                    content = choices[0].toObject()["message"].toObject()["content"].toString();
+                }
+            }
+        } else {
+            QJsonObject choicesObj;
+            if (rootObj.contains("output") && rootObj["output"].toObject().contains("choices")) {
+                choicesObj = rootObj["output"].toObject()["choices"].toArray()[0].toObject();
+            } else if (rootObj.contains("choices")) {
+                choicesObj = rootObj["choices"].toArray()[0].toObject();
+            } else {
+                QMessageBox::warning(this, "错误", "AI返回内容格式错误");
+                return;
+            }
+            
+            content = choicesObj["message"].toObject()["content"].toString();
+        }
+        
+        if (content.isEmpty()) {
+            QMessageBox::warning(this, "错误", "AI返回内容为空");
+            return;
+        }
+        
+        QString currentReport = reportEdit->toPlainText();
+        QString updatedReport;
+        
+        if (reportType == "季报") {
+            int highlightsPos = currentReport.indexOf("## 四、季度工作亮点");
+            if (highlightsPos > 0) {
+                int problemsPos = currentReport.indexOf("## 五、存在问题与改进");
+                if (problemsPos > highlightsPos) {
+                    QString beforeHighlights = currentReport.left(highlightsPos);
+                    QString afterProblems = currentReport.mid(problemsPos);
+                    updatedReport = beforeHighlights + "## 四、季度工作亮点\n\n" + content + "\n\n" + afterProblems;
+                }
+            }
+        } else if (reportType == "月报") {
+            int highlightsPos = currentReport.indexOf("## 三、月度工作亮点");
+            if (highlightsPos > 0) {
+                int problemsPos = currentReport.indexOf("## 四、存在问题与改进");
+                if (problemsPos > highlightsPos) {
+                    QString beforeHighlights = currentReport.left(highlightsPos);
+                    QString afterProblems = currentReport.mid(problemsPos);
+                    updatedReport = beforeHighlights + "## 三、月度工作亮点\n\n" + content + "\n\n" + afterProblems;
+                }
+            }
+        } else {
+            int highlightsPos = currentReport.indexOf("## 三、本周工作亮点");
+            if (highlightsPos > 0) {
+                int problemsPos = currentReport.indexOf("## 四、存在问题与改进");
+                if (problemsPos > highlightsPos) {
+                    QString beforeHighlights = currentReport.left(highlightsPos);
+                    QString afterProblems = currentReport.mid(problemsPos);
+                    updatedReport = beforeHighlights + "## 三、本周工作亮点\n\n" + content + "\n\n" + afterProblems;
+                }
+            }
+        }
+        
+        if (!updatedReport.isEmpty()) {
+            reportEdit->setPlainText(updatedReport);
+            logOperation("ai_generate_report", QString("报告类型: %1, 成功生成AI分析内容").arg(reportType));
+            QMessageBox::information(this, "成功", "AI报告分析已生成，您可以在此基础上进行编辑修改");
+        } else {
+            logOperation("ai_generate_report", QString("报告类型: %1, 插入内容失败").arg(reportType));
+            QMessageBox::warning(this, "警告", "无法将AI内容插入报告，请手动编辑");
+        }
+        
+        replyPtr->deleteLater();
+    });
+    
+    QTimer::singleShot(10000, this, [this, replyPtr, progressDialogPtr]() {
+        if (replyPtr && replyPtr->isRunning()) {
+            replyPtr->abort();
+            if (progressDialogPtr) {
+                progressDialogPtr->close();
+            }
+            logOperation("ai_generate_report", "请求超时");
+            QMessageBox::warning(this, "超时", "AI服务响应超时，请检查网络连接");
+        }
+    });
 }
 
 void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
@@ -2852,4 +3338,161 @@ bool WorkLogWidget::exportToText(const QString &content, const QString &fileName
 
     QMessageBox::information(this, "成功", "报告已成功导出");
     return true;
+}
+
+bool WorkLogWidget::exportToPDF(const QString &content, const QString &fileName)
+{
+    if (!checkPermission("export_report")) {
+        QMessageBox::warning(this, "权限不足", "您没有导出报告的权限");
+        return false;
+    }
+    
+    QTextDocument document;
+    document.setMarkdown(content);
+    
+    QPrinter printer(QPrinter::HighResolution);
+    printer.setOutputFormat(QPrinter::PdfFormat);
+    printer.setOutputFileName(fileName);
+    printer.setPageSize(QPageSize(QPageSize::A4));
+    printer.setPageMargins(QMarginsF(20, 20, 20, 20), QPageLayout::Millimeter);
+    
+    document.print(&printer);
+    
+    logOperation("export_report", QString("格式: PDF, 文件: %1").arg(fileName));
+    QMessageBox::information(this, "成功", "报告已成功导出为PDF");
+    return true;
+}
+
+bool WorkLogWidget::exportToWord(const QString &content, const QString &fileName)
+{
+    if (!checkPermission("export_report")) {
+        QMessageBox::warning(this, "权限不足", "您没有导出报告的权限");
+        return false;
+    }
+    
+    QString htmlContent = markdownToHTML(content);
+    
+    QFile file(fileName);
+    if (!file.open(QIODevice::WriteOnly)) {
+        QMessageBox::warning(this, "错误", "无法保存文件");
+        return false;
+    }
+    
+    QString wordContent = QString(
+        "<html xmlns:o='urn:schemas-microsoft-com:office:office' "
+        "xmlns:w='urn:schemas-microsoft-com:office:word' "
+        "xmlns='http://www.w3.org/TR/REC-html40'>"
+        "<head><meta charset='utf-8'><title>工作报告</title></head>"
+        "<body>%1</body></html>"
+    ).arg(htmlContent);
+    
+    file.write(wordContent.toUtf8());
+    file.close();
+    
+    logOperation("export_report", QString("格式: Word, 文件: %1").arg(fileName));
+    QMessageBox::information(this, "成功", "报告已成功导出为Word");
+    return true;
+}
+
+QString WorkLogWidget::markdownToHTML(const QString &markdown)
+{
+    QString html = markdown;
+    
+    html.replace(QRegularExpression("^# (.+)$"), "<h1>\\1</h1>");
+    html.replace(QRegularExpression("^## (.+)$"), "<h2>\\1</h2>");
+    html.replace(QRegularExpression("^### (.+)$"), "<h3>\\1</h3>");
+    html.replace(QRegularExpression("^#### (.+)$"), "<h4>\\1</h4>");
+    
+    html.replace(QRegularExpression("\\*\\*(.+?)\\*\\*"), "<strong>\\1</strong>");
+    html.replace(QRegularExpression("\\*(.+?)\\*"), "<em>\\1</em>");
+    
+    html.replace(QRegularExpression("^- (.+)$"), "<li>\\1</li>");
+    html.replace(QRegularExpression("^\\d+\\. (.+)$"), "<li>\\1</li>");
+    
+    html.replace(QRegularExpression("```"), "<pre>");
+    
+    html.replace(QRegularExpression("\n\n"), "</p><p>");
+    html.prepend("<p>");
+    html.append("</p>");
+    
+    html.replace(QRegularExpression("<p>(<h[1-6]>)"), "\\1");
+    html.replace(QRegularExpression("(</h[1-6]>)</p>"), "\\1");
+    html.replace(QRegularExpression("<p>(<li>)"), "<ul>\\1");
+    html.replace(QRegularExpression("(</li>)</p>"), "\\1</ul>");
+    
+    html.replace(QRegularExpression("<p></p>"), "");
+    html.replace(QRegularExpression("<ul></ul>"), "");
+    
+    html.replace("\n", "<br>");
+    
+    return html;
+}
+
+QString WorkLogWidget::getCachedReport(const QString &cacheKey)
+{
+    if (reportCache.contains(cacheKey) && isCacheValid(cacheKey)) {
+        return reportCache[cacheKey];
+    }
+    return QString();
+}
+
+void WorkLogWidget::cacheReport(const QString &cacheKey, const QString &report)
+{
+    reportCache[cacheKey] = report;
+    lastCacheUpdate = QDateTime::currentDateTime();
+}
+
+bool WorkLogWidget::isCacheValid(const QString &cacheKey, int maxAgeMinutes)
+{
+    if (!reportCache.contains(cacheKey)) {
+        return false;
+    }
+    
+    if (lastCacheUpdate.isNull()) {
+        return false;
+    }
+    
+    QDateTime now = QDateTime::currentDateTime();
+    qint64 secondsDiff = lastCacheUpdate.secsTo(now);
+    qint64 minutesDiff = secondsDiff / 60;
+    
+    return minutesDiff < maxAgeMinutes;
+}
+
+void WorkLogWidget::clearReportCache()
+{
+    reportCache.clear();
+    lastCacheUpdate = QDateTime();
+}
+
+void WorkLogWidget::logOperation(const QString &operation, const QString &details)
+{
+    QString logDir = QCoreApplication::applicationDirPath() + "/logs";
+    QDir dir(logDir);
+    if (!dir.exists()) {
+        dir.mkpath(logDir);
+    }
+    
+    QString logFileName = logDir + "/operations_" + QDateTime::currentDateTime().toString("yyyy_MM_dd") + ".log";
+    QFile logFile(logFileName);
+    
+    if (logFile.open(QIODevice::Append | QIODevice::Text)) {
+        QTextStream out(&logFile);
+        out.setCodec("UTF-8");
+        out << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << " | "
+            << operation << " | " << details << "\n";
+        logFile.close();
+    }
+}
+
+bool WorkLogWidget::checkPermission(const QString &permission)
+{
+    QSettings settings("PonyWork", "WorkLog");
+    QStringList permissions = settings.value("permissions", QStringList()).toStringList();
+    
+    if (permissions.isEmpty()) {
+        return true;
+    }
+    
+    return permissions.contains(permission);
 }

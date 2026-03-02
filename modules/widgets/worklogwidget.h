@@ -91,8 +91,18 @@ private:
     void showCategoryDialog(Category *category = nullptr);
     QString generateWeeklyReport(const QDateTime &startDate, const QDateTime &endDate);
     QString generateMonthlyReport(const QDateTime &startDate, const QDateTime &endDate);
+    QString generateQuarterlyReport(const QDateTime &startDate, const QDateTime &endDate);
     bool exportToMarkdown(const QString &content, const QString &fileName);
     bool exportToText(const QString &content, const QString &fileName);
+    bool exportToPDF(const QString &content, const QString &fileName);
+    bool exportToWord(const QString &content, const QString &fileName);
+    QString markdownToHTML(const QString &markdown);
+    QString getCachedReport(const QString &cacheKey);
+    void cacheReport(const QString &cacheKey, const QString &report);
+    bool isCacheValid(const QString &cacheKey, int maxAgeMinutes = 30);
+    void clearReportCache();
+    void logOperation(const QString &operation, const QString &details);
+    bool checkPermission(const QString &permission);
     void updateTaskRow(int row, const Task &task);
     void analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit, 
                            QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
@@ -112,6 +122,8 @@ private:
     void parseAIResponse(const QString &response, QLineEdit *titleEdit, QTextEdit *descEdit,
                          QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
                          QLineEdit *tagsEdit);
+    QString generateReportWithAI(const QString &reportType, const QString &reportData);
+    void onAIGenerateReport(QTextEdit *reportEdit, const QString &reportType, const QString &reportData);
     
     void setSettingsWidget(void *settings);
     QString getCurrentAIModel();
@@ -182,6 +194,10 @@ private:
     QDateTime taskStartTime;
     
     QNetworkAccessManager *networkManager;
+    
+    // 报告缓存
+    QHash<QString, QString> reportCache;
+    QDateTime lastCacheUpdate;
 };
 
 #endif
