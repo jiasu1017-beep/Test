@@ -113,10 +113,10 @@ void MainWindow::setupUI()
     
     tabWidget->addTab(appManagerWidget, QApplication::style()->standardIcon(QStyle::SP_DesktopIcon), "应用管理");
     tabWidget->addTab(collectionManagerWidget, QApplication::style()->standardIcon(QStyle::SP_DirHomeIcon), "集合管理");
+    tabWidget->addTab(workLogWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView), "工作日志");
     tabWidget->addTab(remoteDesktopWidget, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "远程桌面");
     tabWidget->addTab(recommendedAppsWidget, QApplication::style()->standardIcon(QStyle::SP_ArrowForward), "推荐应用");
-    tabWidget->addTab(workLogWidget, QApplication::style()->standardIcon(QStyle::SP_FileIcon), "工作日志");
-    tabWidget->addTab(fishModeWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView), "摸鱼模式");
+    tabWidget->addTab(fishModeWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogListView), "摸鱼模式");
     tabWidget->addTab(shutdownWidget, QApplication::style()->standardIcon(QStyle::SP_BrowserStop), "定时关机");
     tabWidget->addTab(settingsWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogInfoView), "设置");
  
