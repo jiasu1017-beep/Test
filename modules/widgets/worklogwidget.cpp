@@ -8,6 +8,12 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QDebug>
+#include <QAxObject>
+#include <QAxWidget>
+#include <QTextDocument>
+#include <QTextCursor>
+#include <QTextBlock>
+#include <QTextTable>
 #include <QGraphicsDropShadowEffect>
 #include <QPropertyAnimation>
 #include <QPainter>
@@ -1524,7 +1530,9 @@ void WorkLogWidget::onGenerateReport()
         QString defaultName = reportType + "_" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") + ".pdf";
         QString fileName = QFileDialog::getSaveFileName(this, "导出PDF", defaultName, "PDF文件 (*.pdf)");
         if (!fileName.isEmpty()) {
-            exportToPDF(reportEdit->toPlainText(), fileName);
+            if (exportToPDF(reportEdit->toPlainText(), fileName)) {
+                QDesktopServices::openUrl(QUrl::fromLocalFile(fileName));
+            }
         }
     });
 
@@ -1532,7 +1540,9 @@ void WorkLogWidget::onGenerateReport()
         QString defaultName = reportType + "_" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") + ".docx";
         QString fileName = QFileDialog::getSaveFileName(this, "导出Word", defaultName, "Word文件 (*.docx)");
         if (!fileName.isEmpty()) {
-            exportToWord(reportEdit->toPlainText(), fileName);
+            if (exportToWord(reportEdit->toPlainText(), fileName)) {
+                QDesktopServices::openUrl(QUrl::fromLocalFile(fileName));
+            }
         }
     });
 
@@ -3370,28 +3380,124 @@ bool WorkLogWidget::exportToWord(const QString &content, const QString &fileName
         return false;
     }
     
-    QString htmlContent = markdownToHTML(content);
+    QAxObject *word = nullptr;
+    QAxObject *documents = nullptr;
+    QAxObject *document = nullptr;
+    QAxObject *selection = nullptr;
     
-    QFile file(fileName);
-    if (!file.open(QIODevice::WriteOnly)) {
-        QMessageBox::warning(this, "错误", "无法保存文件");
+    try {
+        word = new QAxObject("Word.Application", this);
+        if (!word->isNull()) {
+            word->setProperty("Visible", false);
+            
+            documents = word->querySubObject("Documents");
+            if (documents) {
+                document = documents->querySubObject("Add()");
+                if (document) {
+                    selection = word->querySubObject("Selection");
+                    if (selection) {
+                        QTextDocument textDoc;
+                        textDoc.setMarkdown(content);
+                        QTextCursor cursor(&textDoc);
+                        
+                        QAxObject *font = selection->querySubObject("Font");
+                        if (font) {
+                            font->setProperty("Name", "Microsoft YaHei");
+                            font->setProperty("Size", 12);
+                            font->setProperty("NameFarEast", "Microsoft YaHei");
+                        }
+                        
+                        for (QTextBlock block = textDoc.begin(); block != textDoc.end(); block = block.next()) {
+                            QTextBlockFormat blockFormat = block.blockFormat();
+                            QTextCharFormat charFormat = block.charFormat();
+                            
+                            if (block.text().startsWith("## ")) {
+                                selection->querySubObject("ParagraphFormat")->setProperty("Alignment", 0);
+                                QAxObject *headingFont = selection->querySubObject("Font");
+                                if (headingFont) {
+                                    headingFont->setProperty("Size", 16);
+                                    headingFont->setProperty("Bold", true);
+                                }
+                                selection->dynamicCall("TypeText(const QString&)", block.text().mid(3));
+                                selection->dynamicCall("TypeParagraph()");
+                                QAxObject *normalFont = selection->querySubObject("Font");
+                                if (normalFont) {
+                                    normalFont->setProperty("Size", 12);
+                                    normalFont->setProperty("Bold", false);
+                                }
+                            } else if (block.text().startsWith("### ")) {
+                                selection->querySubObject("ParagraphFormat")->setProperty("Alignment", 0);
+                                QAxObject *subHeadingFont = selection->querySubObject("Font");
+                                if (subHeadingFont) {
+                                    subHeadingFont->setProperty("Size", 14);
+                                    subHeadingFont->setProperty("Bold", true);
+                                }
+                                selection->dynamicCall("TypeText(const QString&)", block.text().mid(4));
+                                selection->dynamicCall("TypeParagraph()");
+                                QAxObject *normalFont = selection->querySubObject("Font");
+                                if (normalFont) {
+                                    normalFont->setProperty("Size", 12);
+                                    normalFont->setProperty("Bold", false);
+                                }
+                            } else if (block.text().startsWith("# ")) {
+                                selection->querySubObject("ParagraphFormat")->setProperty("Alignment", 1);
+                                QAxObject *titleFont = selection->querySubObject("Font");
+                                if (titleFont) {
+                                    titleFont->setProperty("Size", 18);
+                                    titleFont->setProperty("Bold", true);
+                                }
+                                selection->dynamicCall("TypeText(const QString&)", block.text().mid(2));
+                                selection->dynamicCall("TypeParagraph()");
+                                QAxObject *normalFont = selection->querySubObject("Font");
+                                if (normalFont) {
+                                    normalFont->setProperty("Size", 12);
+                                    normalFont->setProperty("Bold", false);
+                                }
+                            } else if (block.text().startsWith("- ") || block.text().startsWith("* ")) {
+                                selection->querySubObject("ParagraphFormat")->setProperty("Alignment", 0);
+                                selection->dynamicCall("TypeText(const QString&)", "• " + block.text().mid(2));
+                                selection->dynamicCall("TypeParagraph()");
+                            } else if (!block.text().isEmpty()) {
+                                selection->querySubObject("ParagraphFormat")->setProperty("Alignment", 0);
+                                selection->dynamicCall("TypeText(const QString&)", block.text());
+                                selection->dynamicCall("TypeParagraph()");
+                            }
+                        }
+                        
+                        document->dynamicCall("SaveAs(const QString&, int)", fileName, 16);
+                        
+                        document->dynamicCall("Close(bool)", false);
+                        word->dynamicCall("Quit()");
+                        
+                        logOperation("export_report", QString("格式: Word, 文件: %1").arg(fileName));
+                        QMessageBox::information(this, "成功", "报告已成功导出为Word");
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        if (document) {
+            document->dynamicCall("Close(bool)", false);
+        }
+        if (word) {
+            word->dynamicCall("Quit()");
+        }
+        
+        QMessageBox::warning(this, "错误", "无法创建Word文档，请确保已安装Microsoft Word");
+        return false;
+        
+    } catch (...) {
+        if (document) {
+            document->dynamicCall("Close(bool)", false);
+        }
+        if (word) {
+            word->dynamicCall("Quit()");
+        }
+        
+        QMessageBox::warning(this, "错误", "导出Word文档时发生错误");
         return false;
     }
-    
-    QString wordContent = QString(
-        "<html xmlns:o='urn:schemas-microsoft-com:office:office' "
-        "xmlns:w='urn:schemas-microsoft-com:office:word' "
-        "xmlns='http://www.w3.org/TR/REC-html40'>"
-        "<head><meta charset='utf-8'><title>工作报告</title></head>"
-        "<body>%1</body></html>"
-    ).arg(htmlContent);
-    
-    file.write(wordContent.toUtf8());
-    file.close();
-    
-    logOperation("export_report", QString("格式: Word, 文件: %1").arg(fileName));
-    QMessageBox::information(this, "成功", "报告已成功导出为Word");
-    return true;
 }
 
 QString WorkLogWidget::markdownToHTML(const QString &markdown)
