@@ -1000,7 +1000,10 @@ void SettingsWidget::onNoUpdateAvailable()
 {
     checkUpdateButton->setEnabled(true);
     checkUpdateButton->setText("🔄 检查更新");
-    QMessageBox::information(this, "检查更新", "当前已是最新版本！");
+    statusLabel->setText("✅ 当前已是最新版本");
+    QTimer::singleShot(3000, this, [this]() {
+        statusLabel->setText("");
+    });
 }
 
 void SettingsWidget::onUpdateCheckFailed(const QString &error)
