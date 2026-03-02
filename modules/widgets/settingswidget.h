@@ -45,6 +45,12 @@ private slots:
 
 private:
     void setupUI();
+    QWidget* createGeneralPage();
+    QWidget* createShortcutPage();
+    QWidget* createAIPage();
+    QWidget* createStartupPage();
+    QWidget* createUpdatePage();
+    QWidget* createAboutPage();
     bool isShortcutConflict(const QString &shortcut);
     
     Database *db;
