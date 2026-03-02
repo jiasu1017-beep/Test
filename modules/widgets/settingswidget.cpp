@@ -335,7 +335,7 @@ QWidget *SettingsWidget::createAIPage()
     line->setStyleSheet("color: #e0e0e0;");
     layout->addWidget(line);
 
-    QGroupBox *aiModelGroup = new QGroupBox("🤖 AI模型配置", contentWidget);
+    QGroupBox *aiModelGroup = new QGroupBox("AI模型配置", contentWidget);
     QVBoxLayout *aiModelLayout = new QVBoxLayout(aiModelGroup);
     aiModelLayout->setSpacing(15);
 
@@ -348,15 +348,15 @@ QWidget *SettingsWidget::createAIPage()
     QLabel *modelLabel = new QLabel("AI模型:", contentWidget);
     modelLabel->setMinimumWidth(80);
     aiModelCombo = new QComboBox(contentWidget);
-    aiModelCombo->addItem("🤖 MiniMax", "minimax");
-    aiModelCombo->addItem("🔵 OpenAI GPT-3.5", "gpt35");
-    aiModelCombo->addItem("🔷 OpenAI GPT-4", "gpt4");
-    aiModelCombo->addItem("🦊 Anthropic Claude-3", "claude");
-    aiModelCombo->addItem("💎 Google Gemini", "gemini");
-    aiModelCombo->addItem("🟢 通义千问", "qwen");
-    aiModelCombo->addItem("🔶 讯飞星火", "spark");
-    aiModelCombo->addItem("🚀 DeepSeek (硅基流动)", "deepseek");
-    aiModelCombo->addItem("💻 本地关键词匹配", "local");
+    aiModelCombo->addItem("MiniMax", "minimax");
+    aiModelCombo->addItem("OpenAI GPT-3.5", "gpt35");
+    aiModelCombo->addItem("OpenAI GPT-4", "gpt4");
+    aiModelCombo->addItem("Anthropic Claude-3", "claude");
+    aiModelCombo->addItem("Google Gemini", "gemini");
+    aiModelCombo->addItem("通义千问", "qwen");
+    aiModelCombo->addItem("讯飞星火", "spark");
+    aiModelCombo->addItem("DeepSeek (硅基流动)", "deepseek");
+    aiModelCombo->addItem("本地关键词匹配", "local");
     connect(aiModelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SettingsWidget::onAISettingsChanged);
     modelLayout->addWidget(modelLabel);
     modelLayout->addWidget(aiModelCombo);
@@ -433,7 +433,7 @@ QWidget *SettingsWidget::createAIPage()
 
     layout->addWidget(aiModelGroup);
 
-    QGroupBox *aiFeaturesGroup = new QGroupBox("⚡ AI功能开关", contentWidget);
+    QGroupBox *aiFeaturesGroup = new QGroupBox("AI功能开关", contentWidget);
     QVBoxLayout *aiFeaturesLayout = new QVBoxLayout(aiFeaturesGroup);
     aiFeaturesLayout->setSpacing(10);
 
