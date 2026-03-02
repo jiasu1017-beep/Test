@@ -401,7 +401,7 @@ QWidget *SettingsWidget::createAIPage()
     connect(saveAiBtn, &QPushButton::clicked, this, &SettingsWidget::onSaveAIConfig);
     buttonLayout->addWidget(saveAiBtn);
 
-    chatTestBtn = new QPushButton("💬 Chat测试", contentWidget);
+    chatTestBtn = new QPushButton("💬 AI对话", contentWidget);
     chatTestBtn->setStyleSheet(
         "QPushButton { background-color: #e67e22; color: white; padding: 10px 20px; border-radius: 5px; } "
         "QPushButton:hover { background-color: #d35400; }"

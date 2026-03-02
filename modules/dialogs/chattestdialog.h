@@ -35,13 +35,14 @@ private slots:
 
 private:
     void setupUI();
-    void appendMessage(const QString &message, bool isUser);
+    void appendMessage(const QString &message, bool isUser, const QString &aiName = "AI");
     void callAI(const QString &message);
     QString getAPIKey();
     QString getCurrentModel();
     QString getAPIEndpoint();
     QString getDefaultEndpoint(const QString &model);
     QString getModelName(const QString &model);
+    QString getModelDisplayName(const QString &model);
 
     QTextEdit *chatDisplay;
     QLineEdit *messageInput;

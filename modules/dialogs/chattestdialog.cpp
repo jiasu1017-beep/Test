@@ -15,17 +15,17 @@ ChatTestDialog::~ChatTestDialog()
 
 void ChatTestDialog::setupUI()
 {
-    setWindowTitle("AI模型测试");
+    setWindowTitle("AI对话");
     setMinimumSize(600, 500);
     resize(800, 600);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
-    QLabel *titleLabel = new QLabel("AI模型测试 - 验证配置是否正常", this);
+    QLabel *titleLabel = new QLabel("AI对话", this);
     titleLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50; padding: 5px;");
     mainLayout->addWidget(titleLabel);
 
-    QGroupBox *chatGroup = new QGroupBox("对话测试", this);
+    QGroupBox *chatGroup = new QGroupBox("对话", this);
     QVBoxLayout *chatLayout = new QVBoxLayout(chatGroup);
 
     chatDisplay = new QTextEdit(this);
@@ -43,7 +43,7 @@ void ChatTestDialog::setupUI()
 
     QHBoxLayout *inputLayout = new QHBoxLayout();
     messageInput = new QLineEdit(this);
-    messageInput->setPlaceholderText("输入消息进行测试...");
+    messageInput->setPlaceholderText("输入消息...");
     messageInput->setStyleSheet(
         "QLineEdit {"
         "  border: 1px solid #ced4da;"
@@ -100,7 +100,9 @@ void ChatTestDialog::setupUI()
 
     connect(messageInput, &QLineEdit::returnPressed, this, &ChatTestDialog::onSendButtonClicked);
 
-    appendMessage("欢迎使用AI模型测试！\n\n请输入消息测试您的AI配置是否正常工作。", false);
+    QString currentModel = getCurrentModel();
+    QString aiName = getModelDisplayName(currentModel);
+    appendMessage("欢迎使用AI对话！\n\n请输入消息验证您的AI配置是否正常工作。", false, aiName);
 }
 
 void ChatTestDialog::onSendButtonClicked()
@@ -114,7 +116,9 @@ void ChatTestDialog::onSendButtonClicked()
         return;
     }
 
-    appendMessage(message, true);
+    QString currentModel = getCurrentModel();
+    QString aiName = getModelDisplayName(currentModel);
+    appendMessage(message, true, aiName);
     messageInput->clear();
 
     callAI(message);
@@ -123,13 +127,16 @@ void ChatTestDialog::onSendButtonClicked()
 void ChatTestDialog::onClearButtonClicked()
 {
     chatDisplay->clear();
-    appendMessage("对话已清空。", false);
+    QString currentModel = getCurrentModel();
+    QString aiName = getModelDisplayName(currentModel);
+    appendMessage("对话已清空。", false, aiName);
 }
 
-void ChatTestDialog::appendMessage(const QString &message, bool isUser)
+void ChatTestDialog::appendMessage(const QString &message, bool isUser, const QString &aiName)
 {
     QString color = isUser ? "#3498db" : "#27ae60";
-    QString prefix = isUser ? "👤 您" : "🤖 AI";
+    QString displayName = isUser ? "您" : aiName;
+    QString prefix = isUser ? "👤 " + displayName : "🤖 " + displayName;
     
     QString formatted = QString("<div style='margin: 8px 0;'>"
                            "<span style='color: %1; font-weight: bold;'>%2:</span><br/>"
@@ -153,14 +160,15 @@ void ChatTestDialog::callAI(const QString &message)
     }
 
     QString currentModel = getCurrentModel();
+    QString aiName = getModelDisplayName(currentModel);
     if (currentModel == "local") {
-        appendMessage("本地关键词模式不支持对话测试。", false);
+        appendMessage("本地关键词模式不支持对话测试。", false, aiName);
         return;
     }
 
     isProcessing = true;
     sendButton->setEnabled(false);
-    statusLabel->setText("🔄 AI思考中...");
+    statusLabel->setText("🔄 " + aiName + "思考中...");
 
     QString endpoint = getAPIEndpoint();
     if (endpoint.isEmpty()) {
@@ -239,10 +247,13 @@ void ChatTestDialog::onAIResponse(QPointer<QNetworkReply> reply)
     isProcessing = false;
     sendButton->setEnabled(true);
 
+    QString currentModel = getCurrentModel();
+    QString aiName = getModelDisplayName(currentModel);
+
     if (reply->error() != QNetworkReply::NoError) {
         QString errorMsg = reply->errorString();
         statusLabel->setText(QString("❌ 调用失败: %1").arg(errorMsg));
-        appendMessage(QString("错误: %1").arg(errorMsg), false);
+        appendMessage(QString("错误: %1").arg(errorMsg), false, aiName);
         reply->deleteLater();
         return;
     }
@@ -251,7 +262,7 @@ void ChatTestDialog::onAIResponse(QPointer<QNetworkReply> reply)
     QJsonDocument doc = QJsonDocument::fromJson(data);
     if (!doc.isObject()) {
         statusLabel->setText("❌ 响应格式错误");
-        appendMessage("错误: 响应格式不正确", false);
+        appendMessage("错误: 响应格式不正确", false, aiName);
         reply->deleteLater();
         return;
     }
@@ -263,7 +274,7 @@ void ChatTestDialog::onAIResponse(QPointer<QNetworkReply> reply)
         if (statusCode != 0) {
             QString errorMsg = rootObj["base_resp"].toObject()["status_msg"].toString();
             statusLabel->setText(QString("❌ API错误: %1").arg(errorMsg));
-            appendMessage(QString("API错误: %1").arg(errorMsg), false);
+            appendMessage(QString("API错误: %1").arg(errorMsg), false, aiName);
             reply->deleteLater();
             return;
         }
@@ -293,10 +304,10 @@ void ChatTestDialog::onAIResponse(QPointer<QNetworkReply> reply)
 
     if (responseText.isEmpty()) {
         statusLabel->setText("❌ 无法解析响应");
-        appendMessage("错误: 无法解析AI响应", false);
+        appendMessage("错误: 无法解析AI响应", false, aiName);
     } else {
         statusLabel->setText("✅ 调用成功");
-        appendMessage(responseText, false);
+        appendMessage(responseText, false, aiName);
     }
 
     reply->deleteLater();
@@ -368,4 +379,20 @@ QString ChatTestDialog::getModelName(const QString &model)
         {"deepseek", "deepseek-ai/DeepSeek-V2-Chat"}
     };
     return models.value(model, "");
+}
+
+QString ChatTestDialog::getModelDisplayName(const QString &model)
+{
+    static QMap<QString, QString> displayNames = {
+        {"minimax", "MiniMax"},
+        {"gpt35", "OpenAI GPT-3.5"},
+        {"gpt4", "OpenAI GPT-4"},
+        {"claude", "Claude-3"},
+        {"gemini", "Google Gemini"},
+        {"qwen", "通义千问"},
+        {"spark", "讯飞星火"},
+        {"deepseek", "DeepSeek"},
+        {"local", "本地关键词匹配"}
+    };
+    return displayNames.value(model, "AI");
 }
