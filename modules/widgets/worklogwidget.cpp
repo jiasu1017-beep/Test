@@ -446,6 +446,7 @@ void WorkLogWidget::setupUI()
             background-color: #ecf0f1;
             text-align: center;
             height: 20px;
+            color: #2c3e50;
         }
 
         QProgressBar::chunk {
@@ -1256,7 +1257,7 @@ void WorkLogWidget::updateStatistics()
             statusText = "📋 待完成";
             color = "#3498db";
         }
-        todayProgress->setFormat(QString("%1 %2 小时 (%3%)").arg(statusText).arg(todayHours, 0, 'f', 1).arg(percentage));
+        todayProgress->setFormat(QString("本日 %1 %2 小时 (%3%)").arg(statusText).arg(todayHours, 0, 'f', 1).arg(percentage));
         todayProgress->update();
     }
 
@@ -1286,7 +1287,7 @@ void WorkLogWidget::updateStatistics()
         } else {
             statusText = "📋 待完成";
         }
-        weekProgress->setFormat(QString("%1 %2 小时 (%3%)").arg(statusText).arg(weekHours, 0, 'f', 1).arg(percentage));
+        weekProgress->setFormat(QString("本周 %1 %2 小时 (%3%)").arg(statusText).arg(weekHours, 0, 'f', 1).arg(percentage));
         weekProgress->update();
     }
 }
@@ -1722,9 +1723,9 @@ void WorkLogWidget::onTaskContextMenu(const QPoint &pos)
                 if (db->deleteTask(taskId)) {
                     refreshTaskTable();
                     updateStatistics();
-                    QMessageBox::information(this, "成功", "任务已删除");
+                    //QMessageBox::information(this, "成功", "任务已删除");
                 } else {
-                    QMessageBox::warning(this, "错误", "删除任务失败");
+                    //QMessageBox::warning(this, "错误", "删除任务失败");
                 }
             }
         }
@@ -2124,7 +2125,7 @@ void WorkLogWidget::showTaskDialog(Task *task)
                          .arg(newTask.title)
                          .arg(getStatusString(newTask.status))
                          .arg(newTask.completionTime.isValid() ? newTask.completionTime.toString("yyyy-MM-dd hh:mm:ss") : "无"));
-            QMessageBox::information(this, "成功", "任务已创建");
+            //QMessageBox::information(this, "成功", "任务已创建");
         }
 
         refreshTaskTable();
