@@ -3,6 +3,7 @@
 #include "modules/dialogs/shortcutdialog.h"
 #include "modules/dialogs/aisettingsdialog.h"
 #include "modules/dialogs/chattestdialog.h"
+#include "modules/core/aiconfig.h"
 #include <QApplication>
 #include <QStyle>
 #include <QDialog>
@@ -37,6 +38,7 @@
 #include <QTimer>
 #include <QMap>
 #include <QUrl>
+#include <QColor>
 #include "modules/update/updatedialog.h"
 #include "modules/update/updateprogressdialog.h"
 
@@ -320,7 +322,7 @@ QWidget *SettingsWidget::createAIPage()
     scrollArea->setWidgetResizable(true);
     scrollArea->setFrameShape(QFrame::NoFrame);
     scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    
+
     QWidget *contentWidget = new QWidget();
     QVBoxLayout *layout = new QVBoxLayout(contentWidget);
     layout->setContentsMargins(30, 30, 30, 30);
@@ -335,86 +337,138 @@ QWidget *SettingsWidget::createAIPage()
     line->setStyleSheet("color: #e0e0e0;");
     layout->addWidget(line);
 
-    QGroupBox *aiModelGroup = new QGroupBox("AI模型配置", contentWidget);
-    QVBoxLayout *aiModelLayout = new QVBoxLayout(aiModelGroup);
-    aiModelLayout->setSpacing(15);
+    QGroupBox *aiKeysGroup = new QGroupBox("API密钥管理", contentWidget);
+    QVBoxLayout *aiKeysLayout = new QVBoxLayout(aiKeysGroup);
+    aiKeysLayout->setSpacing(10);
 
-    QLabel *aiDescLabel = new QLabel("配置AI模型以启用智能任务分析和报告生成功能", contentWidget);
-    aiDescLabel->setStyleSheet("color: #666; font-size: 13px; padding: 5px;");
-    aiDescLabel->setWordWrap(true);
-    aiModelLayout->addWidget(aiDescLabel);
+    QLabel *aiKeysDesc = new QLabel("管理多个AI模型的API密钥，支持同时配置和使用多个不同的大模型服务", aiKeysGroup);
+    aiKeysDesc->setStyleSheet("color: #666; font-size: 13px; padding: 5px;");
+    aiKeysDesc->setWordWrap(true);
+    aiKeysLayout->addWidget(aiKeysDesc);
 
-    QHBoxLayout *modelLayout = new QHBoxLayout();
-    QLabel *modelLabel = new QLabel("AI模型:", contentWidget);
-    modelLabel->setMinimumWidth(80);
-    aiModelCombo = new QComboBox(contentWidget);
-    aiModelCombo->addItem("MiniMax", "minimax");
-    aiModelCombo->addItem("OpenAI GPT-3.5", "gpt35");
-    aiModelCombo->addItem("OpenAI GPT-4", "gpt4");
-    aiModelCombo->addItem("Anthropic Claude-3", "claude");
-    aiModelCombo->addItem("Google Gemini", "gemini");
-    aiModelCombo->addItem("通义千问", "qwen");
-    aiModelCombo->addItem("讯飞星火", "spark");
-    aiModelCombo->addItem("DeepSeek (硅基流动)", "deepseek");
-    aiModelCombo->addItem("本地关键词匹配", "local");
-    connect(aiModelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SettingsWidget::onAISettingsChanged);
-    modelLayout->addWidget(modelLabel);
-    modelLayout->addWidget(aiModelCombo);
-    modelLayout->addStretch();
-    aiModelLayout->addLayout(modelLayout);
+    aiKeysTable = new QTableWidget(aiKeysGroup);
+    aiKeysTable->setColumnCount(7);
+    aiKeysTable->setHorizontalHeaderLabels({"默认", "名称", "服务商", "模型", "API Key", "API地址", "状态"});
+    aiKeysTable->horizontalHeader()->setStretchLastSection(true);
+    aiKeysTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    aiKeysTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    aiKeysTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    aiKeysTable->setAlternatingRowColors(true);
+    aiKeysTable->setMinimumHeight(200);
+    connect(aiKeysTable, &QTableWidget::itemSelectionChanged, this, &SettingsWidget::onAIKeyTableSelectionChanged);
+    aiKeysLayout->addWidget(aiKeysTable);
 
-    QHBoxLayout *apiKeyLayout = new QHBoxLayout();
-    QLabel *apiKeyLabel = new QLabel("API Key:", contentWidget);
-    apiKeyLabel->setMinimumWidth(80);
-    apiKeyEdit = new QLineEdit(contentWidget);
-    apiKeyEdit->setPlaceholderText("请输入API Key");
-    apiKeyEdit->setEchoMode(QLineEdit::Password);
-    apiKeyLayout->addWidget(apiKeyLabel);
-    apiKeyLayout->addWidget(apiKeyEdit);
-    aiModelLayout->addLayout(apiKeyLayout);
+    QHBoxLayout *keyButtonLayout = new QHBoxLayout();
+    keyButtonLayout->setSpacing(10);
 
-    QHBoxLayout *endpointLayout = new QHBoxLayout();
-    QLabel *endpointLabel = new QLabel("API地址:", contentWidget);
-    endpointLabel->setMinimumWidth(80);
-    apiEndpointEdit = new QLineEdit(contentWidget);
-    apiEndpointEdit->setPlaceholderText("留空使用默认地址");
-    endpointLayout->addWidget(endpointLabel);
-    endpointLayout->addWidget(apiEndpointEdit);
-    aiModelLayout->addLayout(endpointLayout);
+    addAIKeyBtn = new QPushButton("➕ 添加", aiKeysGroup);
+    addAIKeyBtn->setStyleSheet(
+        "QPushButton { background-color: #3498db; color: white; padding: 8px 16px; border-radius: 4px; } "
+        "QPushButton:hover { background-color: #2980b9; }"
+    );
+    connect(addAIKeyBtn, &QPushButton::clicked, this, &SettingsWidget::onAddAIKey);
+    keyButtonLayout->addWidget(addAIKeyBtn);
 
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
-    buttonLayout->setSpacing(10);
-    
-    testAiBtn = new QPushButton("🔗 测试连接", contentWidget);
-    testAiBtn->setStyleSheet(
-        "QPushButton { background-color: #9b59b6; color: white; padding: 10px 20px; border-radius: 5px; } "
+    editAIKeyBtn = new QPushButton("✏️ 编辑", aiKeysGroup);
+    editAIKeyBtn->setStyleSheet(
+        "QPushButton { background-color: #f39c12; color: white; padding: 8px 16px; border-radius: 4px; } "
+        "QPushButton:hover { background-color: #e67e22; }"
+    );
+    editAIKeyBtn->setEnabled(false);
+    connect(editAIKeyBtn, &QPushButton::clicked, this, &SettingsWidget::onEditAIKey);
+    keyButtonLayout->addWidget(editAIKeyBtn);
+
+    deleteAIKeyBtn = new QPushButton("🗑️ 删除", aiKeysGroup);
+    deleteAIKeyBtn->setStyleSheet(
+        "QPushButton { background-color: #e74c3c; color: white; padding: 8px 16px; border-radius: 4px; } "
+        "QPushButton:hover { background-color: #c0392b; }"
+    );
+    deleteAIKeyBtn->setEnabled(false);
+    connect(deleteAIKeyBtn, &QPushButton::clicked, this, &SettingsWidget::onDeleteAIKey);
+    keyButtonLayout->addWidget(deleteAIKeyBtn);
+
+    setDefaultAIKeyBtn = new QPushButton("⭐ 设为默认", aiKeysGroup);
+    setDefaultAIKeyBtn->setStyleSheet(
+        "QPushButton { background-color: #9b59b6; color: white; padding: 8px 16px; border-radius: 4px; } "
         "QPushButton:hover { background-color: #8e44ad; }"
     );
-    connect(testAiBtn, &QPushButton::clicked, this, &SettingsWidget::onTestAIConnection);
-    buttonLayout->addWidget(testAiBtn);
+    setDefaultAIKeyBtn->setEnabled(false);
+    connect(setDefaultAIKeyBtn, &QPushButton::clicked, this, &SettingsWidget::onSetDefaultAIKey);
+    keyButtonLayout->addWidget(setDefaultAIKeyBtn);
 
-    saveAiBtn = new QPushButton("💾 保存配置", contentWidget);
-    saveAiBtn->setStyleSheet(
-        "QPushButton { background-color: #27ae60; color: white; padding: 10px 20px; border-radius: 5px; } "
-        "QPushButton:hover { background-color: #229954; }"
-    );
-    connect(saveAiBtn, &QPushButton::clicked, this, &SettingsWidget::onSaveAIConfig);
-    buttonLayout->addWidget(saveAiBtn);
+    keyButtonLayout->addStretch();
+    aiKeysLayout->addLayout(keyButtonLayout);
 
-    chatTestBtn = new QPushButton("💬 AI对话", contentWidget);
+    layout->addWidget(aiKeysGroup);
+
+    QGroupBox *aiFeaturesGroup = new QGroupBox("AI功能开关", contentWidget);
+    QVBoxLayout *aiFeaturesLayout = new QVBoxLayout(aiFeaturesGroup);
+    aiFeaturesLayout->setSpacing(10);
+
+    QCheckBox *taskAnalysisCheck = new QCheckBox("启用智能任务分析", aiFeaturesGroup);
+    taskAnalysisCheck->setChecked(AIConfig::instance().isEnabled("task_analysis"));
+    taskAnalysisCheck->setToolTip("在新建任务时启用AI分析功能");
+    connect(taskAnalysisCheck, &QCheckBox::toggled, [](bool checked) {
+        AIConfig::instance().setEnabled("task_analysis", checked);
+    });
+    aiFeaturesLayout->addWidget(taskAnalysisCheck);
+
+    QCheckBox *reportGenCheck = new QCheckBox("启用AI报告生成", aiFeaturesGroup);
+    reportGenCheck->setChecked(AIConfig::instance().isEnabled("report_generation"));
+    reportGenCheck->setToolTip("在生成周报/月报/季报时启用AI内容生成");
+    connect(reportGenCheck, &QCheckBox::toggled, [](bool checked) {
+        AIConfig::instance().setEnabled("report_generation", checked);
+    });
+    aiFeaturesLayout->addWidget(reportGenCheck);
+
+    QCheckBox *autoSuggestCheck = new QCheckBox("启用智能建议", aiFeaturesGroup);
+    autoSuggestCheck->setChecked(AIConfig::instance().isEnabled("auto_suggest"));
+    autoSuggestCheck->setToolTip("根据工作日志智能推荐下一步操作");
+    connect(autoSuggestCheck, &QCheckBox::toggled, [](bool checked) {
+        AIConfig::instance().setEnabled("auto_suggest", checked);
+    });
+    aiFeaturesLayout->addWidget(autoSuggestCheck);
+
+    layout->addWidget(aiFeaturesGroup);
+
+    QGroupBox *aiTimeoutGroup = new QGroupBox("AI超时设置", contentWidget);
+    QHBoxLayout *aiTimeoutLayout = new QHBoxLayout(aiTimeoutGroup);
+
+    QLabel *timeoutLabel = new QLabel("响应超时时间(秒):", aiTimeoutGroup);
+    aiTimeoutLayout->addWidget(timeoutLabel);
+
+    QSpinBox *timeoutSpinBox = new QSpinBox(aiTimeoutGroup);
+    timeoutSpinBox->setRange(10, 300);
+    timeoutSpinBox->setValue(AIConfig::instance().getTimeout());
+    timeoutSpinBox->setSuffix(" 秒");
+    timeoutSpinBox->setToolTip("AI请求的最大等待时间，超时后将取消请求");
+    connect(timeoutSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), [](int value) {
+        AIConfig::instance().setTimeout(value);
+    });
+    aiTimeoutLayout->addWidget(timeoutSpinBox);
+
+    aiTimeoutLayout->addStretch();
+    layout->addWidget(aiTimeoutGroup);
+
+    QGroupBox *aiTestGroup = new QGroupBox("AI测试", contentWidget);
+    QHBoxLayout *aiTestLayout = new QHBoxLayout(aiTestGroup);
+
+    chatTestBtn = new QPushButton("💬 AI对话测试", aiTestGroup);
     chatTestBtn->setStyleSheet(
         "QPushButton { background-color: #e67e22; color: white; padding: 10px 20px; border-radius: 5px; } "
         "QPushButton:hover { background-color: #d35400; }"
     );
     connect(chatTestBtn, &QPushButton::clicked, this, &SettingsWidget::onChatTestClicked);
-    buttonLayout->addWidget(chatTestBtn);
-    
-    buttonLayout->addStretch();
-    aiModelLayout->addLayout(buttonLayout);
+    aiTestLayout->addWidget(chatTestBtn);
+    aiTestLayout->addStretch();
 
-    aiStatusLabel = new QLabel("", contentWidget);
+    layout->addWidget(aiTestGroup);
+
+    aiStatusLabel = new QLabel(contentWidget);
+    aiStatusLabel->setAlignment(Qt::AlignCenter);
     aiStatusLabel->setStyleSheet("padding: 8px; border-radius: 4px;");
-    aiModelLayout->addWidget(aiStatusLabel);
+    aiStatusLabel->setVisible(false);
+    layout->addWidget(aiStatusLabel);
 
     QLabel *aiHelpLabel = new QLabel(
         "📖 API Key获取指南:\n"
@@ -429,61 +483,86 @@ QWidget *SettingsWidget::createAIPage()
     );
     aiHelpLabel->setStyleSheet("padding: 12px; color: #666; font-size: 11px; background-color: #f5f5f5; border-radius: 5px;");
     aiHelpLabel->setWordWrap(true);
-    aiModelLayout->addWidget(aiHelpLabel);
-
-    layout->addWidget(aiModelGroup);
-
-    QGroupBox *aiFeaturesGroup = new QGroupBox("AI功能开关", contentWidget);
-    QVBoxLayout *aiFeaturesLayout = new QVBoxLayout(aiFeaturesGroup);
-    aiFeaturesLayout->setSpacing(10);
-
-    QCheckBox *taskAnalysisCheck = new QCheckBox("启用智能任务分析", aiFeaturesGroup);
-    taskAnalysisCheck->setChecked(true);
-    taskAnalysisCheck->setToolTip("在新建任务时启用AI分析功能");
-    aiFeaturesLayout->addWidget(taskAnalysisCheck);
-
-    QCheckBox *reportGenCheck = new QCheckBox("启用AI报告生成", aiFeaturesGroup);
-    reportGenCheck->setChecked(true);
-    reportGenCheck->setToolTip("在生成周报/月报/季报时启用AI内容生成");
-    aiFeaturesLayout->addWidget(reportGenCheck);
-
-    QCheckBox *autoSuggestCheck = new QCheckBox("启用智能建议", aiFeaturesGroup);
-    autoSuggestCheck->setChecked(false);
-    autoSuggestCheck->setToolTip("根据工作日志智能推荐下一步操作");
-    aiFeaturesLayout->addWidget(autoSuggestCheck);
-
-    layout->addWidget(aiFeaturesGroup);
+    layout->addWidget(aiHelpLabel);
 
     layout->addStretch();
-    
+
     scrollArea->setWidget(contentWidget);
-    
+
     QVBoxLayout *pageLayout = new QVBoxLayout(page);
     pageLayout->setContentsMargins(0, 0, 0, 0);
     pageLayout->addWidget(scrollArea);
-    
+
     loadAISettings();
-    
+
     return page;
 }
 
 void SettingsWidget::loadAISettings()
 {
-    QSettings settings("PonyWork", "WorkLog");
-    QString model = settings.value("ai_model", "qwen").toString();
-    QString endpoint = settings.value("ai_endpoint", "").toString();
+    aiKeysTable->setRowCount(0);
 
-    int index = aiModelCombo->findData(model);
-    if (index >= 0) {
-        aiModelCombo->setCurrentIndex(index);
+    QList<AIKeyConfig> keys = AIConfig::instance().getAllKeys();
+    for (const AIKeyConfig &key : keys) {
+        int row = aiKeysTable->rowCount();
+        aiKeysTable->insertRow(row);
+
+        QTableWidgetItem *defaultItem = new QTableWidgetItem(key.isDefault ? "⭐ 默认" : "");
+        defaultItem->setTextAlignment(Qt::AlignCenter);
+        defaultItem->setData(Qt::UserRole, key.id);
+        aiKeysTable->setItem(row, 0, defaultItem);
+
+        QTableWidgetItem *nameItem = new QTableWidgetItem(key.name);
+        nameItem->setData(Qt::UserRole, key.id);
+        aiKeysTable->setItem(row, 1, nameItem);
+
+        QString providerDisplay = key.provider;
+        QList<AIProviderInfo> providers = AIConfig::instance().getProviders();
+        for (const AIProviderInfo &p : providers) {
+            if (p.id == key.provider) {
+                providerDisplay = p.displayName;
+                break;
+            }
+        }
+        QTableWidgetItem *providerItem = new QTableWidgetItem(providerDisplay);
+        providerItem->setData(Qt::UserRole, key.id);
+        aiKeysTable->setItem(row, 2, providerItem);
+
+        AIModelInfo modelInfo = AIConfig::instance().getModelInfo(key.model);
+        QString modelDisplay = modelInfo.name.isEmpty() ? key.model : modelInfo.name;
+        QTableWidgetItem *modelItem = new QTableWidgetItem(modelDisplay);
+        modelItem->setData(Qt::UserRole, key.id);
+        aiKeysTable->setItem(row, 3, modelItem);
+
+        QString maskedKey = key.apiKey.isEmpty() ? "未配置" : AIConfig::instance().maskAPIKey(key.apiKey);
+        QTableWidgetItem *apiKeyItem = new QTableWidgetItem(maskedKey);
+        apiKeyItem->setData(Qt::UserRole, key.id);
+        if (!key.apiKey.isEmpty()) {
+            apiKeyItem->setForeground(QColor("#7f8c8d"));
+            apiKeyItem->setToolTip("点击查看完整密钥");
+        }
+        aiKeysTable->setItem(row, 4, apiKeyItem);
+
+        QString endpointDisplay = key.endpoint.isEmpty() ? "默认" : key.endpoint;
+        QTableWidgetItem *endpointItem = new QTableWidgetItem(endpointDisplay);
+        endpointItem->setData(Qt::UserRole, key.id);
+        if (!key.endpoint.isEmpty()) {
+            endpointItem->setForeground(QColor("#7f8c8d"));
+        }
+        aiKeysTable->setItem(row, 5, endpointItem);
+
+        QString status = key.apiKey.isEmpty() ? "未配置" : "已配置";
+        QTableWidgetItem *statusItem = new QTableWidgetItem(status);
+        statusItem->setData(Qt::UserRole, key.id);
+        if (key.apiKey.isEmpty()) {
+            statusItem->setForeground(QColor("#e74c3c"));
+        } else {
+            statusItem->setForeground(QColor("#27ae60"));
+        }
+        aiKeysTable->setItem(row, 6, statusItem);
     }
 
-    apiEndpointEdit->setText(endpoint);
-
-    QString apiKey = loadSavedAPIKey();
-    if (!apiKey.isEmpty()) {
-        apiKeyEdit->setText(apiKey);
-    }
+    onAIKeyTableSelectionChanged();
 }
 
 QString SettingsWidget::loadSavedAPIKey()
@@ -660,9 +739,9 @@ void SettingsWidget::onTestAIConnection()
 
 void SettingsWidget::onChatTestClicked()
 {
-    QString apiKey = apiKeyEdit->text().trimmed();
-    if (apiKey.isEmpty()) {
-        QMessageBox::warning(this, "提示", "请先配置API Key");
+    AIKeyConfig defaultKey = AIConfig::instance().getDefaultKey();
+    if (defaultKey.apiKey.isEmpty()) {
+        QMessageBox::warning(this, "提示", "请先添加并配置API Key");
         return;
     }
 
@@ -696,9 +775,713 @@ QString SettingsWidget::getModelName(const QString &model)
         {"gemini", "gemini-pro"},
         {"qwen", "qwen-turbo"},
         {"spark", "generalv3.5"},
-        {"deepseek", "deepseek-ai/DeepSeek-V2-Chat"}
+        {"deepseek", "deepseek-ai/DeepSeek-V3.2"}
     };
     return models.value(model, "");
+}
+
+QString SettingsWidget::getModelDisplayName(const QString &model)
+{
+    static QMap<QString, QString> displayNames = {
+        {"minimax", "MiniMax"},
+        {"gpt35", "OpenAI GPT-3.5"},
+        {"gpt4", "OpenAI GPT-4"},
+        {"claude", "Claude-3"},
+        {"gemini", "Google Gemini"},
+        {"qwen", "通义千问"},
+        {"spark", "讯飞星火"},
+        {"deepseek", "DeepSeek"},
+        {"local", "本地关键词匹配"}
+    };
+    return displayNames.value(model, model);
+}
+
+void SettingsWidget::onAIKeyTableSelectionChanged()
+{
+    bool hasSelection = !aiKeysTable->selectedItems().isEmpty();
+    editAIKeyBtn->setEnabled(hasSelection);
+    deleteAIKeyBtn->setEnabled(hasSelection);
+    setDefaultAIKeyBtn->setEnabled(hasSelection);
+}
+
+void SettingsWidget::onAddAIKey()
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle("添加AI模型");
+    dialog.setMinimumWidth(550);
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
+    mainLayout->setSpacing(15);
+
+    QGroupBox *formGroup = new QGroupBox("模型配置", &dialog);
+    QFormLayout *formLayout = new QFormLayout(formGroup);
+    formLayout->setSpacing(12);
+    formLayout->setLabelAlignment(Qt::AlignRight);
+
+    QLabel *providerLabel = new QLabel("服务商:", formGroup);
+    QComboBox *providerCombo = new QComboBox(formGroup);
+    providerCombo->setEditable(true);
+    providerCombo->setInsertPolicy(QComboBox::NoInsert);
+    providerCombo->setMinimumWidth(250);
+    providerCombo->lineEdit()->setPlaceholderText("搜索服务商...");
+
+    QList<AIProviderInfo> providers = AIConfig::instance().getProviders();
+    for (const AIProviderInfo &provider : providers) {
+        providerCombo->addItem(provider.displayName, provider.id);
+    }
+    formLayout->addRow(providerLabel, providerCombo);
+
+    QLabel *modelLabel = new QLabel("模型:", formGroup);
+    QComboBox *modelCombo = new QComboBox(formGroup);
+    modelCombo->setEditable(true);
+    modelCombo->setInsertPolicy(QComboBox::NoInsert);
+    modelCombo->setMinimumWidth(250);
+    modelCombo->lineEdit()->setPlaceholderText("选择或搜索模型...");
+
+    auto updateModels = [&](const QString &providerId) {
+        modelCombo->clear();
+        QList<AIModelInfo> models = AIConfig::instance().getModelsByProvider(providerId);
+        for (const AIModelInfo &model : models) {
+            modelCombo->addItem(model.id, model.id);
+        }
+    };
+    updateModels(providerCombo->currentData().toString());
+    connect(providerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [&](int index) {
+        if (index >= 0) {
+            updateModels(providerCombo->itemData(index).toString());
+        }
+    });
+
+    formLayout->addRow(modelLabel, modelCombo);
+
+    QLabel *nameLabel = new QLabel("配置名称:", formGroup);
+    QLineEdit *nameEdit = new QLineEdit(formGroup);
+    nameEdit->setPlaceholderText("自定义名称（可选）");
+    formLayout->addRow(nameLabel, nameEdit);
+
+    QLabel *apiKeyLabel = new QLabel("API Key:", formGroup);
+    QWidget *apiKeyContainer = new QWidget(formGroup);
+    QHBoxLayout *apiKeyLayout = new QHBoxLayout(apiKeyContainer);
+    apiKeyLayout->setContentsMargins(0, 0, 0, 0);
+    apiKeyLayout->setSpacing(8);
+
+    QLineEdit *apiKeyEdit = new QLineEdit(apiKeyContainer);
+    apiKeyEdit->setPlaceholderText("请输入API Key");
+    apiKeyEdit->setEchoMode(QLineEdit::Password);
+    apiKeyEdit->setMinimumWidth(200);
+
+    QPushButton *togglePasswordBtn = new QPushButton("👁", apiKeyContainer);
+    togglePasswordBtn->setFixedWidth(35);
+    togglePasswordBtn->setToolTip("显示/隐藏密码");
+    togglePasswordBtn->setStyleSheet("QPushButton { border: 1px solid #ccc; border-radius: 3px; padding: 4px; }");
+
+    connect(togglePasswordBtn, &QPushButton::clicked, [&]() {
+        if (apiKeyEdit->echoMode() == QLineEdit::Password) {
+            apiKeyEdit->setEchoMode(QLineEdit::Normal);
+            togglePasswordBtn->setText("🔒");
+        } else {
+            apiKeyEdit->setEchoMode(QLineEdit::Password);
+            togglePasswordBtn->setText("👁");
+        }
+    });
+
+    apiKeyLayout->addWidget(apiKeyEdit);
+    apiKeyLayout->addWidget(togglePasswordBtn);
+    formLayout->addRow(apiKeyLabel, apiKeyContainer);
+
+    QLabel *endpointLabel = new QLabel("API地址:", formGroup);
+    QLineEdit *endpointEdit = new QLineEdit(formGroup);
+    endpointEdit->setPlaceholderText("留空使用默认地址（可选）");
+    formLayout->addRow(endpointLabel, endpointEdit);
+
+    mainLayout->addWidget(formGroup);
+
+    QFrame *verifyFrame = new QFrame(&dialog);
+    verifyFrame->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
+    verifyFrame->setStyleSheet("QFrame { background-color: #f8f9fa; border-radius: 8px; padding: 15px; }");
+    QVBoxLayout *verifyLayout = new QVBoxLayout(verifyFrame);
+    verifyLayout->setSpacing(10);
+
+    QHBoxLayout *verifyBtnLayout = new QHBoxLayout();
+    verifyBtnLayout->setSpacing(10);
+
+    QPushButton *verifyBtn = new QPushButton("🔐 验证连接", &dialog);
+    verifyBtn->setStyleSheet(
+        "QPushButton { background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+        "QPushButton:hover { background-color: #2980b9; } "
+        "QPushButton:disabled { background-color: #bdc3c7; }"
+    );
+
+    QLabel *verifyStatusLabel = new QLabel("", verifyFrame);
+    verifyStatusLabel->setAlignment(Qt::AlignCenter);
+    verifyStatusLabel->setStyleSheet("padding: 10px; border-radius: 4px; font-size: 13px;");
+    verifyStatusLabel->setVisible(false);
+
+    verifyBtnLayout->addStretch();
+    verifyBtnLayout->addWidget(verifyBtn);
+    verifyBtnLayout->addStretch();
+
+    verifyLayout->addLayout(verifyBtnLayout);
+    verifyLayout->addWidget(verifyStatusLabel);
+
+    mainLayout->addWidget(verifyFrame);
+
+    QCheckBox *defaultCheck = new QCheckBox("设为默认模型", &dialog);
+    defaultCheck->setStyleSheet("QCheckBox { font-size: 14px; padding: 5px; }");
+    mainLayout->addWidget(defaultCheck);
+
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    buttonLayout->setSpacing(15);
+
+    QPushButton *okBtn = new QPushButton("✅ 添加", &dialog);
+    okBtn->setStyleSheet(
+        "QPushButton { background-color: #27ae60; color: white; padding: 10px 25px; border-radius: 5px; font-weight: bold; font-size: 14px; } "
+        "QPushButton:hover { background-color: #219a52; }"
+    );
+
+    QPushButton *cancelBtn = new QPushButton("取消", &dialog);
+    cancelBtn->setStyleSheet(
+        "QPushButton { background-color: #95a5a6; color: white; padding: 10px 25px; border-radius: 5px; font-size: 14px; } "
+        "QPushButton:hover { background-color: #7f8c8d; }"
+    );
+
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(okBtn);
+    buttonLayout->addWidget(cancelBtn);
+    mainLayout->addLayout(buttonLayout);
+
+    QNetworkAccessManager *verifyManager = new QNetworkAccessManager(&dialog);
+
+    connect(verifyBtn, &QPushButton::clicked, [&]() {
+        QString apiKey = apiKeyEdit->text().trimmed();
+        QString modelId = modelCombo->currentData().toString();
+        if (modelId.isEmpty()) {
+            modelId = modelCombo->currentText().trimmed();
+        }
+        QString providerId = providerCombo->currentData().toString();
+        QString endpoint = endpointEdit->text().trimmed();
+
+        if (apiKey.isEmpty()) {
+            verifyStatusLabel->setText("❌ 请输入API Key");
+            verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+            verifyStatusLabel->setVisible(true);
+            return;
+        }
+
+        if (modelId == "local") {
+            verifyStatusLabel->setText("ℹ️ 本地模式无需验证");
+            verifyStatusLabel->setStyleSheet("padding: 10px; color: #2980b9; background-color: #d4e6f1; border-radius: 4px;");
+            verifyStatusLabel->setVisible(true);
+            return;
+        }
+
+        verifyBtn->setEnabled(false);
+        verifyBtn->setText("🔄 验证中...");
+        verifyBtn->setStyleSheet(
+            "QPushButton { background-color: #f39c12; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+            "QPushButton:disabled { background-color: #f39c12; }"
+        );
+        verifyStatusLabel->setVisible(false);
+
+        AIModelInfo modelInfo = AIConfig::instance().getModelInfo(modelId);
+        QString actualEndpoint = endpoint.isEmpty() ? modelInfo.defaultEndpoint : endpoint;
+        QString actualModelName = modelInfo.name.isEmpty() ? modelId : modelInfo.name;
+
+        if (actualEndpoint.isEmpty()) {
+            verifyStatusLabel->setText("❌ 未配置API地址");
+            verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+            verifyStatusLabel->setVisible(true);
+            verifyBtn->setEnabled(true);
+            verifyBtn->setText("🔐 验证连接");
+            verifyBtn->setStyleSheet(
+                "QPushButton { background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+                "QPushButton:hover { background-color: #2980b9; }"
+            );
+            return;
+        }
+
+        QUrl url(actualEndpoint);
+        QNetworkRequest request;
+        request.setUrl(url);
+        request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+        request.setRawHeader("Authorization", QString("Bearer %1").arg(apiKey).toUtf8());
+
+        QJsonObject json;
+        json["model"] = actualModelName;
+        QJsonArray messages;
+        QJsonObject msg;
+        msg["role"] = "user";
+        msg["content"] = "Hi";
+        messages.append(msg);
+        json["messages"] = messages;
+        json["max_tokens"] = 10;
+        json["stream"] = false;
+
+        if (providerId == "aliyun" || providerId == "minimax") {
+            QJsonObject input;
+            input["messages"] = json.take("messages");
+            json["input"] = input;
+            json.remove("max_tokens");
+            json.remove("stream");
+            json["parameters"] = QJsonObject({
+                {"temperature", 0.7},
+                {"max_tokens", 10},
+                {"result_format", "message"}
+            });
+        }
+
+        QJsonDocument doc(json);
+        QPointer<QNetworkReply> reply = verifyManager->post(request, doc.toJson());
+
+        connect(reply, &QNetworkReply::finished, [=]() {
+            verifyBtn->setEnabled(true);
+            verifyBtn->setText("🔐 验证连接");
+            verifyBtn->setStyleSheet(
+                "QPushButton { background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+                "QPushButton:hover { background-color: #2980b9; }"
+            );
+
+            if (!reply || reply->error() != QNetworkReply::NoError) {
+                QString errorMsg = reply ? reply->errorString() : "网络错误";
+                verifyStatusLabel->setText(QString("❌ 连接失败: %1").arg(errorMsg));
+                verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+                verifyStatusLabel->setVisible(true);
+                return;
+            }
+
+            QByteArray responseData = reply->readAll();
+            QJsonParseError parseError;
+            QJsonDocument responseDoc = QJsonDocument::fromJson(responseData, &parseError);
+
+            if (parseError.error != QJsonParseError::NoError) {
+                verifyStatusLabel->setText("⚠️ 响应格式异常");
+                verifyStatusLabel->setStyleSheet("padding: 10px; color: #d35400; background-color: #fdebd0; border-radius: 4px;");
+                verifyStatusLabel->setVisible(true);
+                return;
+            }
+
+            QJsonObject responseObj = responseDoc.object();
+            if (responseObj.contains("error")) {
+                QString errorMsg = responseObj["error"].toObject()["message"].toString("未知错误");
+                verifyStatusLabel->setText(QString("❌ API错误: %1").arg(errorMsg));
+                verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+                verifyStatusLabel->setVisible(true);
+            } else {
+                verifyStatusLabel->setText("✅ 连接成功！API Key有效");
+                verifyStatusLabel->setStyleSheet("padding: 10px; color: #196f3d; background-color: #d4edda; border-radius: 4px;");
+                verifyStatusLabel->setVisible(true);
+            }
+        });
+    });
+
+    connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
+    connect(cancelBtn, &QPushButton::clicked, &dialog, &QDialog::reject);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        QString apiKey = apiKeyEdit->text().trimmed();
+        QString modelId = modelCombo->currentData().toString();
+        if (modelId.isEmpty()) {
+            modelId = modelCombo->currentText().trimmed();
+        }
+        if (modelId.isEmpty()) {
+            QMessageBox::warning(this, "警告", "请选择或输入模型名称");
+            return;
+        }
+        QString providerId = providerCombo->currentData().toString();
+        QString endpoint = endpointEdit->text().trimmed();
+
+        if (apiKey.isEmpty()) {
+            QMessageBox::warning(this, "警告", "API Key不能为空");
+            return;
+        }
+
+        AIKeyConfig newKey;
+        newKey.provider = providerId;
+        newKey.model = modelId;
+
+        QString customName = nameEdit->text().trimmed();
+        if (!customName.isEmpty()) {
+            newKey.name = customName;
+        } else {
+            AIModelInfo modelInfo = AIConfig::instance().getModelInfo(modelId);
+            newKey.name = modelInfo.name.isEmpty() ? modelId : modelInfo.name;
+        }
+
+        newKey.apiKey = apiKey;
+        newKey.endpoint = endpoint;
+        newKey.isDefault = defaultCheck->isChecked();
+
+        AIConfig::instance().addKey(newKey);
+        loadAISettings();
+
+        aiStatusLabel->setText("✅ 模型添加成功");
+        aiStatusLabel->setStyleSheet("padding: 8px; color: #196f3d; background-color: #d4edda; border-radius: 4px;");
+        QTimer::singleShot(2000, this, [this]() {
+            aiStatusLabel->setText("");
+        });
+    }
+}
+
+void SettingsWidget::onEditAIKey()
+{
+    int currentRow = aiKeysTable->currentRow();
+    if (currentRow < 0) return;
+
+    QString keyId = aiKeysTable->item(currentRow, 0)->data(Qt::UserRole).toString();
+    AIKeyConfig key = AIConfig::instance().getKey(keyId);
+    if (key.id.isEmpty()) return;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("编辑AI模型");
+    dialog.setMinimumWidth(550);
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
+    mainLayout->setSpacing(15);
+
+    QGroupBox *formGroup = new QGroupBox("模型配置", &dialog);
+    QFormLayout *formLayout = new QFormLayout(formGroup);
+    formLayout->setSpacing(12);
+    formLayout->setLabelAlignment(Qt::AlignRight);
+
+    QLabel *providerLabel = new QLabel("服务商:", formGroup);
+    QComboBox *providerCombo = new QComboBox(formGroup);
+    providerCombo->setEditable(true);
+    providerCombo->setInsertPolicy(QComboBox::NoInsert);
+    providerCombo->setMinimumWidth(250);
+    providerCombo->lineEdit()->setPlaceholderText("搜索服务商...");
+
+    QList<AIProviderInfo> providers = AIConfig::instance().getProviders();
+    for (const AIProviderInfo &provider : providers) {
+        providerCombo->addItem(provider.displayName, provider.id);
+    }
+    int providerIndex = providerCombo->findData(key.provider);
+    if (providerIndex >= 0) providerCombo->setCurrentIndex(providerIndex);
+
+    formLayout->addRow(providerLabel, providerCombo);
+
+    QLabel *modelLabel = new QLabel("模型:", formGroup);
+    QComboBox *modelCombo = new QComboBox(formGroup);
+    modelCombo->setEditable(true);
+    modelCombo->setInsertPolicy(QComboBox::NoInsert);
+    modelCombo->setMinimumWidth(250);
+    modelCombo->lineEdit()->setPlaceholderText("选择或搜索模型...");
+
+    auto updateModels = [&](const QString &providerId) {
+        modelCombo->clear();
+        QList<AIModelInfo> models = AIConfig::instance().getModelsByProvider(providerId);
+        for (const AIModelInfo &model : models) {
+            modelCombo->addItem(model.id, model.id);
+        }
+    };
+    updateModels(key.provider);
+    int modelIndex = modelCombo->findData(key.model);
+    if (modelIndex >= 0) {
+        modelCombo->setCurrentIndex(modelIndex);
+    } else {
+        modelCombo->setCurrentText(key.model);
+    }
+
+    connect(providerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [&](int index) {
+        if (index >= 0) {
+            updateModels(providerCombo->itemData(index).toString());
+        }
+    });
+
+    formLayout->addRow(modelLabel, modelCombo);
+
+    QLabel *nameLabel = new QLabel("配置名称:", formGroup);
+    QLineEdit *nameEdit = new QLineEdit(key.name, formGroup);
+    nameEdit->setPlaceholderText("自定义名称（可选）");
+    formLayout->addRow(nameLabel, nameEdit);
+
+    QLabel *apiKeyLabel = new QLabel("API Key:", formGroup);
+    QWidget *apiKeyContainer = new QWidget(formGroup);
+    QHBoxLayout *apiKeyLayout = new QHBoxLayout(apiKeyContainer);
+    apiKeyLayout->setContentsMargins(0, 0, 0, 0);
+    apiKeyLayout->setSpacing(8);
+
+    QLineEdit *apiKeyEdit = new QLineEdit(apiKeyContainer);
+    apiKeyEdit->setPlaceholderText("留空保持原值");
+    apiKeyEdit->setEchoMode(QLineEdit::Password);
+    apiKeyEdit->setMinimumWidth(200);
+
+    QPushButton *togglePasswordBtn = new QPushButton("👁", apiKeyContainer);
+    togglePasswordBtn->setFixedWidth(35);
+    togglePasswordBtn->setToolTip("显示/隐藏密码");
+    togglePasswordBtn->setStyleSheet("QPushButton { border: 1px solid #ccc; border-radius: 3px; padding: 4px; }");
+
+    connect(togglePasswordBtn, &QPushButton::clicked, [&]() {
+        if (apiKeyEdit->echoMode() == QLineEdit::Password) {
+            apiKeyEdit->setEchoMode(QLineEdit::Normal);
+            togglePasswordBtn->setText("🔒");
+        } else {
+            apiKeyEdit->setEchoMode(QLineEdit::Password);
+            togglePasswordBtn->setText("👁");
+        }
+    });
+
+    apiKeyLayout->addWidget(apiKeyEdit);
+    apiKeyLayout->addWidget(togglePasswordBtn);
+    formLayout->addRow(apiKeyLabel, apiKeyContainer);
+
+    QLabel *endpointLabel = new QLabel("API地址:", formGroup);
+    QLineEdit *endpointEdit = new QLineEdit(key.endpoint, formGroup);
+    endpointEdit->setPlaceholderText("留空使用默认地址（可选）");
+    formLayout->addRow(endpointLabel, endpointEdit);
+
+    mainLayout->addWidget(formGroup);
+
+    QFrame *verifyFrame = new QFrame(&dialog);
+    verifyFrame->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
+    verifyFrame->setStyleSheet("QFrame { background-color: #f8f9fa; border-radius: 8px; padding: 15px; }");
+    QVBoxLayout *verifyLayout = new QVBoxLayout(verifyFrame);
+    verifyLayout->setSpacing(10);
+
+    QHBoxLayout *verifyBtnLayout = new QHBoxLayout();
+    verifyBtnLayout->setSpacing(10);
+
+    QPushButton *verifyBtn = new QPushButton("🔐 验证连接", &dialog);
+    verifyBtn->setStyleSheet(
+        "QPushButton { background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+        "QPushButton:hover { background-color: #2980b9; } "
+        "QPushButton:disabled { background-color: #bdc3c7; }"
+    );
+
+    QLabel *verifyStatusLabel = new QLabel("", verifyFrame);
+    verifyStatusLabel->setAlignment(Qt::AlignCenter);
+    verifyStatusLabel->setStyleSheet("padding: 10px; border-radius: 4px; font-size: 13px;");
+    verifyStatusLabel->setVisible(false);
+
+    verifyBtnLayout->addStretch();
+    verifyBtnLayout->addWidget(verifyBtn);
+    verifyBtnLayout->addStretch();
+
+    verifyLayout->addLayout(verifyBtnLayout);
+    verifyLayout->addWidget(verifyStatusLabel);
+
+    mainLayout->addWidget(verifyFrame);
+
+    QCheckBox *defaultCheck = new QCheckBox("设为默认模型", &dialog);
+    defaultCheck->setChecked(key.isDefault);
+    defaultCheck->setStyleSheet("QCheckBox { font-size: 14px; padding: 5px; }");
+    mainLayout->addWidget(defaultCheck);
+
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    buttonLayout->setSpacing(15);
+
+    QPushButton *okBtn = new QPushButton("✅ 保存", &dialog);
+    okBtn->setStyleSheet(
+        "QPushButton { background-color: #27ae60; color: white; padding: 10px 25px; border-radius: 5px; font-weight: bold; font-size: 14px; } "
+        "QPushButton:hover { background-color: #219a52; }"
+    );
+
+    QPushButton *cancelBtn = new QPushButton("取消", &dialog);
+    cancelBtn->setStyleSheet(
+        "QPushButton { background-color: #95a5a6; color: white; padding: 10px 25px; border-radius: 5px; font-size: 14px; } "
+        "QPushButton:hover { background-color: #7f8c8d; }"
+    );
+
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(okBtn);
+    buttonLayout->addWidget(cancelBtn);
+    mainLayout->addLayout(buttonLayout);
+
+    QString originalApiKey = key.apiKey;
+    QNetworkAccessManager *verifyManager = new QNetworkAccessManager(&dialog);
+
+    connect(verifyBtn, &QPushButton::clicked, [&]() {
+        QString apiKey = apiKeyEdit->text().trimmed();
+        if (apiKey.isEmpty()) {
+            apiKey = originalApiKey;
+        }
+        QString modelId = modelCombo->currentData().toString();
+        if (modelId.isEmpty()) {
+            modelId = modelCombo->currentText().trimmed();
+        }
+        QString providerId = providerCombo->currentData().toString();
+        QString endpoint = endpointEdit->text().trimmed();
+
+        if (apiKey.isEmpty()) {
+            verifyStatusLabel->setText("❌ 没有可验证的API Key");
+            verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+            verifyStatusLabel->setVisible(true);
+            return;
+        }
+
+        if (modelId == "local") {
+            verifyStatusLabel->setText("ℹ️ 本地模式无需验证");
+            verifyStatusLabel->setStyleSheet("padding: 10px; color: #2980b9; background-color: #d4e6f1; border-radius: 4px;");
+            verifyStatusLabel->setVisible(true);
+            return;
+        }
+
+        verifyBtn->setEnabled(false);
+        verifyBtn->setText("🔄 验证中...");
+        verifyBtn->setStyleSheet(
+            "QPushButton { background-color: #f39c12; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+            "QPushButton:disabled { background-color: #f39c12; }"
+        );
+        verifyStatusLabel->setVisible(false);
+
+        AIModelInfo modelInfo = AIConfig::instance().getModelInfo(modelId);
+        QString actualEndpoint = endpoint.isEmpty() ? modelInfo.defaultEndpoint : endpoint;
+        QString actualModelName = modelInfo.name.isEmpty() ? modelId : modelInfo.name;
+
+        if (actualEndpoint.isEmpty()) {
+            verifyStatusLabel->setText("❌ 未配置API地址");
+            verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+            verifyStatusLabel->setVisible(true);
+            verifyBtn->setEnabled(true);
+            verifyBtn->setText("🔐 验证连接");
+            verifyBtn->setStyleSheet(
+                "QPushButton { background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+                "QPushButton:hover { background-color: #2980b9; }"
+            );
+            return;
+        }
+
+        QUrl url(actualEndpoint);
+        QNetworkRequest request;
+        request.setUrl(url);
+        request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+        request.setRawHeader("Authorization", QString("Bearer %1").arg(apiKey).toUtf8());
+
+        QJsonObject json;
+        json["model"] = actualModelName;
+        QJsonArray messages;
+        QJsonObject msg;
+        msg["role"] = "user";
+        msg["content"] = "Hi";
+        messages.append(msg);
+        json["messages"] = messages;
+        json["max_tokens"] = 10;
+        json["stream"] = false;
+
+        if (providerId == "aliyun" || providerId == "minimax") {
+            QJsonObject input;
+            input["messages"] = json.take("messages");
+            json["input"] = input;
+            json.remove("max_tokens");
+            json.remove("stream");
+            json["parameters"] = QJsonObject({
+                {"temperature", 0.7},
+                {"max_tokens", 10},
+                {"result_format", "message"}
+            });
+        }
+
+        QJsonDocument doc(json);
+        QPointer<QNetworkReply> reply = verifyManager->post(request, doc.toJson());
+
+        connect(reply, &QNetworkReply::finished, [=]() {
+            verifyBtn->setEnabled(true);
+            verifyBtn->setText("🔐 验证连接");
+            verifyBtn->setStyleSheet(
+                "QPushButton { background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+                "QPushButton:hover { background-color: #2980b9; }"
+            );
+
+            if (!reply || reply->error() != QNetworkReply::NoError) {
+                QString errorMsg = reply ? reply->errorString() : "网络错误";
+                verifyStatusLabel->setText(QString("❌ 连接失败: %1").arg(errorMsg));
+                verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+                verifyStatusLabel->setVisible(true);
+                return;
+            }
+
+            QByteArray responseData = reply->readAll();
+            QJsonParseError parseError;
+            QJsonDocument responseDoc = QJsonDocument::fromJson(responseData, &parseError);
+
+            if (parseError.error != QJsonParseError::NoError) {
+                verifyStatusLabel->setText("⚠️ 响应格式异常");
+                verifyStatusLabel->setStyleSheet("padding: 10px; color: #d35400; background-color: #fdebd0; border-radius: 4px;");
+                verifyStatusLabel->setVisible(true);
+                return;
+            }
+
+            QJsonObject responseObj = responseDoc.object();
+            if (responseObj.contains("error")) {
+                QString errorMsg = responseObj["error"].toObject()["message"].toString("未知错误");
+                verifyStatusLabel->setText(QString("❌ API错误: %1").arg(errorMsg));
+                verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+                verifyStatusLabel->setVisible(true);
+            } else {
+                verifyStatusLabel->setText("✅ 连接成功！API Key有效");
+                verifyStatusLabel->setStyleSheet("padding: 10px; color: #196f3d; background-color: #d4edda; border-radius: 4px;");
+                verifyStatusLabel->setVisible(true);
+            }
+        });
+    });
+
+    connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
+    connect(cancelBtn, &QPushButton::clicked, &dialog, &QDialog::reject);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        QString modelId = modelCombo->currentData().toString();
+        if (modelId.isEmpty()) {
+            modelId = modelCombo->currentText().trimmed();
+        }
+        if (modelId.isEmpty()) {
+            QMessageBox::warning(this, "警告", "请选择或输入模型名称");
+            return;
+        }
+
+        key.provider = providerCombo->currentData().toString();
+        key.model = modelId;
+
+        if (!apiKeyEdit->text().trimmed().isEmpty()) {
+            key.apiKey = apiKeyEdit->text().trimmed();
+        }
+        key.endpoint = endpointEdit->text().trimmed();
+        key.isDefault = defaultCheck->isChecked();
+
+        QString customName = nameEdit->text().trimmed();
+        if (!customName.isEmpty()) {
+            key.name = customName;
+        } else {
+            AIModelInfo modelInfo = AIConfig::instance().getModelInfo(key.model);
+            key.name = modelInfo.name.isEmpty() ? modelId : modelInfo.name;
+        }
+
+        AIConfig::instance().updateKey(key);
+        loadAISettings();
+
+        aiStatusLabel->setText("✅ 模型更新成功");
+        aiStatusLabel->setStyleSheet("padding: 8px; color: #196f3d; background-color: #d4edda; border-radius: 4px;");
+        aiStatusLabel->setVisible(true);
+        QTimer::singleShot(2000, this, [this]() {
+            aiStatusLabel->setText("");
+        });
+    }
+}
+
+void SettingsWidget::onDeleteAIKey()
+{
+    int currentRow = aiKeysTable->currentRow();
+    if (currentRow < 0) return;
+
+    QString keyId = aiKeysTable->item(currentRow, 0)->data(Qt::UserRole).toString();
+
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this, "确认删除", "确定要删除此AI配置吗？",
+        QMessageBox::Yes | QMessageBox::No
+    );
+
+    if (reply == QMessageBox::Yes) {
+        AIConfig::instance().deleteKey(keyId);
+        loadAISettings();
+    }
+}
+
+void SettingsWidget::onSetDefaultAIKey()
+{
+    int currentRow = aiKeysTable->currentRow();
+    if (currentRow < 0) return;
+
+    QString keyId = aiKeysTable->item(currentRow, 0)->data(Qt::UserRole).toString();
+    AIConfig::instance().setDefaultKey(keyId);
+    loadAISettings();
 }
 
 QWidget *SettingsWidget::createStartupPage()

@@ -18,6 +18,9 @@
 #include <QTabWidget>
 #include <QLabel>
 #include <QNetworkAccessManager>
+#include <QTableWidget>
+#include <QHeaderView>
+#include "modules/core/aiconfig.h"
 #include <QNetworkReply>
 #include <QSettings>
 #include <QCryptographicHash>
@@ -57,6 +60,11 @@ private slots:
     void onSaveAIConfig();
     void onTestAIConnection();
     void onChatTestClicked();
+    void onAddAIKey();
+    void onEditAIKey();
+    void onDeleteAIKey();
+    void onSetDefaultAIKey();
+    void onAIKeyTableSelectionChanged();
 
 private:
     void setupUI();
@@ -71,6 +79,7 @@ private:
     QString loadSavedAPIKey();
     QString getDefaultEndpoint(const QString &model);
     QString getModelName(const QString &model);
+    QString getModelDisplayName(const QString &model);
     
     Database *db;
     MainWindow *mainWindow;
@@ -94,6 +103,11 @@ private:
     QPushButton *saveAiBtn;
     QPushButton *chatTestBtn;
     QLabel *aiStatusLabel;
+    QTableWidget *aiKeysTable;
+    QPushButton *addAIKeyBtn;
+    QPushButton *editAIKeyBtn;
+    QPushButton *deleteAIKeyBtn;
+    QPushButton *setDefaultAIKeyBtn;
 };
 
 #endif

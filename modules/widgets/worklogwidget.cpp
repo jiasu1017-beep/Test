@@ -1,4 +1,5 @@
 #include "worklogwidget.h"
+#include "modules/core/aiconfig.h"
 #include <QDateTime>
 #include <QTimer>
 #include <QMessageBox>
@@ -1491,12 +1492,24 @@ void WorkLogWidget::onGenerateReport()
 
     QHBoxLayout *btnLayout = new QHBoxLayout();
     QPushButton *aiGenerateBtn = new QPushButton("🤖 AI生成分析", &reportDialog);
+
+    QComboBox *aiModelCombo = new QComboBox(&reportDialog);
+    aiModelCombo->setToolTip("选择AI模型");
+    aiModelCombo->setStyleSheet(R"(
+        QComboBox {
+            min-width: 150px;
+            padding: 4px;
+        }
+    )");
+    loadAIKeysToComboBox(aiModelCombo);
+
     QPushButton *exportPDFBtn = new QPushButton("📄 导出PDF", &reportDialog);
     QPushButton *exportWordBtn = new QPushButton("📝 导出Word", &reportDialog);
     QPushButton *exportMarkdownBtn = new QPushButton("📋 导出Markdown", &reportDialog);
     QPushButton *copyBtn = new QPushButton("复制", &reportDialog);
     QPushButton *closeBtn = new QPushButton("关闭", &reportDialog);
     btnLayout->addWidget(aiGenerateBtn);
+    btnLayout->addWidget(aiModelCombo);
     btnLayout->addWidget(exportPDFBtn);
     btnLayout->addWidget(exportWordBtn);
     btnLayout->addWidget(exportMarkdownBtn);
@@ -1522,8 +1535,9 @@ void WorkLogWidget::onGenerateReport()
         }
     });
 
-    connect(aiGenerateBtn, &QPushButton::clicked, [this, reportEdit, reportType, reportContent]() {
-        onAIGenerateReport(reportEdit, reportType, reportContent);
+    connect(aiGenerateBtn, &QPushButton::clicked, [this, reportEdit, reportType, reportContent, aiModelCombo]() {
+        QString currentModel = aiModelCombo->currentData().toString();
+        onAIGenerateReport(currentModel, reportEdit, reportType, reportContent);
     });
 
     connect(exportPDFBtn, &QPushButton::clicked, [this, reportEdit, reportType]() {
@@ -1875,6 +1889,17 @@ void WorkLogWidget::showTaskDialog(Task *task)
     QLabel *aiStatusLabel = new QLabel("", &dialog);
     aiStatusLabel->setStyleSheet("font-size: 11px; color: #7f8c8d;");
     titleLayout->addWidget(aiStatusLabel);
+
+    QComboBox *aiModelCombo = new QComboBox(&dialog);
+    aiModelCombo->setToolTip("选择AI模型");
+    aiModelCombo->setStyleSheet(R"(
+        QComboBox {
+            min-width: 150px;
+            padding: 4px;
+        }
+    )");
+    loadAIKeysToComboBox(aiModelCombo);
+    titleLayout->addWidget(aiModelCombo);
     
     QTextEdit *descEdit = new QTextEdit(&dialog);
     descEdit->setPlaceholderText("请输入任务描述");
@@ -1982,13 +2007,18 @@ void WorkLogWidget::showTaskDialog(Task *task)
         tagsEdit->setText(task->tags.join(", "));
     }
 
-    connect(aiBtn, &QPushButton::clicked, this, [this, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, tagsEdit, &dialog]() {
+    connect(aiBtn, &QPushButton::clicked, this, [this, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, tagsEdit, aiModelCombo, &dialog]() {
         QString title = titleEdit->text().trimmed();
         if (title.isEmpty()) {
             QMessageBox::warning(&dialog, "提示", "请先输入任务标题");
             return;
         }
-        analyzeTaskWithAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, tagsEdit);
+        QString selectedModel = aiModelCombo->currentData().toString();
+        if (selectedModel.isEmpty()) {
+            QMessageBox::warning(&dialog, "提示", "请先配置AI API Key");
+            return;
+        }
+        analyzeTaskWithAI(selectedModel, title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, tagsEdit);
     });
     
     connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
@@ -2431,51 +2461,58 @@ QString WorkLogWidget::generateReportWithAI(const QString &reportType, const QSt
 
 void WorkLogWidget::onAIGenerateReport(QTextEdit *reportEdit, const QString &reportType, const QString &reportData)
 {
+    QString currentModel = getCurrentAIModel();
+    onAIGenerateReport(currentModel, reportEdit, reportType, reportData);
+}
+
+void WorkLogWidget::onAIGenerateReport(const QString &model, QTextEdit *reportEdit, const QString &reportType, const QString &reportData)
+{
     if (!reportEdit) {
         return;
     }
-    
-    QString currentModel = getCurrentAIModel();
-    
+
+    QString currentModel = model;
+
     if (currentModel == "local") {
         QMessageBox::information(this, "提示", "本地AI模式不支持报告生成，请配置在线AI服务");
         return;
     }
-    
+
     if (!networkManager) {
         networkManager = new QNetworkAccessManager(this);
     }
-    
-    QString apiKey = getAPIKey();
-    if (apiKey.isEmpty()) {
+
+    AIKeyConfig keyConfig = AIConfig::instance().getKeyByModelName(currentModel);
+    if (keyConfig.apiKey.isEmpty()) {
         QMessageBox::warning(this, "提示", "请先在设置中配置AI API Key");
         return;
     }
-    
-    QString endpoint = getAPIEndpoint();
+
+    QString endpoint = keyConfig.endpoint;
     if (endpoint.isEmpty()) {
         endpoint = getDefaultEndpoint(currentModel);
     }
-    
-    QString modelName = getModelNameForAPI(currentModel);
+
+    QString modelName = currentModel;
+
     QString prompt = generateReportWithAI(reportType, reportData);
-    
+
     QJsonObject json;
     json["model"] = modelName;
     json["stream"] = false;
-    
+
     QJsonArray messages;
     QJsonObject msg;
     msg["role"] = "user";
     msg["content"] = prompt;
     messages.append(msg);
     json["messages"] = messages;
-    
-    if (currentModel == "minimax" || currentModel == "qwen" || currentModel == "spark") {
+
+    if (currentModel == "minimax" || currentModel.startsWith("qwen") || currentModel.startsWith("spark") || currentModel.startsWith("deepseek")) {
         json["max_tokens"] = 1024;
     }
-    
-    if (currentModel == "qwen") {
+
+    if (currentModel.startsWith("qwen")) {
         QJsonObject input;
         input["messages"] = json.take("messages");
         json["input"] = input;
@@ -2487,14 +2524,10 @@ void WorkLogWidget::onAIGenerateReport(QTextEdit *reportEdit, const QString &rep
             {"result_format", "message"}
         });
     }
-    
-    if (currentModel == "spark") {
-        json["max_tokens"] = 1024;
-    }
-    
+
     QJsonDocument doc(json);
     QByteArray postData = doc.toJson();
-    
+
     QString logDir = QCoreApplication::applicationDirPath() + "/logs";
     QDir dir(logDir);
     if (!dir.exists()) {
@@ -2517,36 +2550,55 @@ void WorkLogWidget::onAIGenerateReport(QTextEdit *reportEdit, const QString &rep
     QNetworkRequest request;
     request.setUrl(QUrl(endpoint));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    request.setRawHeader("Authorization", QString("Bearer %1").arg(apiKey).toUtf8());
-    
+    request.setRawHeader("Authorization", QString("Bearer %1").arg(keyConfig.apiKey).toUtf8());
+
     QProgressDialog *progressDialog = new QProgressDialog("AI正在生成报告分析...", "取消", 0, 0, this);
     progressDialog->setWindowModality(Qt::WindowModal);
     progressDialog->setCancelButton(nullptr);
     progressDialog->setAttribute(Qt::WA_DeleteOnClose);
     progressDialog->show();
-    
+
     QPointer<QProgressDialog> progressDialogPtr(progressDialog);
     QNetworkReply *reply = networkManager->post(request, postData);
     QPointer<QNetworkReply> replyPtr(reply);
-    
-    connect(reply, &QNetworkReply::finished, this, [this, replyPtr, reportEdit, reportType, progressDialogPtr, currentModel, logFileName]() {
+
+    QTimer *timeoutTimer = new QTimer(this);
+    timeoutTimer->setSingleShot(true);
+    timeoutTimer->setInterval(AIConfig::instance().getTimeout() * 1000);
+
+    connect(timeoutTimer, &QTimer::timeout, this, [replyPtr]() {
+        if (replyPtr && replyPtr->isRunning()) {
+            replyPtr->abort();
+        }
+    });
+
+    connect(reply, &QNetworkReply::finished, this, [this, replyPtr, reportEdit, reportType, progressDialogPtr, currentModel, logFileName, timeoutTimer]() {
+        if (timeoutTimer) {
+            timeoutTimer->stop();
+            timeoutTimer->deleteLater();
+        }
+
         if (progressDialogPtr) {
             progressDialogPtr->close();
         }
-        
+
         if (!replyPtr) {
             return;
         }
-        
+
         if (replyPtr->error() != QNetworkReply::NoError) {
             QString errorMsg = replyPtr->errorString();
+            if (replyPtr->error() == QNetworkReply::OperationCanceledError) {
+                errorMsg = QString("请求超时（%1秒），请检查网络连接或增加超时时间").arg(AIConfig::instance().getTimeout());
+            }
             QByteArray responseData = replyPtr->readAll();
-            
+
             QFile logFile(logFileName);
             if (logFile.open(QIODevice::Append | QIODevice::Text)) {
                 QTextStream out(&logFile);
                 out.setCodec("UTF-8");
                 out << "\n=== AI Report Response (ERROR) ===" << "\n";
+                out << "Error Code: " << replyPtr->error() << "\n";
                 out << "Error: " << errorMsg << "\n";
                 out << "Response:\n" << responseData << "\n\n";
                 logFile.close();
@@ -2579,7 +2631,7 @@ void WorkLogWidget::onAIGenerateReport(QTextEdit *reportEdit, const QString &rep
         
         QString content;
         
-        if (currentModel == "qwen") {
+        if (currentModel.startsWith("qwen")) {
             if (rootObj.contains("output") && rootObj["output"].toObject().contains("choices")) {
                 QJsonArray choices = rootObj["output"].toObject()["choices"].toArray();
                 if (!choices.isEmpty()) {
@@ -2651,29 +2703,26 @@ void WorkLogWidget::onAIGenerateReport(QTextEdit *reportEdit, const QString &rep
         
         replyPtr->deleteLater();
     });
-    
-    QTimer::singleShot(10000, this, [this, replyPtr, progressDialogPtr]() {
-        if (replyPtr && replyPtr->isRunning()) {
-            replyPtr->abort();
-            if (progressDialogPtr) {
-                progressDialogPtr->close();
-            }
-            logOperation("ai_generate_report", "请求超时");
-            QMessageBox::warning(this, "超时", "AI服务响应超时，请检查网络连接");
-        }
-    });
 }
 
 void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
                                        QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
                                        QLabel *aiStatusLabel, QPushButton *aiBtn, QLineEdit *tagsEdit)
 {
+    QString currentModel = getCurrentAIModel();
+    analyzeTaskWithAI(currentModel, title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, tagsEdit);
+}
+
+void WorkLogWidget::analyzeTaskWithAI(const QString &model, const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
+                                       QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
+                                       QLabel *aiStatusLabel, QPushButton *aiBtn, QLineEdit *tagsEdit)
+{
     if (!titleEdit || !descEdit || !categoryCombo || !priorityCombo || !durationSpin) {
         return;
     }
-    
-    QString currentModel = getCurrentAIModel();
-    
+
+    QString currentModel = model;
+
     if (currentModel == "local") {
         analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, tagsEdit);
         return;
@@ -2722,8 +2771,8 @@ void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit
                             "只返回JSON，不要其他文字。")
                             .arg(title)
                             .arg(getExistingCategories());
-    
-    QString apiKey = getAPIKey();
+
+    QString apiKey = getAPIKey(currentModel);
     if (apiKey.isEmpty()) {
         if (aiStatusLabel) {
             aiStatusLabel->setText("⚠️ 请先配置API Key");
@@ -2734,14 +2783,26 @@ void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit
         QMessageBox::warning(nullptr, "提示", "请先在设置中配置AI API Key");
         return;
     }
-    
-    QString endpoint = getAPIEndpoint();
+
+    AIKeyConfig keyConfig = AIConfig::instance().getKeyByModelName(currentModel);
+    if (keyConfig.apiKey.isEmpty()) {
+        if (aiStatusLabel) {
+            aiStatusLabel->setText("⚠️ 请先配置API Key");
+        }
+        if (aiBtn) {
+            aiBtn->setEnabled(true);
+        }
+        QMessageBox::warning(nullptr, "提示", "请先在设置中配置AI API Key");
+        return;
+    }
+
+    QString endpoint = keyConfig.endpoint;
     if (endpoint.isEmpty()) {
         endpoint = getDefaultEndpoint(currentModel);
     }
-    
-    QString modelName = getModelNameForAPI(currentModel);
-    
+
+    QString modelName = currentModel;
+
     QJsonObject json;
     json["model"] = modelName;
     json["stream"] = false;
@@ -2753,11 +2814,11 @@ void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit
     messages.append(msg);
     json["messages"] = messages;
     
-    if (currentModel == "minimax" || currentModel == "qwen" || currentModel == "spark") {
+    if (currentModel == "minimax" || currentModel.startsWith("qwen") || currentModel.startsWith("spark") || currentModel.startsWith("deepseek")) {
         json["max_tokens"] = 1024;
     }
-    
-    if (currentModel == "qwen") {
+
+    if (currentModel.startsWith("qwen")) {
         QJsonObject input;
         input["messages"] = json.take("messages");
         json["input"] = input;
@@ -2769,14 +2830,10 @@ void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit
             {"result_format", "message"}
         });
     }
-    
-    if (currentModel == "spark") {
-        json["max_tokens"] = 1024;
-    }
-    
+
     QJsonDocument doc(json);
     QByteArray postData = doc.toJson();
-    
+
     QString logDir = QCoreApplication::applicationDirPath() + "/logs";
     QDir dir(logDir);
     if (!dir.exists()) {
@@ -2799,27 +2856,29 @@ void WorkLogWidget::analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit
     QNetworkRequest request;
     request.setUrl(QUrl(endpoint));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    request.setRawHeader("Authorization", QString("Bearer %1").arg(apiKey).toUtf8());
-    
+    request.setRawHeader("Authorization", QString("Bearer %1").arg(keyConfig.apiKey).toUtf8());
+
     QNetworkReply *reply = networkManager->post(request, postData);
     QPointer<QNetworkReply> replyPtr(reply);
-    
-    connect(reply, &QNetworkReply::finished, this, [this, replyPtr, title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, logFileName, tagsEdit]() {
-        if (replyPtr) {
-            handleAIResponse(replyPtr, title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, logFileName, tagsEdit);
-        }
-    });
-    
-    QTimer::singleShot(10000, this, [this, replyPtr, aiStatusLabel, aiBtn]() {
+
+    QTimer *timeoutTimer = new QTimer(this);
+    timeoutTimer->setSingleShot(true);
+    timeoutTimer->setInterval(AIConfig::instance().getTimeout() * 1000);
+
+    connect(timeoutTimer, &QTimer::timeout, this, [replyPtr]() {
         if (replyPtr && replyPtr->isRunning()) {
             replyPtr->abort();
-            if (aiStatusLabel) {
-                aiStatusLabel->setText("❌ 请求超时");
-            }
-            if (aiBtn) {
-                aiBtn->setEnabled(true);
-            }
-            QMessageBox::warning(this, "超时", "AI服务响应超时，请检查网络连接");
+        }
+    });
+
+    connect(reply, &QNetworkReply::finished, this, [this, replyPtr, title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, logFileName, tagsEdit, timeoutTimer]() {
+        if (timeoutTimer) {
+            timeoutTimer->stop();
+            timeoutTimer->deleteLater();
+        }
+
+        if (replyPtr) {
+            handleAIResponse(replyPtr, title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, logFileName, tagsEdit);
         }
     });
 }
@@ -2839,18 +2898,8 @@ QString WorkLogWidget::getExistingCategories()
 
 QString WorkLogWidget::getAIServiceKey()
 {
-    QSettings settings("PonyWork", "WorkLog");
-    QString encryptedKey = settings.value("ai_api_key", "").toString();
-    if (encryptedKey.isEmpty()) {
-        return qgetenv("AI_API_KEY");
-    }
-    QByteArray data = QByteArray::fromBase64(encryptedKey.toUtf8());
-    QByteArray key = QCryptographicHash::hash(QByteArray("PonyWorkAI").append(QHostInfo::localHostName().toUtf8()), QCryptographicHash::Sha256);
-    QByteArray decrypted;
-    for (int i = 0; i < data.size(); ++i) {
-        decrypted.append(data.at(i) ^ key.at(i % key.size()));
-    }
-    return QString::fromUtf8(decrypted);
+    AIKeyConfig key = AIConfig::instance().getDefaultKey();
+    return key.apiKey;
 }
 
 QString WorkLogWidget::getAPIKey()
@@ -2858,16 +2907,33 @@ QString WorkLogWidget::getAPIKey()
     return getAIServiceKey();
 }
 
+QString WorkLogWidget::getAPIKey(const QString &model)
+{
+    if (model.isEmpty()) {
+        return getAPIKey();
+    }
+    
+    AIKeyConfig key = AIConfig::instance().getKeyByModel(model);
+    if (!key.apiKey.isEmpty()) {
+        return key.apiKey;
+    }
+    
+    return getAPIKey();
+}
+
 QString WorkLogWidget::getCurrentAIModel()
 {
-    QSettings settings("PonyWork", "WorkLog");
-    return settings.value("ai_model", "qwen").toString();
+    AIKeyConfig key = AIConfig::instance().getDefaultKey();
+    return key.model;
 }
 
 QString WorkLogWidget::getAPIEndpoint()
 {
-    QSettings settings("PonyWork", "WorkLog");
-    return settings.value("ai_endpoint", "").toString();
+    AIKeyConfig key = AIConfig::instance().getDefaultKey();
+    if (key.endpoint.isEmpty()) {
+        return getDefaultEndpoint(key.model);
+    }
+    return key.endpoint;
 }
 
 void WorkLogWidget::setSettingsWidget(void *settings)
@@ -2877,32 +2943,100 @@ void WorkLogWidget::setSettingsWidget(void *settings)
 
 QString WorkLogWidget::getDefaultEndpoint(const QString &model)
 {
-    static QMap<QString, QString> endpoints = {
-        {"minimax", "https://api.minimax.chat/v1/text/chatcompletion_v2"},
-        {"gpt35", "https://api.openai.com/v1/chat/completions"},
-        {"gpt4", "https://api.openai.com/v1/chat/completions"},
-        {"claude", "https://api.anthropic.com/v1/messages"},
-        {"gemini", "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"},
-        {"qwen", "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"},
-        {"spark", "https://spark-api.xfyun.com/v3.5/chat"},
-        {"deepseek", "https://api.siliconflow.cn/v1/chat/completions"}
-    };
-    return endpoints.value(model, "");
+    AIModelInfo modelInfo = AIConfig::instance().getModelInfo(model);
+    if (!modelInfo.defaultEndpoint.isEmpty()) {
+        return modelInfo.defaultEndpoint;
+    }
+    for (const AIModelInfo &m : AIConfig::instance().getAllModels()) {
+        if (m.name == model) {
+            return m.defaultEndpoint;
+        }
+    }
+    return "";
 }
 
 QString WorkLogWidget::getModelNameForAPI(const QString &model)
 {
     static QMap<QString, QString> models = {
         {"minimax", "abab6.5s-chat"},
+        {"abab6.5s-chat", "abab6.5s-chat"},
+        {"abab6.5g-chat", "abab6.5g-chat"},
         {"gpt35", "gpt-3.5-turbo"},
+        {"gpt-3.5-turbo", "gpt-3.5-turbo"},
         {"gpt4", "gpt-4"},
+        {"gpt-4", "gpt-4"},
+        {"gpt4o", "gpt-4o"},
+        {"gpt4turbo", "gpt-4-turbo"},
         {"claude", "claude-3-opus-20240229"},
+        {"claude3haiku", "claude-3-haiku-20240307"},
+        {"claude3sonnet", "claude-3-sonnet-20240229"},
+        {"claude3opus", "claude-3-opus-20240229"},
+        {"claude3.5sonnet", "claude-3-5-sonnet-20240620"},
         {"gemini", "gemini-pro"},
+        {"gemini-pro", "gemini-pro"},
+        {"gemini-1.5-pro", "gemini-1.5-pro"},
         {"qwen", "qwen-turbo"},
+        {"qwen-turbo", "qwen-turbo"},
+        {"qwen-plus", "qwen-plus"},
+        {"qwen-max", "qwen-max"},
+        {"qwen-long", "qwen-long"},
         {"spark", "generalv3.5"},
-        {"deepseek", "deepseek-ai/DeepSeek-V2-Chat"}
+        {"spark-v3.5", "generalv3.5"},
+        {"spark-v3", "generalv3"},
+        {"deepseek", "deepseek-ai/DeepSeek-V3.2"},
+        {"deepseek-v2", "deepseek-ai/DeepSeek-V2-Chat"},
+        {"deepseek-v2.5", "deepseek-ai/DeepSeek-V2.5"},
+        {"deepseek-v3", "deepseek-ai/DeepSeek-V3"},
+        {"deepseek-v3.2", "deepseek-ai/DeepSeek-V3.2"},
+        {"deepseek-coder", "deepseek-ai/DeepSeek-Coder-V2"},
+        {"qwen-coder", "qwen-coder-7b-instruct"}
     };
-    return models.value(model, "");
+    return models.value(model, model);
+}
+
+void WorkLogWidget::loadAIKeysToComboBox(QComboBox *comboBox)
+{
+    if (!comboBox) {
+        return;
+    }
+    
+    comboBox->clear();
+    
+    QList<AIKeyConfig> allKeys = AIConfig::instance().getAllKeys();
+    
+    if (allKeys.isEmpty()) {
+        comboBox->addItem("⚙️ 请先配置AI Key", "");
+        return;
+    }
+    
+    AIKeyConfig defaultKey = AIConfig::instance().getDefaultKey();
+    int defaultIndex = 0;
+    
+    for (int i = 0; i < allKeys.size(); ++i) {
+        const AIKeyConfig &key = allKeys[i];
+        QString displayName = key.name.isEmpty() ? key.model : key.name;
+
+        if (!key.provider.isEmpty()) {
+            AIProviderInfo providerInfo = AIConfig::instance().getProviderInfo(key.provider);
+            if (!providerInfo.displayName.isEmpty()) {
+                displayName = QString("%1 - %2").arg(providerInfo.displayName).arg(displayName);
+            }
+        }
+
+        QString modelId = key.model;
+        AIModelInfo modelInfo = AIConfig::instance().getModelInfo(modelId);
+        QString modelName = modelInfo.name.isEmpty() ? modelId : modelInfo.name;
+
+        comboBox->addItem(displayName, modelName);
+
+        if (key.isDefault || key.model == defaultKey.model) {
+            defaultIndex = i;
+        }
+    }
+    
+    if (comboBox->count() > 0) {
+        comboBox->setCurrentIndex(defaultIndex);
+    }
 }
 
 void WorkLogWidget::handleAIResponse(QPointer<QNetworkReply> reply, const QString &title, QLineEdit *titleEdit, 
@@ -2920,11 +3054,14 @@ void WorkLogWidget::handleAIResponse(QPointer<QNetworkReply> reply, const QStrin
     
     if (reply->error() != QNetworkReply::NoError) {
         QString errorMsg = reply->errorString();
+        if (reply->error() == QNetworkReply::OperationCanceledError) {
+            errorMsg = QString("请求超时（%1秒），请检查网络连接或增加超时时间").arg(AIConfig::instance().getTimeout());
+        }
         if (aiStatusLabel) {
             aiStatusLabel->setText("❌ 调用失败");
         }
         qDebug() << "AI API Error:" << errorMsg;
-        
+
         QFile logFile(logFileName);
         if (logFile.open(QIODevice::Append | QIODevice::Text)) {
             QTextStream out(&logFile);
@@ -2932,12 +3069,15 @@ void WorkLogWidget::handleAIResponse(QPointer<QNetworkReply> reply, const QStrin
             out << "=== AI Response ===" << "\n";
             out << "Time: " << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << "\n";
             out << "HTTP Status: " << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() << "\n";
-            out << "Error: " << reply->error() << " - " << reply->errorString() << "\n";
+            out << "Error Code: " << reply->error() << "\n";
+            out << "Error: " << errorMsg << "\n";
             out << "\n========================================\n\n";
             logFile.close();
         }
-        
-        analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, tagsEdit);
+
+        if (reply->error() != QNetworkReply::OperationCanceledError) {
+            analyzeWithLocalAI(title, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, tagsEdit);
+        }
         return;
     }
     

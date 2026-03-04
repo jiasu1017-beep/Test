@@ -10,6 +10,7 @@ TEMPLATE = app
 SOURCES += main.cpp \
            mainwindow.cpp \
            modules/core/database.cpp \
+           modules/core/aiconfig.cpp \
            modules/core/logger.cpp \
            modules/widgets/appmanagerwidget.cpp \
            modules/widgets/fishmodewidget.cpp \
@@ -32,6 +33,7 @@ SOURCES += main.cpp \
 
 HEADERS  += mainwindow.h \
             modules/core/database.h \
+            modules/core/aiconfig.h \
             modules/core/logger.h \
             modules/widgets/appmanagerwidget.h \
             modules/widgets/fishmodewidget.h \

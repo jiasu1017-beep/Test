@@ -370,7 +370,7 @@ QString AISettingsDialog::getModelName(const QString &model)
         {"gemini", "gemini-pro"},
         {"qwen", "qwen-turbo"},
         {"spark", "generalv3.5"},
-        {"deepseek", "deepseek-ai/DeepSeek-V2-Chat"}
+        {"deepseek", "deepseek-ai/DeepSeek-V3.2"}
     };
     return models.value(model, "");
 }

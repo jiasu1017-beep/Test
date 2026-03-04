@@ -27,6 +27,7 @@
 #include <QGroupBox>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QTimer>
 #include <QtCharts>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -107,6 +108,9 @@ private:
     void analyzeTaskWithAI(const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit, 
                            QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
                            QLabel *aiStatusLabel, QPushButton *aiBtn, QLineEdit *tagsEdit = nullptr);
+    void analyzeTaskWithAI(const QString &model, const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
+                           QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
+                           QLabel *aiStatusLabel, QPushButton *aiBtn, QLineEdit *tagsEdit = nullptr);
     void onAIAnalysisFinished(const QString &title, QLineEdit *titleEdit, QTextEdit *descEdit,
                                QComboBox *categoryCombo, QComboBox *priorityCombo, QDoubleSpinBox *durationSpin,
                                QLabel *aiStatusLabel, QPushButton *aiBtn);
@@ -124,13 +128,16 @@ private:
                          QLineEdit *tagsEdit);
     QString generateReportWithAI(const QString &reportType, const QString &reportData);
     void onAIGenerateReport(QTextEdit *reportEdit, const QString &reportType, const QString &reportData);
+    void onAIGenerateReport(const QString &model, QTextEdit *reportEdit, const QString &reportType, const QString &reportData);
     
     void setSettingsWidget(void *settings);
     QString getCurrentAIModel();
     QString getAPIKey();
+    QString getAPIKey(const QString &model);
     QString getAPIEndpoint();
     QString getDefaultEndpoint(const QString &model);
     QString getModelNameForAPI(const QString &model);
+    void loadAIKeysToComboBox(QComboBox *comboBox);
 
     Database *db;
     
