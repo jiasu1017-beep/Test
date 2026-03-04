@@ -6,6 +6,10 @@
 #include <QDebug>
 #include <algorithm>
 
+#ifdef QT_DEBUG
+static void runTaskFilterTests();
+#endif
+
 Database::Database(QObject *parent) : QObject(parent)
 {
     nextAppId = 1;
@@ -45,6 +49,10 @@ bool Database::init()
         rootObject["nextCategoryId"] = 1;
         saveData();
     }
+    
+#ifdef QT_DEBUG
+    runTaskFilterTests();
+#endif
     
     return true;
 }
@@ -989,6 +997,7 @@ QJsonObject Database::taskToJson(const Task &task)
     obj["priority"] = static_cast<int>(task.priority);
     obj["status"] = static_cast<int>(task.status);
     obj["workDuration"] = task.workDuration;
+    obj["finishTime"] = task.completionTime.toString(Qt::ISODate);
     
     QJsonArray tagsArray;
     for (const QString &tag : task.tags) {
@@ -1016,6 +1025,8 @@ Task Database::jsonToTask(const QJsonObject &obj)
     task.status = static_cast<TaskStatus>(statusInt);
     
     task.workDuration = obj["workDuration"].toDouble(0.0);
+    
+    task.completionTime = QDateTime::fromString(obj["finishTime"].toString(), Qt::ISODate);
     
     QJsonArray tagsArray = obj["tags"].toArray();
     for (const QJsonValue &val : tagsArray) {
@@ -1111,6 +1122,124 @@ QList<Task> Database::getAllTasks()
     });
     
     return tasks;
+}
+
+static QList<Task> filterTasksForDateInternal(const QList<Task> &allTasks, const QDate &viewDate)
+{
+    QList<Task> result;
+    QDateTime dayStart(viewDate);
+    
+    for (const Task &task : allTasks) {
+        if (task.id.length() < 8) {
+            continue;
+        }
+        
+        QString dateStr = task.id.left(8);
+        QDate taskDate = QDate::fromString(dateStr, "yyyyMMdd");
+        if (!taskDate.isValid()) {
+            continue;
+        }
+        if (taskDate > viewDate) {
+            continue;
+        }
+        
+        if (task.completionTime.isValid()) {
+            if (!(task.completionTime > dayStart)) {
+                continue;
+            }
+        }
+        
+        result.append(task);
+    }
+    
+    return result;
+}
+
+#ifdef QT_DEBUG
+static void runTaskFilterTests()
+{
+    QList<Task> tasks;
+    QDate viewDate(2026, 3, 4);
+    QDate prevDate = viewDate.addDays(-1);
+    QDate nextDate = viewDate.addDays(1);
+    QDateTime dayStart(viewDate);
+    
+    Task prevIncomplete;
+    prevIncomplete.id = prevDate.toString("yyyyMMdd") + "0001";
+    prevIncomplete.status = TaskStatus_Todo;
+    tasks.append(prevIncomplete);
+    
+    Task viewIncomplete;
+    viewIncomplete.id = viewDate.toString("yyyyMMdd") + "0002";
+    viewIncomplete.status = TaskStatus_InProgress;
+    tasks.append(viewIncomplete);
+    
+    Task prevCompletedEarly;
+    prevCompletedEarly.id = prevDate.toString("yyyyMMdd") + "0003";
+    prevCompletedEarly.status = TaskStatus_Completed;
+    prevCompletedEarly.completionTime = QDateTime(prevDate).addSecs(12 * 3600);
+    tasks.append(prevCompletedEarly);
+    
+    Task prevCompletedAfter;
+    prevCompletedAfter.id = prevDate.toString("yyyyMMdd") + "0004";
+    prevCompletedAfter.status = TaskStatus_Completed;
+    prevCompletedAfter.completionTime = QDateTime(viewDate).addSecs(3600);
+    tasks.append(prevCompletedAfter);
+    
+    Task viewCompletedAtStart;
+    viewCompletedAtStart.id = viewDate.toString("yyyyMMdd") + "0005";
+    viewCompletedAtStart.status = TaskStatus_Completed;
+    viewCompletedAtStart.completionTime = dayStart;
+    tasks.append(viewCompletedAtStart);
+    
+    Task viewCompletedLater;
+    viewCompletedLater.id = viewDate.toString("yyyyMMdd") + "0006";
+    viewCompletedLater.status = TaskStatus_Completed;
+    viewCompletedLater.completionTime = QDateTime(viewDate).addSecs(10 * 3600);
+    tasks.append(viewCompletedLater);
+    
+    Task futureIncomplete;
+    futureIncomplete.id = nextDate.toString("yyyyMMdd") + "0007";
+    futureIncomplete.status = TaskStatus_Todo;
+    tasks.append(futureIncomplete);
+    
+    Task completedNoTime;
+    completedNoTime.id = viewDate.toString("yyyyMMdd") + "0008";
+    completedNoTime.status = TaskStatus_Completed;
+    tasks.append(completedNoTime);
+    
+    QList<Task> result = filterTasksForDateInternal(tasks, viewDate);
+    
+    bool hasPrevIncomplete = false;
+    bool hasViewIncomplete = false;
+    bool hasPrevCompletedAfter = false;
+    bool hasViewCompletedLater = false;
+    bool hasCompletedNoTime = false;
+    
+    for (const Task &task : result) {
+        if (task.id == prevIncomplete.id) hasPrevIncomplete = true;
+        if (task.id == viewIncomplete.id) hasViewIncomplete = true;
+        if (task.id == prevCompletedAfter.id) hasPrevCompletedAfter = true;
+        if (task.id == viewCompletedLater.id) hasViewCompletedLater = true;
+        if (task.id == completedNoTime.id) hasCompletedNoTime = true;
+        
+        Q_ASSERT(task.id != prevCompletedEarly.id);
+        Q_ASSERT(task.id != viewCompletedAtStart.id);
+        Q_ASSERT(task.id != futureIncomplete.id);
+    }
+    
+    Q_ASSERT(hasPrevIncomplete);
+    Q_ASSERT(hasViewIncomplete);
+    Q_ASSERT(hasPrevCompletedAfter);
+    Q_ASSERT(hasViewCompletedLater);
+    Q_ASSERT(hasCompletedNoTime);
+}
+#endif
+
+QList<Task> Database::getTasksForDate(const QDate &date)
+{
+    QList<Task> allTasks = getAllTasks();
+    return filterTasksForDateInternal(allTasks, date);
 }
 
 QList<Task> Database::getTasksByStatus(TaskStatus status)
@@ -1211,6 +1340,11 @@ bool Database::updateTaskStatus(const QString &id, TaskStatus status)
         QJsonObject obj = tasksArray[i].toObject();
         if (obj["id"].toString() == id) {
             obj["status"] = static_cast<int>(status);
+            if (status == TaskStatus_Completed) {
+                obj["finishTime"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+            } else {
+                obj.remove("finishTime");
+            }
             tasksArray[i] = obj;
             break;
         }

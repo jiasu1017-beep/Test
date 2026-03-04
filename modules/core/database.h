@@ -121,6 +121,7 @@ struct Task {
     TaskPriority priority;
     TaskStatus status;
     double workDuration;
+    QDateTime completionTime;
     QStringList tags;
 };
 
@@ -198,6 +199,7 @@ public:
     bool updateTask(const Task &task);
     bool deleteTask(const QString &id);
     QList<Task> getAllTasks();
+    QList<Task> getTasksForDate(const QDate &date);
     QList<Task> getTasksByStatus(TaskStatus status);
     QList<Task> getTasksByCategory(int categoryId);
     QList<Task> getTasksByDateRange(const QDateTime &startDate, const QDateTime &endDate);

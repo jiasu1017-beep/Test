@@ -34,7 +34,51 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSettings>
+#include <QProxyStyle>
+#include <QPainter>
+#include <QStyleOption>
 #include "modules/core/database.h"
+
+class ComboBoxArrowStyle : public QProxyStyle
+{
+public:
+    ComboBoxArrowStyle(QStyle *style = nullptr) : QProxyStyle(style) {}
+
+    void drawComplexControl(ComplexControl control, const QStyleOptionComplex *option,
+                           QPainter *painter, const QWidget *widget) const override
+    {
+        if (control == CC_ComboBox) {
+            const QStyleOptionComboBox *comboBox = qstyleoption_cast<const QStyleOptionComboBox *>(option);
+            if (comboBox) {
+                QProxyStyle::drawComplexControl(control, option, painter, widget);
+                
+                QRect arrowRect = subControlRect(CC_ComboBox, option, SC_ComboBoxArrow, widget);
+                if (arrowRect.isValid()) {
+                    painter->setRenderHint(QPainter::Antialiasing);
+                    painter->setPen(Qt::NoPen);
+                    painter->setBrush(QColor(60, 60, 60));
+
+                    QPolygonF triangle;
+                    triangle << QPointF(arrowRect.center().x() - 5, arrowRect.top() + 4)
+                             << QPointF(arrowRect.center().x() + 5, arrowRect.top() + 4)
+                             << QPointF(arrowRect.center().x(), arrowRect.bottom() - 4);
+                    painter->drawPolygon(triangle);
+                }
+                return;
+            }
+        }
+        QProxyStyle::drawComplexControl(control, option, painter, widget);
+    }
+
+    void drawPrimitive(PrimitiveElement element, const QStyleOption *option,
+                      QPainter *painter, const QWidget *widget) const override
+    {
+        if (element == PE_IndicatorArrowDown) {
+            return;
+        }
+        QProxyStyle::drawPrimitive(element, option, painter, widget);
+    }
+};
 
 class WorkLogWidget : public QWidget
 {

@@ -157,38 +157,58 @@ void WorkLogWidget::setupUI()
             border: 1px solid #95a5a6;
         }
 
-        /* 下拉框样式 */
         QComboBox {
-            padding: 6px 30px 6px 12px;
-            border: 1px solid #dfe6e9;
-            border-radius: 4px;
+            padding: 6px 28px 6px 10px;
+            border: 1px solid #dde4eb;
+            border-radius: 6px;
             background-color: #ffffff;
-            min-width: 120px;
+            color: #2d3436;
+            min-width: 130px;
         }
 
         QComboBox:focus {
-            border: 1px solid #3498db;
+            border-color: #3498db;
+            background-color: #fdfefe;
         }
 
         QComboBox:hover {
-            border: 1px solid #95a5a6;
+            border-color: #b2bec3;
+        }
+
+        QComboBox::drop-down {
+            subcontrol-origin: padding;
+            subcontrol-position: right center;
+            width: 26px;
+            border-left: none;
+            background: transparent;
+            margin-right: 4px;
+        }
+
+        QComboBox::down-arrow {
+            image: none;
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 6px solid #7f8c8d;
+            margin-right: 8px;
         }
 
         QComboBox QAbstractItemView {
-            border: 1px solid #dfe6e9;
+            border: 1px solid #dde4eb;
             background-color: #ffffff;
             selection-background-color: #3498db;
             border-radius: 4px;
         }
 
         QComboBox QAbstractItemView::item {
-            min-height: 30px;
-            padding: 4px 8px;
+            min-height: 28px;
+            padding: 4px 10px;
         }
 
         QComboBox QAbstractItemView::item:selected {
             background-color: #3498db;
-            color: white;
+            color: #ffffff;
         }
 
         /* 按钮样式 */
@@ -564,6 +584,7 @@ void WorkLogWidget::setupUI()
     QHBoxLayout *timeFilterLayout = new QHBoxLayout();
     timeFilterLayout->setSpacing(4);
     timeFilterCombo = new QComboBox(statisticsPanel);
+    timeFilterCombo->setStyle(new ComboBoxArrowStyle(timeFilterCombo->style()));
     timeFilterCombo->addItem("📅 今日", Today);
     timeFilterCombo->addItem("📆 本周", ThisWeek);
     timeFilterCombo->addItem("📆 本月", ThisMonth);
@@ -658,6 +679,7 @@ void WorkLogWidget::setupUI()
     filterLayout->addWidget(searchEdit, 1);
 
     statusFilter = new QComboBox(this);
+    statusFilter->setStyle(new ComboBoxArrowStyle(statusFilter->style()));
     statusFilter->addItem("全部状态", -1);
     statusFilter->addItem("📝 待办", static_cast<int>(TaskStatus_Todo));
     statusFilter->addItem("🔄 进行中", static_cast<int>(TaskStatus_InProgress));
@@ -667,6 +689,7 @@ void WorkLogWidget::setupUI()
     filterLayout->addWidget(statusFilter);
 
     priorityFilter = new QComboBox(this);
+    priorityFilter->setStyle(new ComboBoxArrowStyle(priorityFilter->style()));
     priorityFilter->addItem("全部优先级", -1);
     priorityFilter->addItem("🔵 低", static_cast<int>(TaskPriority_Low));
     priorityFilter->addItem("🟡 中", static_cast<int>(TaskPriority_Medium));
@@ -794,8 +817,8 @@ void WorkLogWidget::setupToolbar()
 void WorkLogWidget::setupTaskTable()
 {
     taskTable = new QTableWidget();
-    taskTable->setColumnCount(7);
-    taskTable->setHorizontalHeaderLabels({"🔢 序号", "📝 标题", "📁 分类", "🎯 优先级", "📊 状态", "⏱️ 工时", "🏷️ 标签"});
+    taskTable->setColumnCount(8);
+    taskTable->setHorizontalHeaderLabels({"🔢 序号", "📝 标题", "📁 分类", "🎯 优先级", "📊 状态", "⏱️ 工时", "🏷️ 标签", "📅 完成时间"});
 
     taskTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     taskTable->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -815,6 +838,7 @@ void WorkLogWidget::setupTaskTable()
     taskTable->setColumnWidth(4, 90);
     taskTable->setColumnWidth(5, 80);
     taskTable->setColumnWidth(6, 150);
+    taskTable->setColumnWidth(7, 160);
 
     // 启用自动换行
     taskTable->setWordWrap(true);
@@ -942,13 +966,13 @@ void WorkLogWidget::refreshTaskTable()
 {
     taskTable->setRowCount(0);
 
-    QList<Task> allTasks = db->getAllTasks();
+    QDate viewDate = taskViewDate->date();
+    QList<Task> allTasks = db->getTasksForDate(viewDate);
 
     QString searchText = searchEdit->text().toLower();
     int statusValue = statusFilter->currentData().toInt();
     int priorityValue = priorityFilter->currentData().toInt();
 
-    QDate viewDate = taskViewDate->date();
     QString viewDateStr = viewDate.toString("yyyyMMdd");
 
     int selectedCategoryId = -1;
@@ -963,13 +987,6 @@ void WorkLogWidget::refreshTaskTable()
 
     for (const Task &task : allTasks) {
         QString taskDateStr = task.id.left(8);
-
-        bool isViewDateTask = (taskDateStr == viewDateStr);
-        bool isUncompletedTask = (task.status != TaskStatus_Completed) && (taskDateStr < viewDateStr);
-
-        if (!isViewDateTask && !isUncompletedTask) {
-            continue;
-        }
 
         if (!searchText.isEmpty()) {
             if (!task.title.toLower().contains(searchText) &&
@@ -1018,6 +1035,14 @@ void WorkLogWidget::updateTaskRow(int row, const Task &task)
 
     QString tags = task.tags.join(", ");
     taskTable->setItem(row, 6, new QTableWidgetItem(tags));
+    
+    QString completionText;
+    if (task.completionTime.isValid()) {
+        completionText = task.completionTime.toString("yyyy-MM-dd hh:mm:ss");
+    } else {
+        completionText = "-";
+    }
+    taskTable->setItem(row, 7, new QTableWidgetItem(completionText));
 
     for (int col = 0; col < taskTable->columnCount(); ++col) {
         if (taskTable->item(row, col)) {
@@ -1481,6 +1506,7 @@ void WorkLogWidget::onGenerateReport()
     QPushButton *aiGenerateBtn = new QPushButton("🤖 AI生成分析", &reportDialog);
 
     QComboBox *aiModelCombo = new QComboBox(&reportDialog);
+    aiModelCombo->setStyle(new ComboBoxArrowStyle(aiModelCombo->style()));
     aiModelCombo->setToolTip("选择AI模型");
     aiModelCombo->setStyleSheet(R"(
         QComboBox {
@@ -1878,6 +1904,7 @@ void WorkLogWidget::showTaskDialog(Task *task)
     titleLayout->addWidget(aiStatusLabel);
 
     QComboBox *aiModelCombo = new QComboBox(&dialog);
+    aiModelCombo->setStyle(new ComboBoxArrowStyle(aiModelCombo->style()));
     aiModelCombo->setToolTip("选择AI模型");
     aiModelCombo->setStyleSheet(R"(
         QComboBox {
@@ -1902,10 +1929,35 @@ void WorkLogWidget::showTaskDialog(Task *task)
     detailLayout->setSpacing(10);
 
     QComboBox *categoryCombo = new QComboBox(&dialog);
+    categoryCombo->setStyle(new ComboBoxArrowStyle(categoryCombo->style()));
     QComboBox *priorityCombo = new QComboBox(&dialog);
+    priorityCombo->setStyle(new ComboBoxArrowStyle(priorityCombo->style()));
     QComboBox *statusCombo = new QComboBox(&dialog);
+    statusCombo->setStyle(new ComboBoxArrowStyle(statusCombo->style()));
     QDoubleSpinBox *durationSpin = new QDoubleSpinBox(&dialog);
     QLineEdit *tagsEdit = new QLineEdit(&dialog);
+    QDateEdit *completionTimeEdit = new QDateEdit(&dialog);
+    completionTimeEdit->setDisplayFormat("yyyy-MM-dd");
+    completionTimeEdit->setCalendarPopup(true);
+    completionTimeEdit->setStyleSheet(R"(
+        QDateEdit {
+            padding: 8px;
+            border: 1px solid #dfe6e9;
+            border-radius: 4px;
+            background-color: #ffffff;
+            font-size: 13px;
+        }
+        QDateEdit:focus {
+            border: 1px solid #3498db;
+        }
+        QDateEdit:hover {
+            border: 1px solid #95a5a6;
+        }
+        QDateEdit:disabled {
+            background-color: #f5f6fa;
+            color: #bdc3c7;
+        }
+    )");
 
     categoryCombo->addItem("📁 未分类", -1);
     QList<Category> categories = db->getAllCategories();
@@ -1931,6 +1983,7 @@ void WorkLogWidget::showTaskDialog(Task *task)
     detailLayout->addRow("分类:", categoryCombo);
     detailLayout->addRow("优先级:", priorityCombo);
     detailLayout->addRow("状态:", statusCombo);
+    detailLayout->addRow("完成时间:", completionTimeEdit);
     detailLayout->addRow("工时:", durationSpin);
     detailLayout->addRow("标签:", tagsEdit);
 
@@ -1992,7 +2045,23 @@ void WorkLogWidget::showTaskDialog(Task *task)
         statusCombo->setCurrentIndex(statusCombo->findData(static_cast<int>(task->status)));
         durationSpin->setValue(task->workDuration);
         tagsEdit->setText(task->tags.join(", "));
+        if (task->completionTime.isValid()) {
+            completionTimeEdit->setDate(task->completionTime.date());
+        } else {
+            completionTimeEdit->setDate(QDate::currentDate());
+        }
+    } else {
+        completionTimeEdit->setDate(QDate::currentDate());
     }
+
+    auto updateCompletionTimeVisibility = [completionTimeEdit, statusCombo]() {
+        bool isCompleted = statusCombo->currentData().toInt() == static_cast<int>(TaskStatus_Completed);
+        completionTimeEdit->setEnabled(isCompleted);
+    };
+    updateCompletionTimeVisibility();
+    QObject::connect(statusCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), &dialog, [updateCompletionTimeVisibility]() {
+        updateCompletionTimeVisibility();
+    });
 
     connect(aiBtn, &QPushButton::clicked, this, [this, titleEdit, descEdit, categoryCombo, priorityCombo, durationSpin, aiStatusLabel, aiBtn, tagsEdit, aiModelCombo, &dialog]() {
         QString title = titleEdit->text().trimmed();
@@ -2012,6 +2081,7 @@ void WorkLogWidget::showTaskDialog(Task *task)
     connect(cancelBtn, &QPushButton::clicked, &dialog, &QDialog::reject);
 
     if (dialog.exec() == QDialog::Accepted) {
+        TaskStatus oldStatus = task ? task->status : TaskStatus_Todo;
         Task newTask;
         if (task) {
             newTask = *task;
@@ -2025,10 +2095,36 @@ void WorkLogWidget::showTaskDialog(Task *task)
         newTask.workDuration = durationSpin->value();
         newTask.tags = tagsEdit->text().split(",", Qt::SkipEmptyParts);
 
+        if (!task) {
+            newTask.completionTime = QDateTime();
+        }
+
+        if (newTask.status == TaskStatus_Completed) {
+            QDate selectedCompletionDate = completionTimeEdit->date();
+            if (selectedCompletionDate > QDate::currentDate()) {
+                QMessageBox::warning(&dialog, "提示", "完成时间不能晚于当前日期");
+                return;
+            }
+            newTask.completionTime = QDateTime(selectedCompletionDate, QTime(0, 0, 0));
+        } else if (oldStatus == TaskStatus_Completed && newTask.status != TaskStatus_Completed) {
+            newTask.completionTime = QDateTime();
+        }
+
         if (task) {
             db->updateTask(newTask);
+            logOperation("update_task", QString("任务ID: %1, 标题: %2, 状态: %3, 完成时间: %4")
+                         .arg(newTask.id)
+                         .arg(newTask.title)
+                         .arg(getStatusString(newTask.status))
+                         .arg(newTask.completionTime.isValid() ? newTask.completionTime.toString("yyyy-MM-dd hh:mm:ss") : "无"));
+            //QMessageBox::information(this, "成功", "任务已更新");
         } else {
             db->addTask(newTask);
+            logOperation("add_task", QString("标题: %1, 状态: %2, 完成时间: %3")
+                         .arg(newTask.title)
+                         .arg(getStatusString(newTask.status))
+                         .arg(newTask.completionTime.isValid() ? newTask.completionTime.toString("yyyy-MM-dd hh:mm:ss") : "无"));
+            QMessageBox::information(this, "成功", "任务已创建");
         }
 
         refreshTaskTable();
