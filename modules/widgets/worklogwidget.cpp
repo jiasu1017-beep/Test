@@ -159,7 +159,7 @@ void WorkLogWidget::setupUI()
 
         /* 下拉框样式 */
         QComboBox {
-            padding: 6px 12px;
+            padding: 6px 30px 6px 12px;
             border: 1px solid #dfe6e9;
             border-radius: 4px;
             background-color: #ffffff;
@@ -172,19 +172,6 @@ void WorkLogWidget::setupUI()
 
         QComboBox:hover {
             border: 1px solid #95a5a6;
-        }
-
-        QComboBox::drop-down {
-            border: none;
-            width: 30px;
-        }
-
-        QComboBox::down-arrow {
-            image: none;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 6px solid #7f8c8d;
-            margin-right: 10px;
         }
 
         QComboBox QAbstractItemView {
