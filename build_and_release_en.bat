@@ -57,16 +57,39 @@ if errorlevel 1 (
     exit /b 1
 )
 
+echo [4.1/7] Build Updater...
+cd ..
+mkdir build\Updater >nul 2>&1
+cd build\Updater
+call "%QT_PATH%\bin\qmake.exe" "..\..\Updater\Updater.pro"
+if errorlevel 1 (
+    echo Updater qmake failed!
+    pause
+    exit /b 1
+)
+call "%MINGW_PATH%\bin\mingw32-make.exe" release
+if errorlevel 1 (
+    echo Updater build failed!
+    pause
+    exit /b 1
+)
+cd ..\..
+
 echo [5/7] Check executable file...
-if not exist "release\PonyWork.exe" (
+if not exist "build\release\PonyWork.exe" (
     echo Executable file generation failed!
     pause
     exit /b 1
 )
-echo Executable file generated successfully!
+echo Main program generated successfully!
+
+if not exist "build\Updater\release\Updater.exe" (
+    echo [WARNING] Updater program was not generated
+) else (
+    echo Updater program generated successfully!
+)
 
 echo [6/7] Deploy application...
-cd ..
 if exist deploy (
     rd /s /q deploy 2>nul
     timeout /t 1 /nobreak >nul
@@ -74,6 +97,7 @@ if exist deploy (
 mkdir deploy >nul 2>&1
 copy "build\release\PonyWork.exe" "deploy\" >nul
 if exist "build\release\Updater.exe" copy "build\release\Updater.exe" "deploy\" >nul
+if exist "build\Updater\release\Updater.exe" copy "build\Updater\release\Updater.exe" "deploy\" >nul
 
 echo Running windeployqt...
 call "%QT_PATH%\bin\windeployqt.exe" "deploy\PonyWork.exe" >nul 2>&1
@@ -87,6 +111,9 @@ echo Copy additional DLL files...
 if exist "dll\libcrypto-1_1-x64.dll" copy "dll\libcrypto-1_1-x64.dll" "deploy\" >nul 2>&1
 if exist "dll\libssl-1_1-x64.dll" copy "dll\libssl-1_1-x64.dll" "deploy\" >nul 2>&1
 if exist "img" xcopy "img" "deploy\img\" /s /y /i >nul 2>&1
+
+echo Copy app_icons folder...
+if exist "app_icons" xcopy "app_icons" "deploy\app_icons\" /s /y /i >nul 2>&1
 
 echo [7/7] Organize release files...
 if exist "%RELEASE_DIR%" rd /s /q "%RELEASE_DIR%" 2>nul
