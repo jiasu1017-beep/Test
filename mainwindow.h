@@ -14,6 +14,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QHBoxLayout>
+#include <QPropertyAnimation>
 #include "modules/core/database.h"
 #include "modules/update/updatemanager.h"
 
@@ -30,6 +31,7 @@ class UpdateDialog;
 class UpdateProgressDialog;
 class RemoteDesktopWidget;
 class WorkLogWidget;
+class BottomAppBar;
 
 class MainWindow : public QMainWindow
 {
@@ -43,6 +45,8 @@ public slots:
     void setStatusText(const QString &text);
     void resetApps();
     void refreshGlobalShortcut();
+    void setBottomAppBarVisible(bool visible);
+    void refreshBottomAppBarVisibility();
     
 private slots:
     void onTabChanged(int index);
@@ -100,6 +104,8 @@ private:
     UpdateProgressDialog *updateProgressDialog;
     RemoteDesktopWidget *remoteDesktopWidget;
     WorkLogWidget *workLogWidget;
+    QPropertyAnimation *m_bottomAppBarAnimation;
+    BottomAppBar *bottomAppBar;
     QLabel *statusLabel;
     
     void setupGlobalShortcut();

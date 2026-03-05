@@ -165,6 +165,9 @@ public:
     bool setShowClosePrompt(bool show);
     bool getShowClosePrompt();
     
+    bool setShowBottomAppBar(bool show);
+    bool getShowBottomAppBar();
+    
     bool setAutoCheckUpdate(bool enabled);
     bool getAutoCheckUpdate();
     

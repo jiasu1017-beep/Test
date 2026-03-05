@@ -182,6 +182,14 @@ QWidget *SettingsWidget::createGeneralPage()
     QVBoxLayout *appearLayout = new QVBoxLayout(appearanceGroup);
     appearLayout->setSpacing(10);
 
+    showBottomAppBarCheck = new QCheckBox("显示快捷应用条", page);
+    showBottomAppBarCheck->setChecked(db->getShowBottomAppBar());
+    showBottomAppBarCheck->setToolTip("控制是否在窗口底部显示快捷应用条");
+    showBottomAppBarCheck->setAccessibleName("显示快捷应用条开关");
+    showBottomAppBarCheck->setAccessibleDescription("开启或关闭底部快捷应用条的显示");
+    connect(showBottomAppBarCheck, &QCheckBox::stateChanged, this, &SettingsWidget::onShowBottomAppBarToggled);
+    appearLayout->addWidget(showBottomAppBarCheck);
+
     QHBoxLayout *themeLayout = new QHBoxLayout();
     QLabel *themeLabel = new QLabel("主题:", page);
     QComboBox *themeCombo = new QComboBox(page);
@@ -1740,6 +1748,21 @@ void SettingsWidget::onShowClosePromptToggled(int state)
     } else {
         QMessageBox::warning(this, "错误", "设置失败！");
         showClosePromptCheck->setChecked(!show);
+    }
+}
+
+void SettingsWidget::onShowBottomAppBarToggled(int state)
+{
+    bool show = (state == Qt::Checked);
+    
+    if (db->setShowBottomAppBar(show)) {
+        // 设置已保存，强制刷新底部应用条的显示状态
+        if (mainWindow) {
+            mainWindow->refreshBottomAppBarVisibility();
+        }
+    } else {
+        QMessageBox::warning(this, "错误", "设置失败！");
+        showBottomAppBarCheck->setChecked(!show);
     }
 }
 

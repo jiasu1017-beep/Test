@@ -489,6 +489,21 @@ bool Database::getAutoCheckUpdate()
     return settingsObj["auto_check_update"].toString("1") == "1";
 }
 
+bool Database::setShowBottomAppBar(bool show)
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    settingsObj["show_bottom_app_bar"] = show ? "1" : "0";
+    rootObject["settings"] = settingsObj;
+    
+    return saveData();
+}
+
+bool Database::getShowBottomAppBar()
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    return settingsObj["show_bottom_app_bar"].toString("1") == "1";
+}
+
 bool Database::setShortcutKey(const QString &key)
 {
     QJsonObject settingsObj = rootObject["settings"].toObject();

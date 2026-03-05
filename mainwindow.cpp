@@ -6,6 +6,7 @@
 #include "modules/widgets/collectionmanagerwidget.h"
 #include "modules/widgets/recommendedappswidget.h"
 #include "modules/widgets/worklogwidget.h"
+#include "modules/widgets/bottomappbar.h"
 #include "modules/update/updatedialog.h"
 #include "modules/update/updateprogressdialog.h"
 #include "modules/widgets/remotedesktopwidget.h"
@@ -126,6 +127,13 @@ void MainWindow::setupUI()
     
     mainLayout->addWidget(tabWidget);
     
+    // 创建底部快捷应用条
+    bottomAppBar = new BottomAppBar(db, this);
+    mainLayout->addWidget(bottomAppBar);
+    
+    // 初始化动画指针
+    m_bottomAppBarAnimation = nullptr;
+    
     // 创建状态栏布局
     QWidget *statusBarWidget = new QWidget();
     QHBoxLayout *statusBarLayout = new QHBoxLayout(statusBarWidget);
@@ -158,6 +166,9 @@ void MainWindow::setupUI()
     statusBarLayout->addWidget(shortcutTipsBtn);
     
     statusBar()->addPermanentWidget(statusBarWidget, 1);
+    
+    // 初始化底部应用条显示状态
+    setBottomAppBarVisible(db->getShowBottomAppBar());
 }
 
 void MainWindow::initPresetApps()
@@ -287,6 +298,29 @@ void MainWindow::onTabChanged(int index)
     if (tabWidget->widget(index) == collectionManagerWidget) {
         collectionManagerWidget->selectFirstCollection();
     }
+    
+    // 根据当前页面显示/隐藏底部应用栏
+    bool shouldShowBottomAppBar = false;
+    
+    if (tabWidget->widget(index) == collectionManagerWidget ||
+        tabWidget->widget(index) == workLogWidget ||
+        tabWidget->widget(index) == remoteDesktopWidget) {
+        shouldShowBottomAppBar = true;
+    }
+    
+    // 检查用户设置是否允许显示
+    if (db && !db->getShowBottomAppBar()) {
+        shouldShowBottomAppBar = false;
+    }
+    
+    setBottomAppBarVisible(shouldShowBottomAppBar);
+}
+
+void MainWindow::refreshBottomAppBarVisibility()
+{
+    // 强制刷新底部应用条的显示状态
+    int currentIndex = tabWidget->currentIndex();
+    onTabChanged(currentIndex);
 }
 
 void MainWindow::setupTrayIcon()
@@ -744,5 +778,44 @@ void MainWindow::resetApps()
             appManagerWidget->refreshAppList();
         }
         QMessageBox::information(this, "初始化完成", "应用列表已成功初始化！");
+    }
+}
+
+void MainWindow::setBottomAppBarVisible(bool visible)
+{
+    if (bottomAppBar) {
+        if (m_bottomAppBarAnimation) {
+            m_bottomAppBarAnimation->stop();
+            m_bottomAppBarAnimation->deleteLater();
+            m_bottomAppBarAnimation = nullptr;
+        }
+        
+        if (visible) {
+            bottomAppBar->show();
+            m_bottomAppBarAnimation = new QPropertyAnimation(bottomAppBar, "maximumHeight", this);
+            m_bottomAppBarAnimation->setDuration(300);
+            m_bottomAppBarAnimation->setEasingCurve(QEasingCurve::OutCubic);
+            m_bottomAppBarAnimation->setStartValue(0);
+            m_bottomAppBarAnimation->setEndValue(bottomAppBar->height());
+            connect(m_bottomAppBarAnimation, &QPropertyAnimation::finished, this, [this]() {
+                bottomAppBar->setMaximumHeight(16777215); // 恢复默认值
+                m_bottomAppBarAnimation->deleteLater();
+                m_bottomAppBarAnimation = nullptr;
+            });
+            m_bottomAppBarAnimation->start();
+        } else {
+            m_bottomAppBarAnimation = new QPropertyAnimation(bottomAppBar, "maximumHeight", this);
+            m_bottomAppBarAnimation->setDuration(250);
+            m_bottomAppBarAnimation->setEasingCurve(QEasingCurve::InCubic);
+            m_bottomAppBarAnimation->setStartValue(bottomAppBar->height());
+            m_bottomAppBarAnimation->setEndValue(0);
+            connect(m_bottomAppBarAnimation, &QPropertyAnimation::finished, this, [this]() {
+                bottomAppBar->hide();
+                bottomAppBar->setMaximumHeight(16777215); // 恢复默认值
+                m_bottomAppBarAnimation->deleteLater();
+                m_bottomAppBarAnimation = nullptr;
+            });
+            m_bottomAppBarAnimation->start();
+        }
     }
 }
