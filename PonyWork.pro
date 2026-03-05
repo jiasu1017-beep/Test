@@ -22,6 +22,7 @@ SOURCES += main.cpp \
            modules/widgets/snapshotmanagerwidget.cpp \
            modules/widgets/appcollectionupdater.cpp \
            modules/widgets/worklogwidget.cpp \
+           modules/widgets/bottomappbar.cpp \
            modules/update/updatemanager.cpp \
            modules/update/updatedialog.cpp \
            modules/update/updateprogressdialog.cpp \
@@ -45,6 +46,7 @@ HEADERS  += mainwindow.h \
             modules/widgets/snapshotmanagerwidget.h \
             modules/widgets/appcollectionupdater.h \
             modules/widgets/worklogwidget.h \
+            modules/widgets/bottomappbar.h \
             modules/core/appcollectiontypes.h \
             modules/update/updatemanager.h \
             modules/update/updatedialog.h \
