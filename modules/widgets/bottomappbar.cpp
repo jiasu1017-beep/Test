@@ -158,8 +158,11 @@ void BottomAppBarItem::paintEvent(QPaintEvent *event)
     painter.setClipping(false);
     
     QIcon icon;
-    if (!m_app.iconPath.isEmpty() && QFile::exists(m_app.iconPath)) {
-        icon = QIcon(m_app.iconPath);
+    
+    if (!m_app.iconPath.isEmpty()) {
+        if (QFile::exists(m_app.iconPath)) {
+            icon = QIcon(m_app.iconPath);
+        }
     }
     
     if (icon.isNull()) {
@@ -176,7 +179,13 @@ void BottomAppBarItem::paintEvent(QPaintEvent *event)
                 icon = QApplication::style()->standardIcon(QStyle::SP_FileIcon);
             }
         } else {
-            icon = QApplication::style()->standardIcon(QStyle::SP_FileIcon);
+            if (QFile::exists(m_app.path)) {
+                QFileInfo fileInfo(m_app.path);
+                QFileIconProvider provider;
+                icon = provider.icon(fileInfo);
+            } else {
+                icon = QApplication::style()->standardIcon(QStyle::SP_FileIcon);
+            }
         }
     }
     
@@ -219,10 +228,11 @@ void BottomAppBar::setupUI()
     
     m_contentWidget = new QWidget();
     m_contentWidget->setFixedHeight(m_height);
+    m_contentWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     m_contentLayout = new QHBoxLayout(m_contentWidget);
     m_contentLayout->setContentsMargins(12, 6, 12, 6);
     m_contentLayout->setSpacing(12);
-    m_contentLayout->addStretch();
+    m_contentLayout->setAlignment(Qt::AlignCenter);
     
     m_scrollArea->setWidget(m_contentWidget);
     mainLayout->addWidget(m_scrollArea, 1);
@@ -464,39 +474,4 @@ void BottomAppBar::launchApp(const AppInfo &app)
         }
         QProcess::startDetached(app.path, args);
     }
-}
-
-QIcon BottomAppBar::getAppIcon(const AppInfo &app)
-{
-    if (!app.iconPath.isEmpty() && QFile::exists(app.iconPath)) {
-        QIcon icon(app.iconPath);
-        if (!icon.isNull()) {
-            return icon;
-        }
-    }
-    
-    if (app.type == AppType_Website) {
-        return QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView);
-    }
-    
-    if (app.type == AppType_Folder) {
-        return QApplication::style()->standardIcon(QStyle::SP_DirIcon);
-    }
-    
-    if (app.type == AppType_Document) {
-        if (QFile::exists(app.path)) {
-            QFileInfo fileInfo(app.path);
-            QFileIconProvider provider;
-            return provider.icon(fileInfo);
-        }
-        return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
-    }
-    
-    if (QFile::exists(app.path)) {
-        QFileInfo fileInfo(app.path);
-        QFileIconProvider provider;
-        return provider.icon(fileInfo);
-    }
-    
-    return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
 }

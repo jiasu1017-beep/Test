@@ -40,7 +40,10 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-
+    
+    static constexpr int BOTTOM_APP_BAR_SHOW_DURATION = 300;
+    static constexpr int BOTTOM_APP_BAR_HIDE_DURATION = 250;
+    
 public slots:
     void setStatusText(const QString &text);
     void resetApps();

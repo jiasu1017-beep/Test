@@ -82,6 +82,14 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    if (m_bottomAppBarAnimation) {
+        m_bottomAppBarAnimation->stop();
+        m_bottomAppBarAnimation->deleteLater();
+        m_bottomAppBarAnimation = nullptr;
+    }
+    if (bottomAppBar) {
+        bottomAppBar->deleteLater();
+    }
 }
 
 void MainWindow::setupUI()
@@ -130,6 +138,9 @@ void MainWindow::setupUI()
     // 创建底部快捷应用条
     bottomAppBar = new BottomAppBar(db, this);
     mainLayout->addWidget(bottomAppBar);
+    
+    // 连接应用数据变化信号到底部快捷应用栏
+    connect(db, &Database::appsChanged, bottomAppBar, &BottomAppBar::refreshApps);
     
     // 初始化动画指针
     m_bottomAppBarAnimation = nullptr;
@@ -319,6 +330,8 @@ void MainWindow::onTabChanged(int index)
 void MainWindow::refreshBottomAppBarVisibility()
 {
     // 强制刷新底部应用条的显示状态
+    // 当用户在设置中切换"显示快捷应用条"开关时调用此方法
+    // 通过重新评估当前标签页和用户设置来更新底部应用栏的显示状态
     int currentIndex = tabWidget->currentIndex();
     onTabChanged(currentIndex);
 }
@@ -793,25 +806,27 @@ void MainWindow::setBottomAppBarVisible(bool visible)
         if (visible) {
             bottomAppBar->show();
             m_bottomAppBarAnimation = new QPropertyAnimation(bottomAppBar, "maximumHeight", this);
-            m_bottomAppBarAnimation->setDuration(300);
+            m_bottomAppBarAnimation->setDuration(BOTTOM_APP_BAR_SHOW_DURATION);
             m_bottomAppBarAnimation->setEasingCurve(QEasingCurve::OutCubic);
             m_bottomAppBarAnimation->setStartValue(0);
             m_bottomAppBarAnimation->setEndValue(bottomAppBar->height());
+            disconnect(m_bottomAppBarAnimation, &QPropertyAnimation::finished, nullptr, nullptr);
             connect(m_bottomAppBarAnimation, &QPropertyAnimation::finished, this, [this]() {
-                bottomAppBar->setMaximumHeight(16777215); // 恢复默认值
+                bottomAppBar->setMaximumHeight(QWIDGETSIZE_MAX);
                 m_bottomAppBarAnimation->deleteLater();
                 m_bottomAppBarAnimation = nullptr;
             });
             m_bottomAppBarAnimation->start();
         } else {
             m_bottomAppBarAnimation = new QPropertyAnimation(bottomAppBar, "maximumHeight", this);
-            m_bottomAppBarAnimation->setDuration(250);
+            m_bottomAppBarAnimation->setDuration(BOTTOM_APP_BAR_HIDE_DURATION);
             m_bottomAppBarAnimation->setEasingCurve(QEasingCurve::InCubic);
             m_bottomAppBarAnimation->setStartValue(bottomAppBar->height());
             m_bottomAppBarAnimation->setEndValue(0);
+            disconnect(m_bottomAppBarAnimation, &QPropertyAnimation::finished, nullptr, nullptr);
             connect(m_bottomAppBarAnimation, &QPropertyAnimation::finished, this, [this]() {
                 bottomAppBar->hide();
-                bottomAppBar->setMaximumHeight(16777215); // 恢复默认值
+                bottomAppBar->setMaximumHeight(QWIDGETSIZE_MAX);
                 m_bottomAppBarAnimation->deleteLater();
                 m_bottomAppBarAnimation = nullptr;
             });

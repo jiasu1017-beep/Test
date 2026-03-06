@@ -226,7 +226,11 @@ bool Database::addApp(const AppInfo &app)
     appsArray.append(appToJson(newApp));
     rootObject["apps"] = appsArray;
     
-    return saveData();
+    bool result = saveData();
+    if (result) {
+        emit appsChanged();
+    }
+    return result;
 }
 
 bool Database::updateApp(const AppInfo &app)
@@ -234,8 +238,7 @@ bool Database::updateApp(const AppInfo &app)
     QJsonArray appsArray = rootObject["apps"].toArray();
     
     for (int i = 0; i < appsArray.size(); ++i) {
-        QJsonObject obj = appsArray[i].toObject();
-        if (obj["id"].toInt() == app.id) {
+        if (appsArray[i].toObject()["id"].toInt() == app.id) {
             appsArray[i] = appToJson(app);
             break;
         }
@@ -243,7 +246,11 @@ bool Database::updateApp(const AppInfo &app)
     
     rootObject["apps"] = appsArray;
     
-    return saveData();
+    bool result = saveData();
+    if (result) {
+        emit appsChanged();
+    }
+    return result;
 }
 
 bool Database::deleteApp(int id)
@@ -251,8 +258,7 @@ bool Database::deleteApp(int id)
     QJsonArray appsArray = rootObject["apps"].toArray();
     
     for (int i = 0; i < appsArray.size(); ++i) {
-        QJsonObject obj = appsArray[i].toObject();
-        if (obj["id"].toInt() == id) {
+        if (appsArray[i].toObject()["id"].toInt() == id) {
             appsArray.removeAt(i);
             break;
         }
@@ -275,7 +281,11 @@ bool Database::deleteApp(int id)
     }
     rootObject["collections"] = colsArray;
     
-    return saveData();
+    bool result = saveData();
+    if (result) {
+        emit appsChanged();
+    }
+    return result;
 }
 
 QList<AppInfo> Database::getAllApps()

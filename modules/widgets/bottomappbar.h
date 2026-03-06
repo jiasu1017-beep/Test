@@ -111,7 +111,6 @@ private:
     void applyTheme();
     void smoothScrollTo(int targetPosition);
     void launchApp(const AppInfo &app);
-    QIcon getAppIcon(const AppInfo &app);
     
     Database *m_db;
     QScrollArea *m_scrollArea;

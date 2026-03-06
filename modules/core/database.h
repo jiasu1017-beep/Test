@@ -137,6 +137,8 @@ struct Category {
 class Database : public QObject
 {
     Q_OBJECT
+signals:
+    void appsChanged();
 public:
     explicit Database(QObject *parent = nullptr);
     ~Database();
