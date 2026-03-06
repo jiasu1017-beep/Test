@@ -4,6 +4,9 @@
 #include <QObject>
 #include <QString>
 #include <QProcess>
+#include <QIcon>
+#include <QFileInfo>
+#include <QWidget>
 #include "database.h"
 
 class ApplicationManager : public QObject
@@ -27,6 +30,9 @@ public:
         bool refreshUI = true;
         bool silentMode = false;
     };
+
+    static QIcon getAppIcon(const AppInfo &app);
+    static QIcon getFileIcon(const QString &filePath);
 
     LaunchResult launchApp(const AppInfo &app, const LaunchOptions &options);
     LaunchResult launchApp(const AppInfo &app);

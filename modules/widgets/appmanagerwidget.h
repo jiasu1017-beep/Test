@@ -10,7 +10,6 @@
 #include <QGridLayout>
 #include <QFileDialog>
 #include <QMessageBox>
-#include <QProcess>
 #include <QMenu>
 #include <QAction>
 #include <QFileIconProvider>

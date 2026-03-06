@@ -193,26 +193,7 @@ void BottomAppBarItem::loadIcon()
 
 QIcon BottomAppBarItem::getDefaultIcon()
 {
-    if (m_app.type == AppType_Website) {
-        return QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView);
-    } else if (m_app.type == AppType_Folder) {
-        return QApplication::style()->standardIcon(QStyle::SP_DirIcon);
-    } else if (m_app.type == AppType_RemoteDesktop || m_app.isRemoteDesktop) {
-        return QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
-    } else if (m_app.type == AppType_Document) {
-        if (QFile::exists(m_app.path)) {
-            QFileInfo fileInfo(m_app.path);
-            QFileIconProvider provider;
-            return provider.icon(fileInfo);
-        }
-    } else {
-        if (QFile::exists(m_app.path)) {
-            QFileInfo fileInfo(m_app.path);
-            QFileIconProvider provider;
-            return provider.icon(fileInfo);
-        }
-    }
-    return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
+    return ApplicationManager::getAppIcon(m_app);
 }
 
 BottomAppBar::BottomAppBar(Database *db, QWidget *parent)

@@ -128,7 +128,6 @@ QJsonObject Database::appToJson(const AppInfo &app)
     obj["isFavorite"] = app.isFavorite;
     obj["sortOrder"] = app.sortOrder;
     obj["type"] = static_cast<int>(app.type);
-    obj["isRemoteDesktop"] = app.isRemoteDesktop;
     obj["remoteDesktopId"] = app.remoteDesktopId;
     return obj;
 }
@@ -145,18 +144,13 @@ AppInfo Database::jsonToApp(const QJsonObject &obj)
     app.useCount = obj["useCount"].toInt();
     app.isFavorite = obj["isFavorite"].toBool();
     app.sortOrder = obj["sortOrder"].toInt();
-    
+
     int typeInt = obj["type"].toInt(0);
     if (typeInt < 0 || typeInt > 4) typeInt = 0;
     app.type = static_cast<AppType>(typeInt);
-    
-    app.isRemoteDesktop = obj["isRemoteDesktop"].toBool(false);
+
     app.remoteDesktopId = obj["remoteDesktopId"].toInt(-1);
-    
-    if (app.isRemoteDesktop) {
-        app.type = AppType_RemoteDesktop;
-    }
-    
+
     return app;
 }
 
@@ -349,6 +343,20 @@ AppInfo Database::getAppById(int id)
     }
     
     return app;
+}
+
+int Database::getMaxSortOrder()
+{
+    int maxOrder = 0;
+    QList<AppInfo> apps = getAllApps();
+    
+    for (const AppInfo &app : apps) {
+        if (app.sortOrder > maxOrder) {
+            maxOrder = app.sortOrder;
+        }
+    }
+    
+    return maxOrder;
 }
 
 bool Database::addCollection(const AppCollection &collection)

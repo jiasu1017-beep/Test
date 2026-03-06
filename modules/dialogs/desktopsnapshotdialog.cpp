@@ -785,12 +785,7 @@ void DesktopSnapshotDialog::onAddToCollection()
                 skippedAppNames.append(detection.name);
             }
         } else {
-            int maxSortOrder = 0;
-            for (const AppInfo &a : allApps) {
-                if (a.sortOrder > maxSortOrder) {
-                    maxSortOrder = a.sortOrder;
-                }
-            }
+            int maxSortOrder = db->getMaxSortOrder();
             
             AppInfo newApp;
             newApp.name = detection.name;
@@ -802,7 +797,6 @@ void DesktopSnapshotDialog::onAddToCollection()
             newApp.isFavorite = false;
             newApp.sortOrder = maxSortOrder + 1;
             newApp.type = detection.type;
-            newApp.isRemoteDesktop = false;
             newApp.remoteDesktopId = -1;
             
             if (db->addApp(newApp)) {

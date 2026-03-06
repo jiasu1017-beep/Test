@@ -9,9 +9,6 @@
 #include <QLinearGradient>
 #include <QPainterPath>
 #include <QPainter>
-#include <QTextStream>
-#include <QProcess>
-#include <QTcpSocket>
 #include <QDesktopServices>
 #include <QUrl>
 #include <windows.h>
@@ -266,39 +263,7 @@ void AppManagerWidget::refreshAppList()
 
 QIcon AppManagerWidget::getAppIcon(const AppInfo &app)
 {
-    if (app.isRemoteDesktop || app.type == AppType_RemoteDesktop) {
-        return QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
-    }
-
-    if (!app.iconPath.isEmpty() && QFile::exists(app.iconPath)) {
-        QIcon icon(app.iconPath);
-        if (!icon.isNull()) {
-            return icon;
-        }
-    }
-    
-    if (app.type == AppType_Website) {
-        return QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView);
-    }
-    
-    if (app.type == AppType_Folder) {
-        return QApplication::style()->standardIcon(QStyle::SP_DirIcon);
-    }
-    
-    if (app.type == AppType_Document) {
-        if (QFile::exists(app.path)) {
-            QFileInfo fileInfo(app.path);
-            return iconProvider.icon(fileInfo);
-        }
-        return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
-    }
-    
-    if (QFile::exists(app.path)) {
-        QFileInfo fileInfo(app.path);
-        return iconProvider.icon(fileInfo);
-    }
-    
-    return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
+    return ApplicationManager::getAppIcon(app);
 }
 
 void AppManagerWidget::onAddApp()
@@ -401,17 +366,9 @@ void AppManagerWidget::addExecutableApp()
     app.useCount = 0;
     app.isFavorite = false;
     app.type = AppType_Executable;
-    app.isRemoteDesktop = false;
     app.remoteDesktopId = -1;
     
-    int maxOrder = 0;
-    QList<AppInfo> existingApps = db->getAllApps();
-    for (const AppInfo &existing : existingApps) {
-        if (existing.sortOrder > maxOrder) {
-            maxOrder = existing.sortOrder;
-        }
-    }
-    app.sortOrder = maxOrder + 1;
+    app.sortOrder = db->getMaxSortOrder() + 1;
     
     db->addApp(app);
     refreshAppList();
@@ -445,17 +402,9 @@ void AppManagerWidget::addWebsiteApp()
     app.useCount = 0;
     app.isFavorite = false;
     app.type = AppType_Website;
-    app.isRemoteDesktop = false;
     app.remoteDesktopId = -1;
     
-    int maxOrder = 0;
-    QList<AppInfo> existingApps = db->getAllApps();
-    for (const AppInfo &existing : existingApps) {
-        if (existing.sortOrder > maxOrder) {
-            maxOrder = existing.sortOrder;
-        }
-    }
-    app.sortOrder = maxOrder + 1;
+    app.sortOrder = db->getMaxSortOrder() + 1;
     
     db->addApp(app);
     refreshAppList();
@@ -480,17 +429,9 @@ void AppManagerWidget::addFolderApp()
     app.useCount = 0;
     app.isFavorite = false;
     app.type = AppType_Folder;
-    app.isRemoteDesktop = false;
     app.remoteDesktopId = -1;
     
-    int maxOrder = 0;
-    QList<AppInfo> existingApps = db->getAllApps();
-    for (const AppInfo &existing : existingApps) {
-        if (existing.sortOrder > maxOrder) {
-            maxOrder = existing.sortOrder;
-        }
-    }
-    app.sortOrder = maxOrder + 1;
+    app.sortOrder = db->getMaxSortOrder() + 1;
     
     db->addApp(app);
     refreshAppList();
@@ -514,17 +455,9 @@ void AppManagerWidget::addDocumentApp()
     app.useCount = 0;
     app.isFavorite = false;
     app.type = AppType_Document;
-    app.isRemoteDesktop = false;
     app.remoteDesktopId = -1;
     
-    int maxOrder = 0;
-    QList<AppInfo> existingApps = db->getAllApps();
-    for (const AppInfo &existing : existingApps) {
-        if (existing.sortOrder > maxOrder) {
-            maxOrder = existing.sortOrder;
-        }
-    }
-    app.sortOrder = maxOrder + 1;
+    app.sortOrder = db->getMaxSortOrder() + 1;
     
     db->addApp(app);
     refreshAppList();

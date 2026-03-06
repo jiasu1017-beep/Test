@@ -6,6 +6,10 @@
 #include <QFile>
 #include <QTextStream>
 #include <QDebug>
+#include <QDir>
+#include <QStyle>
+#include <QApplication>
+#include <QFileIconProvider>
 
 ApplicationManager::ApplicationManager(Database *db, QObject *parent)
     : QObject(parent), m_db(db)
@@ -51,7 +55,7 @@ ApplicationManager::LaunchResult ApplicationManager::launchApp(const AppInfo &ap
         success = launchDocumentApp(app, options);
         break;
     default:
-        if (app.isRemoteDesktop) {
+        if (app.type == AppType_RemoteDesktop && app.remoteDesktopId > 0) {
             success = launchRemoteDesktopApp(app, options);
         } else {
             success = launchExecutableApp(app, options);
@@ -282,4 +286,43 @@ void ApplicationManager::updateAppUsage(const AppInfo &app)
     if (m_db->updateApp(updatedApp)) {
         emit useCountUpdated(updatedApp);
     }
+}
+
+QIcon ApplicationManager::getFileIcon(const QString &filePath)
+{
+    if (filePath.isEmpty() || !QFile::exists(filePath)) {
+        return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
+    }
+
+    QFileInfo fileInfo(filePath);
+    QFileIconProvider provider;
+    return provider.icon(fileInfo);
+}
+
+QIcon ApplicationManager::getAppIcon(const AppInfo &app)
+{
+    if (app.type == AppType_RemoteDesktop) {
+        return QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
+    }
+
+    if (!app.iconPath.isEmpty() && QFile::exists(app.iconPath)) {
+        QIcon icon(app.iconPath);
+        if (!icon.isNull()) {
+            return icon;
+        }
+    }
+
+    if (app.type == AppType_Website) {
+        return QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView);
+    }
+
+    if (app.type == AppType_Folder) {
+        return QApplication::style()->standardIcon(QStyle::SP_DirIcon);
+    }
+
+    if (app.type == AppType_Document) {
+        return getFileIcon(app.path);
+    }
+
+    return getFileIcon(app.path);
 }

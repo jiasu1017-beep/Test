@@ -1219,7 +1219,7 @@ void RemoteDesktopWidget::onTableContextMenuRequested(const QPoint &pos)
                 bool appExists = false;
                 
                 for (const AppInfo &a : allApps) {
-                    if (a.isRemoteDesktop && a.remoteDesktopId == conn.id) {
+                    if (a.type == AppType_RemoteDesktop && a.remoteDesktopId == conn.id) {
                         existingApp = a;
                         appExists = true;
                         break;
@@ -1240,12 +1240,7 @@ void RemoteDesktopWidget::onTableContextMenuRequested(const QPoint &pos)
                     emit collectionNeedsRefresh();
                     emit statusMessageRequested(QString("已将 \"%1\" 添加到集合 \"%2\"！").arg(conn.name, col.name));
                 } else {
-                    int maxSortOrder = 0;
-                    for (const AppInfo &a : allApps) {
-                        if (a.sortOrder > maxSortOrder) {
-                            maxSortOrder = a.sortOrder;
-                        }
-                    }
+                    int maxSortOrder = db->getMaxSortOrder();
                     
                     AppInfo app;
                     app.name = conn.name;
@@ -1257,7 +1252,6 @@ void RemoteDesktopWidget::onTableContextMenuRequested(const QPoint &pos)
                     app.isFavorite = false;
                     app.sortOrder = maxSortOrder + 1;
                     app.type = AppType_RemoteDesktop;
-                    app.isRemoteDesktop = true;
                     app.remoteDesktopId = conn.id;
                     
                     if (db->addApp(app)) {
@@ -1292,20 +1286,15 @@ void RemoteDesktopWidget::onAddToAppList()
     if (conn.id == -1) return;
 
     QList<AppInfo> allApps = db->getAllApps();
-    
+
     for (const AppInfo &a : allApps) {
-        if (a.isRemoteDesktop && a.remoteDesktopId == conn.id) {
+        if (a.type == AppType_RemoteDesktop && a.remoteDesktopId == conn.id) {
             emit statusMessageRequested(QString("\"%1\" 已在应用列表中，无需重复添加！").arg(conn.name));
             return;
         }
     }
     
-    int maxSortOrder = 0;
-    for (const AppInfo &a : allApps) {
-        if (a.sortOrder > maxSortOrder) {
-            maxSortOrder = a.sortOrder;
-        }
-    }
+    int maxSortOrder = db->getMaxSortOrder();
 
     AppInfo app;
     app.name = conn.name;
@@ -1317,7 +1306,6 @@ void RemoteDesktopWidget::onAddToAppList()
     app.isFavorite = false;
     app.sortOrder = maxSortOrder + 1;
     app.type = AppType_RemoteDesktop;
-    app.isRemoteDesktop = true;
     app.remoteDesktopId = conn.id;
 
     if (db->addApp(app)) {

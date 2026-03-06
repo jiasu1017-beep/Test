@@ -33,7 +33,6 @@ struct AppInfo {
     bool isFavorite;
     int sortOrder;
     AppType type;
-    bool isRemoteDesktop;
     int remoteDesktopId;
 };
 
@@ -151,6 +150,7 @@ public:
     QList<AppInfo> getAllApps();
     QList<AppInfo> getFavoriteApps();
     AppInfo getAppById(int id);
+    int getMaxSortOrder();
     
     bool addCollection(const AppCollection &collection);
     bool updateCollection(const AppCollection &collection);

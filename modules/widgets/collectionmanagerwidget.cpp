@@ -561,39 +561,7 @@ void CollectionManagerWidget::refreshCollectionApps()
 
 QIcon CollectionManagerWidget::getAppIcon(const AppInfo &app)
 {
-    if (app.isRemoteDesktop || app.type == AppType_RemoteDesktop) {
-        return QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
-    }
-
-    if (!app.iconPath.isEmpty() && QFile::exists(app.iconPath)) {
-        QIcon icon(app.iconPath);
-        if (!icon.isNull()) {
-            return icon;
-        }
-    }
-    
-    if (app.type == AppType_Website) {
-        return QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView);
-    }
-    
-    if (app.type == AppType_Folder) {
-        return QApplication::style()->standardIcon(QStyle::SP_DirIcon);
-    }
-    
-    if (app.type == AppType_Document) {
-        if (QFile::exists(app.path)) {
-            QFileInfo fileInfo(app.path);
-            return iconProvider.icon(fileInfo);
-        }
-        return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
-    }
-    
-    if (QFile::exists(app.path)) {
-        QFileInfo fileInfo(app.path);
-        return iconProvider.icon(fileInfo);
-    }
-    
-    return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
+    return ApplicationManager::getAppIcon(app);
 }
 
 void CollectionManagerWidget::showCollectionPropertiesDialog(AppCollection &collection, bool isNew)
