@@ -16,6 +16,11 @@
 #include <QDialogButtonBox>
 #include <QMenu>
 #include <QAction>
+#include <QProcess>
+#include <QStandardPaths>
+#include <QTextStream>
+#include <QFile>
+#include <QIODevice>
 #include "modules/core/database.h"
 
 struct RDPConnectionInfo {
@@ -42,6 +47,8 @@ class RemoteDesktopWidget : public QWidget
 
 public:
     explicit RemoteDesktopWidget(Database *db, QWidget *parent = nullptr);
+
+    static void launchRemoteDesktop(const RemoteDesktopConnection &conn, Database *db);
 
 signals:
     void collectionNeedsRefresh();

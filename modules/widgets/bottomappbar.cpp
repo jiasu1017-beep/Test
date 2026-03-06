@@ -1,4 +1,5 @@
 #include "bottomappbar.h"
+#include "modules/widgets/remotedesktopwidget.h"
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
@@ -18,6 +19,8 @@
 #include <QGraphicsOpacityEffect>
 #include <QFileIconProvider>
 #include <QEasingCurve>
+#include <QStandardPaths>
+#include <QTextStream>
 
 BottomAppBarItem::BottomAppBarItem(const AppInfo &app, QWidget *parent)
     : QWidget(parent), m_app(app), m_iconSize(DEFAULT_ICON_SIZE), m_scale(1.0), m_opacity(1.0), m_isHovered(false), m_iconLoaded(false)
@@ -194,6 +197,8 @@ QIcon BottomAppBarItem::getDefaultIcon()
         return QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView);
     } else if (m_app.type == AppType_Folder) {
         return QApplication::style()->standardIcon(QStyle::SP_DirIcon);
+    } else if (m_app.type == AppType_RemoteDesktop || m_app.isRemoteDesktop) {
+        return QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
     } else if (m_app.type == AppType_Document) {
         if (QFile::exists(m_app.path)) {
             QFileInfo fileInfo(m_app.path);
@@ -338,7 +343,7 @@ void BottomAppBar::setApps(const QList<AppInfo> &apps)
         item->setIconSize(m_iconSize);
         connect(item, &BottomAppBarItem::clicked, this, &BottomAppBar::onAppClicked);
         m_appItems.append(item);
-        m_contentLayout->insertWidget(m_contentLayout->count() - 1, item);
+        m_contentLayout->addWidget(item);
     }
     
     m_loadTimer->start();
@@ -485,11 +490,36 @@ void BottomAppBar::launchApp(const AppInfo &app)
         QDesktopServices::openUrl(QUrl::fromLocalFile(app.path));
     } else if (app.type == AppType_Document) {
         QDesktopServices::openUrl(QUrl::fromLocalFile(app.path));
-    } else {
-        QStringList args;
-        if (!app.arguments.isEmpty()) {
-            args = app.arguments.split(' ', Qt::SkipEmptyParts);
+    } else if (app.type == AppType_RemoteDesktop || app.isRemoteDesktop) {
+        if (app.remoteDesktopId > 0 && m_db) {
+            RemoteDesktopConnection conn = m_db->getRemoteDesktopById(app.remoteDesktopId);
+            RemoteDesktopWidget::launchRemoteDesktop(conn, m_db);
         }
-        QProcess::startDetached(app.path, args);
+    } else {
+        QString fullPath = app.path;
+        QString args = app.arguments;
+        
+        QFileInfo fileInfo(fullPath);
+        QString fileName = fileInfo.fileName().toLower();
+        
+        if (fileName == "cmd.exe" || fileName == "cmd") {
+            if (args.trimmed().isEmpty()) {
+                QProcess::startDetached("cmd /c start cmd.exe");
+            } else {
+                QProcess::startDetached(QString("cmd /c start \"\" %1 %2").arg(fullPath, args));
+            }
+        } else if (fileName == "powershell.exe" || fileName == "powershell") {
+            if (args.trimmed().isEmpty()) {
+                QProcess::startDetached("cmd /c start powershell.exe");
+            } else {
+                QProcess::startDetached(QString("cmd /c start \"\" %1 %2").arg(fullPath, args));
+            }
+        } else {
+            if (args.trimmed().isEmpty()) {
+                QProcess::startDetached(fullPath, QStringList());
+            } else {
+                QProcess::startDetached(fullPath, QProcess::splitCommand(args));
+            }
+        }
     }
 }
