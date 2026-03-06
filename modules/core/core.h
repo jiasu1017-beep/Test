@@ -3,5 +3,6 @@
 
 #include "database.h"
 #include "logger.h"
+#include "applicationmanager.h"
 
 #endif

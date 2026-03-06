@@ -17,6 +17,7 @@
 #include <QComboBox>
 #include <QSpinBox>
 #include "modules/core/database.h"
+#include "modules/core/applicationmanager.h"
 #include "modules/widgets/appmanagerwidget.h"
 
 struct TagInfo {
@@ -86,6 +87,7 @@ private:
     void showCollectionPropertiesDialog(AppCollection &collection, bool isNew = false);
 
     Database *db;
+    ApplicationManager *appManager;
     
     QListWidget *collectionListWidget;
     QListView *appsListView;

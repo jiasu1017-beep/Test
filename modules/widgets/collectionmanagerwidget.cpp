@@ -299,6 +299,11 @@ QSize CollectionItemDelegate::sizeHint(const QStyleOptionViewItem &option, const
 CollectionManagerWidget::CollectionManagerWidget(Database *db, QWidget *parent)
     : QWidget(parent), db(db), currentCollectionId(-1)
 {
+    appManager = new ApplicationManager(db, this);
+    connect(appManager, &ApplicationManager::appLaunched, this, [this](const AppInfo &app) {
+        refreshCollectionApps();
+    });
+    
     initTagColors();
     iconDelegate = new AppIconDelegate(this);
     collectionDelegate = new CollectionItemDelegate(this);
@@ -1091,117 +1096,11 @@ void CollectionManagerWidget::onExportCollection()
 
 void CollectionManagerWidget::launchApp(const AppInfo &app)
 {
-    if (app.type == AppType_Website) {
-        QDesktopServices::openUrl(QUrl(app.path));
-        AppInfo updatedApp = app;
-        updatedApp.useCount++;
-        db->updateApp(updatedApp);
-        refreshCollectionApps();
-        return;
-    }
+    ApplicationManager::LaunchOptions options;
+    options.updateUseCount = true;
+    options.refreshUI = false;
     
-    if (app.type == AppType_Folder) {
-        QDesktopServices::openUrl(QUrl::fromLocalFile(app.path));
-        AppInfo updatedApp = app;
-        updatedApp.useCount++;
-        db->updateApp(updatedApp);
-        refreshCollectionApps();
-        return;
-    }
-    
-    if (app.type == AppType_Document) {
-        QDesktopServices::openUrl(QUrl::fromLocalFile(app.path));
-        AppInfo updatedApp = app;
-        updatedApp.useCount++;
-        db->updateApp(updatedApp);
-        refreshCollectionApps();
-        return;
-    }
-    
-    if (app.isRemoteDesktop && app.remoteDesktopId > 0) {
-        RemoteDesktopConnection conn = db->getRemoteDesktopById(app.remoteDesktopId);
-        if (conn.id != -1) {
-            QString targetName = "TERMSRV/" + conn.hostAddress;
-
-            if (!conn.username.isEmpty() && !conn.password.isEmpty()) {
-                QString username = conn.username;
-                if (!conn.domain.isEmpty()) {
-                    username = conn.domain + "\\" + username;
-                }
-
-                QStringList cmdkeyArgs;
-                cmdkeyArgs << "/generic:" + targetName << "/user:" + username << "/pass:" + conn.password;
-
-                QProcess::execute("cmdkey.exe", cmdkeyArgs);
-            }
-
-            QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-            QString rdpFilePath = tempDir + "/PonyWork_RDP_" + QString::number(conn.id) + ".rdp";
-
-            QFile rdpFile(rdpFilePath);
-            if (rdpFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                QTextStream out(&rdpFile);
-                out.setCodec("UTF-8");
-
-                QString fullAddress = conn.hostAddress;
-                if (conn.port != 3389) {
-                    fullAddress += ":" + QString::number(conn.port);
-                }
-
-                out << "full address:s:" << fullAddress << "\n";
-                out << "screen mode id:i:" << (conn.fullScreen ? "2" : "1") << "\n";
-                out << "desktopwidth:i:" << conn.screenWidth << "\n";
-                out << "desktopheight:i:" << conn.screenHeight << "\n";
-                out << "use multimon:i:" << (conn.useAllMonitors ? "1" : "0") << "\n";
-                out << "audiomode:i:" << (conn.enableAudio ? "0" : "2") << "\n";
-                out << "redirectclipboard:i:" << (conn.enableClipboard ? "1" : "0") << "\n";
-                out << "redirectprinters:i:" << (conn.enablePrinter ? "1" : "0") << "\n";
-                out << "redirectdrives:i:" << (conn.enableDrive ? "1" : "0") << "\n";
-                out << "authentication level:i:2\n";
-                out << "prompt for credentials:i:0\n";
-                out << "administrative session:i:0\n";
-
-                if (!conn.username.isEmpty()) {
-                    QString username = conn.username;
-                    if (!conn.domain.isEmpty()) {
-                        username = conn.domain + "\\" + username;
-                    }
-                    out << "username:s:" << username << "\n";
-                }
-
-                rdpFile.close();
-            }
-
-            conn.lastUsedTime = QDateTime::currentDateTime();
-            db->updateRemoteDesktop(conn);
-
-            QStringList args;
-            args << rdpFilePath;
-
-            QProcess::startDetached("mstsc.exe", args);
-
-            AppInfo updatedApp = app;
-            updatedApp.useCount++;
-            db->updateApp(updatedApp);
-            refreshCollectionApps();
-            return;
-        }
-    }
-
-    QString fullPath = app.path;
-    QString args = app.arguments;
-    
-    if (args.trimmed().isEmpty()) {
-        QProcess::startDetached(fullPath, QStringList());
-    } else {
-        QProcess::startDetached(fullPath, QProcess::splitCommand(args));
-    }
-    
-    AppInfo updatedApp = app;
-    updatedApp.useCount++;
-    db->updateApp(updatedApp);
-    
-    refreshCollectionApps();
+    appManager->launchApp(app, options);
 }
 
 void CollectionManagerWidget::runApp(const AppInfo &app)

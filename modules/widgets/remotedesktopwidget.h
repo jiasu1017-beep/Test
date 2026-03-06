@@ -22,6 +22,7 @@
 #include <QFile>
 #include <QIODevice>
 #include "modules/core/database.h"
+#include "modules/core/applicationmanager.h"
 
 struct RDPConnectionInfo {
     QString serverAddress;

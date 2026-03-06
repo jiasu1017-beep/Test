@@ -218,6 +218,8 @@ QIcon BottomAppBarItem::getDefaultIcon()
 BottomAppBar::BottomAppBar(Database *db, QWidget *parent)
     : QWidget(parent), m_db(db), m_iconSize(DEFAULT_ICON_SIZE), m_height(DEFAULT_HEIGHT), m_isLoading(true), m_theme(Light)
 {
+    appManager = new ApplicationManager(m_db, this);
+    
     m_bgColor = Colors::LIGHT_BG;
     m_borderColor = Colors::LIGHT_BORDER;
     m_hoverBgColor = Colors::LIGHT_HOVER;
@@ -484,42 +486,11 @@ void BottomAppBar::updateScrollIndicator()
 
 void BottomAppBar::launchApp(const AppInfo &app)
 {
-    if (app.type == AppType_Website) {
-        QDesktopServices::openUrl(QUrl(app.path));
-    } else if (app.type == AppType_Folder) {
-        QDesktopServices::openUrl(QUrl::fromLocalFile(app.path));
-    } else if (app.type == AppType_Document) {
-        QDesktopServices::openUrl(QUrl::fromLocalFile(app.path));
-    } else if (app.type == AppType_RemoteDesktop || app.isRemoteDesktop) {
-        if (app.remoteDesktopId > 0 && m_db) {
-            RemoteDesktopConnection conn = m_db->getRemoteDesktopById(app.remoteDesktopId);
-            RemoteDesktopWidget::launchRemoteDesktop(conn, m_db);
-        }
-    } else {
-        QString fullPath = app.path;
-        QString args = app.arguments;
-        
-        QFileInfo fileInfo(fullPath);
-        QString fileName = fileInfo.fileName().toLower();
-        
-        if (fileName == "cmd.exe" || fileName == "cmd") {
-            if (args.trimmed().isEmpty()) {
-                QProcess::startDetached("cmd /c start cmd.exe");
-            } else {
-                QProcess::startDetached(QString("cmd /c start \"\" %1 %2").arg(fullPath, args));
-            }
-        } else if (fileName == "powershell.exe" || fileName == "powershell") {
-            if (args.trimmed().isEmpty()) {
-                QProcess::startDetached("cmd /c start powershell.exe");
-            } else {
-                QProcess::startDetached(QString("cmd /c start \"\" %1 %2").arg(fullPath, args));
-            }
-        } else {
-            if (args.trimmed().isEmpty()) {
-                QProcess::startDetached(fullPath, QStringList());
-            } else {
-                QProcess::startDetached(fullPath, QProcess::splitCommand(args));
-            }
-        }
-    }
+    ApplicationManager::LaunchOptions options;
+    options.updateUseCount = false;
+    options.refreshUI = false;
+    options.silentMode = true;
+    
+    appManager->launchApp(app, options);
+    emit appLaunched(app);
 }

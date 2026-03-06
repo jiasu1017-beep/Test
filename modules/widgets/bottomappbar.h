@@ -13,6 +13,7 @@
 #include <QMouseEvent>
 #include <QParallelAnimationGroup>
 #include "modules/core/database.h"
+#include "modules/core/applicationmanager.h"
 
 class BottomAppBarItem : public QWidget
 {
@@ -118,6 +119,7 @@ private:
     void launchApp(const AppInfo &app);
     
     Database *m_db;
+    ApplicationManager *appManager;
     QScrollArea *m_scrollArea;
     QWidget *m_contentWidget;
     QHBoxLayout *m_contentLayout;
