@@ -43,11 +43,16 @@ signals:
     void clicked(const AppInfo &app);
 
 private:
+    void loadIcon();
+    QIcon getDefaultIcon();
+    
     AppInfo m_app;
     int m_iconSize;
     qreal m_scale;
     qreal m_opacity;
     bool m_isHovered;
+    QPixmap m_cachedIcon;
+    bool m_iconLoaded;
     QGraphicsDropShadowEffect *m_shadowEffect;
     QPropertyAnimation *m_scaleAnimation;
 };

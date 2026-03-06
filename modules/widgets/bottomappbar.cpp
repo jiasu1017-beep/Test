@@ -20,7 +20,7 @@
 #include <QEasingCurve>
 
 BottomAppBarItem::BottomAppBarItem(const AppInfo &app, QWidget *parent)
-    : QWidget(parent), m_app(app), m_iconSize(DEFAULT_ICON_SIZE), m_scale(1.0), m_opacity(1.0), m_isHovered(false)
+    : QWidget(parent), m_app(app), m_iconSize(DEFAULT_ICON_SIZE), m_scale(1.0), m_opacity(1.0), m_isHovered(false), m_iconLoaded(false)
 {
     setFixedSize(m_iconSize, m_iconSize + ICON_PADDING);
     setAttribute(Qt::WA_TranslucentBackground);
@@ -37,6 +37,9 @@ BottomAppBarItem::BottomAppBarItem(const AppInfo &app, QWidget *parent)
     m_scaleAnimation->setEasingCurve(QEasingCurve::OutCubic);
     
     setToolTip(app.name);
+    
+    // 预加载图标
+    loadIcon();
 }
 
 void BottomAppBarItem::setIconSize(int size)
@@ -60,14 +63,15 @@ void BottomAppBarItem::enterEvent(QEvent *event)
 {
     m_isHovered = true;
     
-    m_shadowEffect->setBlurRadius(16);
-    m_shadowEffect->setColor(QColor(0, 0, 0, 38));
-    m_shadowEffect->setOffset(0, 4);
+    // 低配电脑优化：简化阴影效果
+    m_shadowEffect->setBlurRadius(8);  // 减少阴影模糊半径
+    m_shadowEffect->setColor(QColor(0, 0, 0, 25));  // 降低阴影透明度
+    m_shadowEffect->setOffset(0, 2);  // 减少阴影偏移
     
     m_scaleAnimation->stop();
     m_scaleAnimation->setStartValue(m_scale);
-    m_scaleAnimation->setEndValue(1.12);
-    m_scaleAnimation->setDuration(200);
+    m_scaleAnimation->setEndValue(1.08);  // 减少缩放幅度
+    m_scaleAnimation->setDuration(150);  // 缩短动画时间
     m_scaleAnimation->start();
     
     update();
@@ -78,6 +82,7 @@ void BottomAppBarItem::leaveEvent(QEvent *event)
 {
     m_isHovered = false;
     
+    // 低配电脑优化：快速恢复
     m_shadowEffect->setBlurRadius(0);
     m_shadowEffect->setColor(QColor(0, 0, 0, 0));
     m_shadowEffect->setOffset(0, 0);
@@ -85,7 +90,7 @@ void BottomAppBarItem::leaveEvent(QEvent *event)
     m_scaleAnimation->stop();
     m_scaleAnimation->setStartValue(m_scale);
     m_scaleAnimation->setEndValue(1.0);
-    m_scaleAnimation->setDuration(180);
+    m_scaleAnimation->setDuration(120);  // 缩短动画时间
     m_scaleAnimation->start();
     
     update();
@@ -157,44 +162,52 @@ void BottomAppBarItem::paintEvent(QPaintEvent *event)
     
     painter.setClipping(false);
     
-    QIcon icon;
-    
-    if (!m_app.iconPath.isEmpty()) {
-        if (QFile::exists(m_app.iconPath)) {
-            icon = QIcon(m_app.iconPath);
-        }
-    }
-    
-    if (icon.isNull()) {
-        if (m_app.type == AppType_Website) {
-            icon = QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView);
-        } else if (m_app.type == AppType_Folder) {
-            icon = QApplication::style()->standardIcon(QStyle::SP_DirIcon);
-        } else if (m_app.type == AppType_Document) {
-            if (QFile::exists(m_app.path)) {
-                QFileInfo fileInfo(m_app.path);
-                QFileIconProvider provider;
-                icon = provider.icon(fileInfo);
-            } else {
-                icon = QApplication::style()->standardIcon(QStyle::SP_FileIcon);
-            }
-        } else {
-            if (QFile::exists(m_app.path)) {
-                QFileInfo fileInfo(m_app.path);
-                QFileIconProvider provider;
-                icon = provider.icon(fileInfo);
-            } else {
-                icon = QApplication::style()->standardIcon(QStyle::SP_FileIcon);
-            }
-        }
-    }
-    
+    // 使用缓存的图标
     int pixmapSize = static_cast<int>(iconAreaSize - 14);
-    QPixmap pixmap = icon.pixmap(QSize(pixmapSize, pixmapSize));
     QRectF pixmapRect(iconRect.center().x() - pixmapSize / 2.0,
                       iconRect.center().y() - pixmapSize / 2.0,
                       pixmapSize, pixmapSize);
-    painter.drawPixmap(pixmapRect.toRect(), pixmap);
+    painter.drawPixmap(pixmapRect.toRect(), m_cachedIcon);
+}
+
+void BottomAppBarItem::loadIcon()
+{
+    if (m_iconLoaded) return;
+    
+    QIcon icon;
+    if (!m_app.iconPath.isEmpty() && QFile::exists(m_app.iconPath)) {
+        icon = QIcon(m_app.iconPath);
+    }
+    
+    if (icon.isNull()) {
+        icon = getDefaultIcon();
+    }
+    
+    int pixmapSize = m_iconSize - 14;
+    m_cachedIcon = icon.pixmap(QSize(pixmapSize, pixmapSize));
+    m_iconLoaded = true;
+}
+
+QIcon BottomAppBarItem::getDefaultIcon()
+{
+    if (m_app.type == AppType_Website) {
+        return QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView);
+    } else if (m_app.type == AppType_Folder) {
+        return QApplication::style()->standardIcon(QStyle::SP_DirIcon);
+    } else if (m_app.type == AppType_Document) {
+        if (QFile::exists(m_app.path)) {
+            QFileInfo fileInfo(m_app.path);
+            QFileIconProvider provider;
+            return provider.icon(fileInfo);
+        }
+    } else {
+        if (QFile::exists(m_app.path)) {
+            QFileInfo fileInfo(m_app.path);
+            QFileIconProvider provider;
+            return provider.icon(fileInfo);
+        }
+    }
+    return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
 }
 
 BottomAppBar::BottomAppBar(Database *db, QWidget *parent)
@@ -362,7 +375,12 @@ void BottomAppBar::wheelEvent(QWheelEvent *event)
         int currentValue = scrollBar->value();
         int newValue = currentValue - delta;
         
-        smoothScrollTo(qBound(0, newValue, scrollBar->maximum()));
+        // 低配电脑优化：直接滚动，不使用动画
+        scrollBar->setValue(qBound(0, newValue, scrollBar->maximum()));
+        
+        // 延迟更新滚动指示器，减少重绘频率
+        QTimer::singleShot(50, this, &BottomAppBar::updateScrollIndicator);
+        
         event->accept();
     }
 }
