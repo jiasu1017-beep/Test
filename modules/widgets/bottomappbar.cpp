@@ -375,6 +375,7 @@ void BottomAppBar::wheelEvent(QWheelEvent *event)
 
 void BottomAppBar::resizeEvent(QResizeEvent *event)
 {
+    setFixedHeight(m_height);
     QWidget::resizeEvent(event);
     updateScrollIndicator();
 }
