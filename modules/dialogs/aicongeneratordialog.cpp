@@ -1,7 +1,6 @@
 #include "aicongeneratordialog.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QFileDialog>
 #include <QStandardPaths>
 #include <QDir>
 #include <QDateTime>
@@ -19,21 +18,38 @@
 #include <QBuffer>
 #include <QTimer>
 #include <QCoreApplication>
+#include <QTextStream>
 #include <QSettings>
+#include <QFileInfo>
 #include <cmath>
-#include "modules/core/aiconfig.h"
+
+namespace {
+    const double PI = 3.14159265358979323846;
+    const int ICON_SIZE = 512;
+    const int ICON_CENTER = 256;
+    const int ICON_RADIUS = 80;
+    const int ICON_INNER_RADIUS = 30;
+    const int ICON_OUTER_RADIUS = 110;
+    const int ICON_TEETH_RADIUS = 20;
+    const int ICON_TEETH_SIZE = 20;
+    const int PREVIEW_SIZE = 256;
+}
 
 AIIconGeneratorDialog::AIIconGeneratorDialog(QWidget *parent)
-    : QDialog(parent), networkManager(new QNetworkAccessManager(this))
+    : QDialog(parent), networkManager(new QNetworkAccessManager(this)), m_currentReply(nullptr), m_iconSaved(false)
 {
     setWindowTitle("AI图标生成器");
-    setMinimumSize(700, 600);
-    resize(800, 700);
+    setMinimumSize(900, 800);
+    resize(1000, 900);
     setupUI();
 }
 
 AIIconGeneratorDialog::~AIIconGeneratorDialog()
 {
+    if (m_currentReply && m_currentReply->isRunning()) {
+        m_currentReply->abort();
+        m_currentReply->deleteLater();
+    }
 }
 
 void AIIconGeneratorDialog::setupUI()
@@ -116,15 +132,65 @@ void AIIconGeneratorDialog::setupUI()
     promptLayout->addWidget(promptLabel);
 
     promptEdit = new QLineEdit(this);
-    promptEdit->setPlaceholderText("例如：蓝色的齿轮图标、红色的信封、绿色的播放按钮");
+    promptEdit->setPlaceholderText("例如：齿轮、信封、播放按钮");
     promptLayout->addWidget(promptEdit);
 
-    QLabel *styleLabel = new QLabel("风格设置 (可选):", this);
-    promptLayout->addWidget(styleLabel);
+    QLabel *iconTypeLabel = new QLabel("图标类型:", this);
+    promptLayout->addWidget(iconTypeLabel);
+
+    iconTypeCombo = new QComboBox(this);
+    iconTypeCombo->addItem("通用图标", "app icon");
+    iconTypeCombo->addItem("工具图标", "tool icon");
+    iconTypeCombo->addItem("社交图标", "social icon");
+    iconTypeCombo->addItem("办公图标", "office icon");
+    iconTypeCombo->addItem("娱乐图标", "entertainment icon");
+    iconTypeCombo->addItem("设置图标", "settings icon");
+    iconTypeCombo->addItem("导航图标", "navigation icon");
+    iconTypeCombo->addItem("媒体图标", "media icon");
+    promptLayout->addWidget(iconTypeCombo);
+
+    QLabel *designStyleLabel = new QLabel("设计风格:", this);
+    promptLayout->addWidget(designStyleLabel);
+
+    designStyleCombo = new QComboBox(this);
+    designStyleCombo->addItem("简约设计", "minimal design");
+    designStyleCombo->addItem("扁平化", "flat style");
+    designStyleCombo->addItem("渐变", "gradient");
+    designStyleCombo->addItem("3D效果", "3D");
+    designStyleCombo->addItem("线条图标", "line icon");
+    designStyleCombo->addItem("填充图标", "filled icon");
+    designStyleCombo->addItem("卡通风格", "cartoon style");
+    designStyleCombo->addItem("抽象风格", "abstract style");
+    designStyleCombo->addItem("现代风格", "modern style");
+    designStyleCombo->addItem("复古风格", "retro style");
+    promptLayout->addWidget(designStyleCombo);
+
+    QLabel *sizeLabel = new QLabel("图标尺寸:", this);
+    promptLayout->addWidget(sizeLabel);
+
+    sizeCombo = new QComboBox(this);
+    sizeCombo->addItem("512x512", "512x512");
+    sizeCombo->addItem("256x256", "256x256");
+    sizeCombo->addItem("1024x1024", "1024x1024");
+    sizeCombo->addItem("128x128", "128x128");
+    promptLayout->addWidget(sizeCombo);
+
+    QLabel *backgroundLabel = new QLabel("背景:", this);
+    promptLayout->addWidget(backgroundLabel);
+
+    backgroundCombo = new QComboBox(this);
+    backgroundCombo->addItem("白色背景", "white background");
+    backgroundCombo->addItem("透明背景", "transparent background");
+    backgroundCombo->addItem("渐变背景", "gradient background");
+    backgroundCombo->addItem("纯色背景", "solid color background");
+    promptLayout->addWidget(backgroundCombo);
+
+    QLabel *customStyleLabel = new QLabel("自定义描述 (可选):", this);
+    promptLayout->addWidget(customStyleLabel);
 
     styleEdit = new QTextEdit(this);
-    styleEdit->setMaximumHeight(80);
-    styleEdit->setPlaceholderText("可选：minimal design, flat style, gradient, 3D, etc.");
+    styleEdit->setMaximumHeight(60);
+    styleEdit->setPlaceholderText("可选：添加其他描述，如颜色、细节等");
     promptLayout->addWidget(styleEdit);
 
     mainLayout->addWidget(promptGroup);
@@ -165,18 +231,28 @@ void AIIconGeneratorDialog::setupUI()
     );
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
 
-    okBtn = new QPushButton("✓ 使用此图标", this);
+    okBtn = new QPushButton("使用此图标", this);
     okBtn->setEnabled(false);
     okBtn->setStyleSheet(
         "QPushButton { background-color: #27ae60; color: white; padding: 10px 20px; border-radius: 5px; font-size: 14px; font-weight: bold; } "
         "QPushButton:hover { background-color: #229954; } "
         "QPushButton:disabled { background-color: #95a5a6; }"
     );
-    connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
+    connect(okBtn, &QPushButton::clicked, this, &AIIconGeneratorDialog::onUseIconClicked);
+
+    saveBtn = new QPushButton("💾 保存图标", this);
+    saveBtn->setEnabled(false);
+    saveBtn->setStyleSheet(
+        "QPushButton { background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; font-size: 14px; } "
+        "QPushButton:hover { background-color: #2980b9; } "
+        "QPushButton:disabled { background-color: #95a5a6; }"
+    );
+    connect(saveBtn, &QPushButton::clicked, this, &AIIconGeneratorDialog::onSaveIconClicked);
 
     buttonLayout->addWidget(generateBtn);
     buttonLayout->addWidget(regenerateBtn);
     buttonLayout->addStretch();
+    buttonLayout->addWidget(saveBtn);
     buttonLayout->addWidget(cancelBtn);
     buttonLayout->addWidget(okBtn);
 
@@ -196,6 +272,10 @@ void AIIconGeneratorDialog::onMethodChanged()
     templateCombo->setEnabled(isTemplate);
     colorCombo->setEnabled(isTemplate);
     promptEdit->setEnabled(isIconFinder || isAPI);
+    iconTypeCombo->setEnabled(isAPI);
+    designStyleCombo->setEnabled(isAPI);
+    sizeCombo->setEnabled(isAPI);
+    backgroundCombo->setEnabled(isAPI);
     styleEdit->setEnabled(isAPI);
     
     if (isTemplate) {
@@ -205,8 +285,8 @@ void AIIconGeneratorDialog::onMethodChanged()
         promptEdit->setPlaceholderText("输入关键词搜索图标库");
         styleEdit->setPlaceholderText("例如：gear, envelope, play");
     } else {
-        promptEdit->setPlaceholderText("例如：蓝色的齿轮图标、红色的信封、绿色的播放按钮");
-        styleEdit->setPlaceholderText("可选：minimal design, flat style, gradient, 3D, etc.");
+        promptEdit->setPlaceholderText("例如：齿轮、信封、播放按钮");
+        styleEdit->setPlaceholderText("可选：添加其他描述，如颜色、细节等");
     }
 }
 
@@ -269,7 +349,7 @@ bool AIIconGeneratorDialog::tryTemplateMatch()
 
 void AIIconGeneratorDialog::generateTemplateIcon(const QString &iconType, const QString &color)
 {
-    QPixmap pixmap(512, 512);
+    QPixmap pixmap(ICON_SIZE, ICON_SIZE);
     pixmap.fill(Qt::transparent);
     
     QPainter painter(&pixmap);
@@ -277,7 +357,7 @@ void AIIconGeneratorDialog::generateTemplateIcon(const QString &iconType, const 
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
     
     QColor bgColor(color);
-    QRadialGradient gradient(256, 256, 256);
+    QRadialGradient gradient(ICON_CENTER, ICON_CENTER, ICON_CENTER);
     gradient.setColorAt(0, bgColor.lighter(110));
     gradient.setColorAt(0.7, bgColor);
     gradient.setColorAt(1, bgColor.darker(110));
@@ -289,20 +369,20 @@ void AIIconGeneratorDialog::generateTemplateIcon(const QString &iconType, const 
     painter.setBrush(Qt::white);
     painter.setPen(Qt::NoPen);
     
-    int cx = 256;
-    int cy = 256;
+    int cx = ICON_CENTER;
+    int cy = ICON_CENTER;
     
     if (iconType == "gear" || iconType == "settings") {
-        painter.drawEllipse(QPointF(cx, cy), 80, 80);
-        painter.drawEllipse(QPointF(cx, cy), 30, 30);
+        painter.drawEllipse(QPointF(cx, cy), ICON_RADIUS, ICON_RADIUS);
+        painter.drawEllipse(QPointF(cx, cy), ICON_INNER_RADIUS, ICON_INNER_RADIUS);
         for (int i = 0; i < 8; i++) {
-            double angle = i * 45 * 3.1415926 / 180;
-            double x1 = cx + cos(angle) * 80;
-            double y1 = cy + sin(angle) * 80;
-            double x2 = cx + cos(angle) * 110;
-            double y2 = cy + sin(angle) * 110;
-            painter.drawEllipse(QPointF(x2, y2), 20, 20);
-            painter.drawRect(QRectF(x1 - 10, y1 - 10, 20, 20));
+            double angle = i * 45 * PI / 180;
+            double x1 = cx + cos(angle) * ICON_RADIUS;
+            double y1 = cy + sin(angle) * ICON_RADIUS;
+            double x2 = cx + cos(angle) * ICON_OUTER_RADIUS;
+            double y2 = cy + sin(angle) * ICON_OUTER_RADIUS;
+            painter.drawEllipse(QPointF(x2, y2), ICON_TEETH_RADIUS, ICON_TEETH_RADIUS);
+            painter.drawRect(QRectF(x1 - 10, y1 - 10, ICON_TEETH_SIZE, ICON_TEETH_SIZE));
         }
     } else if (iconType == "envelope") {
         painter.drawRect(100, 150, 312, 200);
@@ -395,26 +475,24 @@ void AIIconGeneratorDialog::generateTemplateIcon(const QString &iconType, const 
     
     painter.end();
     
-    previewLabel->setPixmap(pixmap.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    statusLabel->setText("✅ 预设模板图标生成成功！");
+    previewLabel->setPixmap(pixmap.scaled(PREVIEW_SIZE, PREVIEW_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     
     m_lastImageData.clear();
     QBuffer buffer(&m_lastImageData);
     buffer.open(QIODevice::WriteOnly);
     pixmap.save(&buffer, "PNG");
     
-    regenerateBtn->setEnabled(true);
-    
-    QString tempPath = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-    m_generatedIconPath = tempPath + "/ai_icon_temp.png";
-    QFile file(m_generatedIconPath);
-    if (file.open(QIODevice::WriteOnly)) {
-        file.write(m_lastImageData);
-        file.close();
+    if (saveGeneratedIcon(m_lastImageData)) {
+        m_iconSaved = true;
+        statusLabel->setText("✅ 预设模板图标生成成功！已自动保存");
+    } else {
+        m_iconSaved = false;
+        statusLabel->setText("✅ 预设模板图标生成成功！但保存失败");
     }
     
     regenerateBtn->setEnabled(true);
     generateBtn->setEnabled(true);
+    saveBtn->setEnabled(!m_iconSaved);
     okBtn->setEnabled(true);
 }
 
@@ -519,7 +597,7 @@ bool AIIconGeneratorDialog::searchIconLibraries()
             return false;
         }
         
-        previewLabel->setPixmap(pixmap.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        previewLabel->setPixmap(pixmap.scaled(PREVIEW_SIZE, PREVIEW_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         statusLabel->setText("✅ 找到匹配的图标！");
         
         m_lastImageData.clear();
@@ -527,16 +605,17 @@ bool AIIconGeneratorDialog::searchIconLibraries()
         buffer.open(QIODevice::WriteOnly);
         pixmap.save(&buffer, "PNG");
         
-        QString tempPath = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-        m_generatedIconPath = tempPath + "/ai_icon_temp.png";
-        QFile file(m_generatedIconPath);
-        if (file.open(QIODevice::WriteOnly)) {
-            file.write(m_lastImageData);
-            file.close();
+        if (saveGeneratedIcon(m_lastImageData)) {
+            m_iconSaved = true;
+            statusLabel->setText("✅ 找到匹配的图标！已自动保存");
+        } else {
+            m_iconSaved = false;
+            statusLabel->setText("✅ 找到匹配的图标！但保存失败");
         }
         
         regenerateBtn->setEnabled(true);
         generateBtn->setEnabled(true);
+        saveBtn->setEnabled(!m_iconSaved);
         okBtn->setEnabled(true);
         
         return true;
@@ -560,7 +639,7 @@ bool AIIconGeneratorDialog::searchIconLibraries()
             return false;
         }
         
-        previewLabel->setPixmap(pixmap.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        previewLabel->setPixmap(pixmap.scaled(PREVIEW_SIZE, PREVIEW_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         statusLabel->setText("✅ 找到匹配的图标！");
         
         m_lastImageData.clear();
@@ -568,16 +647,30 @@ bool AIIconGeneratorDialog::searchIconLibraries()
         buffer.open(QIODevice::WriteOnly);
         pixmap.save(&buffer, "PNG");
         
-        QString tempPath = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-        m_generatedIconPath = tempPath + "/ai_icon_temp.png";
+        QString userDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        QDir dir(userDataDir);
+        if (!dir.exists()) {
+            dir.mkpath(".");
+        }
+        
+        QString iconsDir = userDataDir + "/generated_icons";
+        QDir iconsDirObj(iconsDir);
+        if (!iconsDirObj.exists()) {
+            iconsDirObj.mkpath(".");
+        }
+        
+        QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss");
+        m_generatedIconPath = iconsDir + "/ai_icon_" + timestamp + ".png";
         QFile file(m_generatedIconPath);
         if (file.open(QIODevice::WriteOnly)) {
             file.write(m_lastImageData);
             file.close();
         }
         
+        m_iconSaved = false;
         regenerateBtn->setEnabled(true);
         generateBtn->setEnabled(true);
+        saveBtn->setEnabled(true);
         okBtn->setEnabled(true);
         
         return true;
@@ -594,13 +687,7 @@ bool AIIconGeneratorDialog::useSiliconFlowAPI()
         return false;
     }
     
-    QByteArray key = QCryptographicHash::hash(QByteArray("PonyWorkAI").append(QHostInfo::localHostName().toUtf8()), QCryptographicHash::Sha256);
-    QByteArray data = QByteArray::fromBase64(encryptedKey.toUtf8());
-    QByteArray decrypted;
-    for (int i = 0; i < data.size(); ++i) {
-        decrypted.append(data.at(i) ^ key.at(i % key.size()));
-    }
-    QString apiKey = QString::fromUtf8(decrypted);
+    QString apiKey = decryptApiKey(encryptedKey);
     
     QString endpoint = settings.value("ai_image_endpoint", "").toString();
     
@@ -610,11 +697,7 @@ bool AIIconGeneratorDialog::useSiliconFlowAPI()
         return false;
     }
     
-    m_lastPrompt = prompt;
-    if (!styleEdit->toPlainText().isEmpty()) {
-        m_lastPrompt += ", " + styleEdit->toPlainText();
-    }
-    m_lastPrompt += ", app icon, minimal design, 512x512";
+    m_lastPrompt = buildPrompt(prompt);
     
     QString actualEndpoint = endpoint.isEmpty() ? "https://api.siliconflow.cn/v1/images/generations" : endpoint;
     callImageAPI("siliconflow", "black-forest-labs/FLUX.1-schnell", m_lastPrompt, actualEndpoint, apiKey);
@@ -631,13 +714,7 @@ bool AIIconGeneratorDialog::useDALLE3()
         return false;
     }
     
-    QByteArray key = QCryptographicHash::hash(QByteArray("PonyWorkAI").append(QHostInfo::localHostName().toUtf8()), QCryptographicHash::Sha256);
-    QByteArray data = QByteArray::fromBase64(encryptedKey.toUtf8());
-    QByteArray decrypted;
-    for (int i = 0; i < data.size(); ++i) {
-        decrypted.append(data.at(i) ^ key.at(i % key.size()));
-    }
-    QString apiKey = QString::fromUtf8(decrypted);
+    QString apiKey = decryptApiKey(encryptedKey);
     
     QString endpoint = settings.value("ai_image_endpoint", "").toString();
     
@@ -647,11 +724,7 @@ bool AIIconGeneratorDialog::useDALLE3()
         return false;
     }
     
-    m_lastPrompt = prompt;
-    if (!styleEdit->toPlainText().isEmpty()) {
-        m_lastPrompt += ", " + styleEdit->toPlainText();
-    }
-    m_lastPrompt += ", app icon, minimal design, 512x512";
+    m_lastPrompt = buildPrompt(prompt);
     
     QString actualEndpoint = endpoint.isEmpty() ? "https://api.openai.com/v1/images/generations" : endpoint;
     callImageAPI("openai", "dall-e-3", m_lastPrompt, actualEndpoint, apiKey);
@@ -668,13 +741,7 @@ bool AIIconGeneratorDialog::useStabilityAPI()
         return false;
     }
     
-    QByteArray key = QCryptographicHash::hash(QByteArray("PonyWorkAI").append(QHostInfo::localHostName().toUtf8()), QCryptographicHash::Sha256);
-    QByteArray data = QByteArray::fromBase64(encryptedKey.toUtf8());
-    QByteArray decrypted;
-    for (int i = 0; i < data.size(); ++i) {
-        decrypted.append(data.at(i) ^ key.at(i % key.size()));
-    }
-    QString apiKey = QString::fromUtf8(decrypted);
+    QString apiKey = decryptApiKey(encryptedKey);
     
     QString endpoint = settings.value("ai_image_endpoint", "").toString();
     
@@ -684,11 +751,7 @@ bool AIIconGeneratorDialog::useStabilityAPI()
         return false;
     }
     
-    m_lastPrompt = prompt;
-    if (!styleEdit->toPlainText().isEmpty()) {
-        m_lastPrompt += ", " + styleEdit->toPlainText();
-    }
-    m_lastPrompt += ", app icon, minimal design, 512x512";
+    m_lastPrompt = buildPrompt(prompt);
     
     QString actualEndpoint = endpoint.isEmpty() ? "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image" : endpoint;
     callImageAPI("stability", "stable-diffusion-xl-1024-v1-0", m_lastPrompt, actualEndpoint, apiKey);
@@ -700,6 +763,14 @@ void AIIconGeneratorDialog::callImageAPI(const QString &provider, const QString 
     statusLabel->setText("🔄 正在生成图标...");
     generateBtn->setEnabled(false);
     regenerateBtn->setEnabled(false);
+    
+    QString logDir = QCoreApplication::applicationDirPath() + "/logs";
+    QDir dir(logDir);
+    if (!dir.exists()) {
+        dir.mkpath(logDir);
+    }
+    
+    m_logFileName = logDir + "/ai_icon_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".log";
     
     QNetworkRequest request;
     QUrl url(endpoint);
@@ -713,17 +784,18 @@ void AIIconGeneratorDialog::callImageAPI(const QString &provider, const QString 
     request.setRawHeader("Authorization", QString("Bearer %1").arg(apiKey).toUtf8());
     
     QJsonObject json;
+    QString selectedSize = sizeCombo->currentData().toString();
     
     if (provider == "openai") {
         json["model"] = "dall-e-3";
         json["prompt"] = prompt;
         json["n"] = 1;
-        json["size"] = "1024x1024";
+        json["size"] = selectedSize;
         json["response_format"] = "url";
     } else if (provider == "siliconflow") {
         json["model"] = model;
         json["prompt"] = prompt;
-        json["image_size"] = "1024x1024";
+        json["image_size"] = selectedSize;
         json["batch_size"] = 1;
         json["num_inference_steps"] = 20;
         json["guidance_scale"] = 7.5;
@@ -734,21 +806,52 @@ void AIIconGeneratorDialog::callImageAPI(const QString &provider, const QString 
         QJsonArray promptsArray;
         promptsArray.append(textPrompts);
         
+        QStringList sizeParts = selectedSize.split("x");
+        int width = sizeParts.size() > 0 ? sizeParts[0].toInt() : 1024;
+        int height = sizeParts.size() > 1 ? sizeParts[1].toInt() : 1024;
+        
         json["text_prompts"] = promptsArray;
         json["cfg_scale"] = 7;
-        json["height"] = 1024;
-        json["width"] = 1024;
+        json["height"] = height;
+        json["width"] = width;
         json["steps"] = 30;
         json["samples"] = 1;
     }
     
     QJsonDocument doc(json);
     
-    QNetworkReply *reply = networkManager->post(request, doc.toJson());
+    QFile logFile(m_logFileName);
+    if (logFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&logFile);
+        out.setCodec("UTF-8");
+        out << "=== AI Icon Generation Request ===" << "\n";
+        out << "Time: " << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << "\n";
+        out << "Provider: " << provider << "\n";
+        out << "Model: " << model << "\n";
+        out << "Endpoint: " << endpoint << "\n";
+        out << "Prompt: " << prompt << "\n";
+        out << "Request JSON:\n" << doc.toJson(QJsonDocument::Indented) << "\n\n";
+        logFile.close();
+    }
+    
+    m_currentReply = networkManager->post(request, doc.toJson());
+    QNetworkReply *reply = m_currentReply;
     connect(reply, &QNetworkReply::finished, this, [this, reply, provider]() {
         if (reply->error() == QNetworkReply::NoError) {
             QByteArray data = reply->readAll();
             QJsonDocument responseDoc = QJsonDocument::fromJson(data);
+            
+            {
+                QFile logFile(m_logFileName);
+                if (logFile.open(QIODevice::Append | QIODevice::Text)) {
+                    QTextStream out(&logFile);
+                    out.setCodec("UTF-8");
+                    out << "\n=== AI Icon Generation Response ===" << "\n";
+                    out << "Status Code: " << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() << "\n";
+                    out << "Response:\n" << responseDoc.toJson(QJsonDocument::Indented) << "\n\n";
+                    logFile.close();
+                }
+            }
             
             QString imageUrl;
             
@@ -769,13 +872,32 @@ void AIIconGeneratorDialog::callImageAPI(const QString &provider, const QString 
                     m_lastImageData = QByteArray::fromBase64(base64Data.toUtf8());
                     QPixmap pixmap;
                     pixmap.loadFromData(m_lastImageData);
-                    previewLabel->setPixmap(pixmap.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+                    previewLabel->setPixmap(pixmap.scaled(PREVIEW_SIZE, PREVIEW_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation));
                     statusLabel->setText("✅ 图标生成成功！");
-                    saveGeneratedIcon(m_lastImageData);
+                    m_iconSaved = false;
+                    
+                    // 设置生成的图标路径
+                    QString userDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+                    QDir dir(userDataDir);
+                    if (!dir.exists()) {
+                        dir.mkpath(".");
+                    }
+                    
+                    QString iconsDir = userDataDir + "/generated_icons";
+                    QDir iconsDirObj(iconsDir);
+                    if (!iconsDirObj.exists()) {
+                        iconsDirObj.mkpath(".");
+                    }
+                    
+                    QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss");
+                    m_generatedIconPath = iconsDir + "/ai_icon_" + timestamp + ".png";
+                    
                     generateBtn->setEnabled(true);
                     regenerateBtn->setEnabled(true);
+                    saveBtn->setEnabled(true);
                     okBtn->setEnabled(true);
                     reply->deleteLater();
+                    m_currentReply = nullptr;
                     return;
                 }
             }
@@ -789,6 +911,18 @@ void AIIconGeneratorDialog::callImageAPI(const QString &provider, const QString 
         } else {
             QString errorMsg = reply->errorString();
             QByteArray errorData = reply->readAll();
+            
+            QFile logFile(m_logFileName);
+            if (logFile.open(QIODevice::Append | QIODevice::Text)) {
+                QTextStream out(&logFile);
+                out.setCodec("UTF-8");
+                out << "\n=== AI Icon Generation Response (ERROR) ===" << "\n";
+                out << "Error Code: " << reply->error() << "\n";
+                out << "Error: " << errorMsg << "\n";
+                out << "Response:\n" << errorData << "\n\n";
+                logFile.close();
+            }
+            
             if (!errorData.isEmpty()) {
                 QJsonDocument errorDoc = QJsonDocument::fromJson(errorData);
                 if (errorDoc.isObject()) {
@@ -802,13 +936,25 @@ void AIIconGeneratorDialog::callImageAPI(const QString &provider, const QString 
             generateBtn->setEnabled(true);
         }
         reply->deleteLater();
+        m_currentReply = nullptr;
     });
     
-    QTimer::singleShot(60000, this, [this, reply]() {
-        if (reply && reply->isRunning()) {
-            reply->abort();
+    QTimer::singleShot(60000, this, [this]() {
+        if (m_currentReply && m_currentReply->isRunning()) {
+            m_currentReply->abort();
+            
+            QFile logFile(m_logFileName);
+            if (logFile.open(QIODevice::Append | QIODevice::Text)) {
+                QTextStream out(&logFile);
+                out.setCodec("UTF-8");
+                out << "\n=== AI Icon Generation Response (TIMEOUT) ===" << "\n";
+                out << "Error: Request timeout after 60 seconds\n\n";
+                logFile.close();
+            }
+            
             statusLabel->setText("❌ 生成超时");
             generateBtn->setEnabled(true);
+            m_currentReply = nullptr;
         }
     });
 }
@@ -817,7 +963,8 @@ void AIIconGeneratorDialog::downloadImage(const QString &url)
 {
     statusLabel->setText("📥 正在下载图标...");
     
-    QNetworkReply *reply = networkManager->get(QNetworkRequest(QUrl(url)));
+    m_currentReply = networkManager->get(QNetworkRequest(QUrl(url)));
+    QNetworkReply *reply = m_currentReply;
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         onDownloadFinished(reply);
     });
@@ -830,39 +977,186 @@ void AIIconGeneratorDialog::onDownloadFinished(QNetworkReply *reply)
         QPixmap pixmap;
         pixmap.loadFromData(m_lastImageData);
         
-        previewLabel->setPixmap(pixmap.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        previewLabel->setPixmap(pixmap.scaled(PREVIEW_SIZE, PREVIEW_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         statusLabel->setText("✅ 图标生成成功！");
         
-        saveGeneratedIcon(m_lastImageData);
+        m_iconSaved = false;
+        
+        // 设置生成的图标路径
+        QString userDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        QDir dir(userDataDir);
+        if (!dir.exists()) {
+            dir.mkpath(".");
+        }
+        
+        QString iconsDir = userDataDir + "/generated_icons";
+        QDir iconsDirObj(iconsDir);
+        if (!iconsDirObj.exists()) {
+            iconsDirObj.mkpath(".");
+        }
+        
+        QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss");
+        m_generatedIconPath = iconsDir + "/ai_icon_" + timestamp + ".png";
         
         regenerateBtn->setEnabled(true);
         generateBtn->setEnabled(true);
+        saveBtn->setEnabled(true);
         okBtn->setEnabled(true);
     } else {
-        statusLabel->setText("❌ 下载失败: " + reply->errorString());
+        QString errorMsg = reply->errorString();
+        
+        QFile logFile(m_logFileName);
+        if (logFile.open(QIODevice::Append | QIODevice::Text)) {
+            QTextStream out(&logFile);
+            out.setCodec("UTF-8");
+            out << "\n=== AI Icon Generation Response (DOWNLOAD ERROR) ===" << "\n";
+            out << "Error Code: " << reply->error() << "\n";
+            out << "Error: " << errorMsg << "\n\n";
+            logFile.close();
+        }
+        
+        statusLabel->setText("❌ 下载失败: " + errorMsg);
         generateBtn->setEnabled(true);
     }
     reply->deleteLater();
+    m_currentReply = nullptr;
 }
 
-void AIIconGeneratorDialog::saveGeneratedIcon(const QByteArray &imageData)
+bool AIIconGeneratorDialog::saveGeneratedIcon(const QByteArray &imageData)
 {
-    QString appDataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QString iconsDir = appDataPath + "/custom_icons";
-    QDir().mkpath(iconsDir);
-    
-    QString fileName = QString("ai_icon_%1.png").arg(QDateTime::currentMSecsSinceEpoch());
-    QString filePath = iconsDir + "/" + fileName;
-    
-    QFile file(filePath);
-    if (file.open(QIODevice::WriteOnly)) {
-        file.write(imageData);
-        file.close();
-        m_generatedIconPath = filePath;
+    QString userDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir dir(userDataDir);
+    if (!dir.exists()) {
+        dir.mkpath(".");
     }
+    
+    QString iconsDir = userDataDir + "/generated_icons";
+    QDir iconsDirObj(iconsDir);
+    if (!iconsDirObj.exists()) {
+        iconsDirObj.mkpath(".");
+    }
+    
+    QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss");
+    m_generatedIconPath = iconsDir + "/ai_icon_" + timestamp + ".png";
+    
+    QFile file(m_generatedIconPath);
+    if (file.open(QIODevice::WriteOnly)) {
+        qint64 bytesWritten = file.write(imageData);
+        file.close();
+        if (bytesWritten != imageData.size()) {
+            QMessageBox::warning(this, "错误", "图标保存失败，请检查磁盘空间");
+            m_generatedIconPath.clear();
+            return false;
+        }
+        return true;
+    } else {
+        QMessageBox::warning(this, "错误", "无法打开文件进行保存");
+        m_generatedIconPath.clear();
+        return false;
+    }
+}
+
+void AIIconGeneratorDialog::onSaveIconClicked()
+{
+    if (m_lastImageData.isEmpty()) {
+        QMessageBox::warning(this, "提示", "没有可保存的图标");
+        return;
+    }
+    
+    if (saveGeneratedIcon(m_lastImageData)) {
+        m_iconSaved = true;
+        saveBtn->setEnabled(false);
+        QMessageBox::information(this, "成功", "图标已保存到:\n" + m_generatedIconPath);
+    } else {
+        m_iconSaved = false;
+        QMessageBox::warning(this, "错误", "图标保存失败");
+    }
+}
+
+void AIIconGeneratorDialog::onUseIconClicked()
+{
+    if (!m_iconSaved && !m_lastImageData.isEmpty()) {
+        if (saveGeneratedIcon(m_lastImageData)) {
+            m_iconSaved = true;
+        } else {
+            return;
+        }
+    }
+    
+    if (m_generatedIconPath.isEmpty()) {
+        QMessageBox::warning(this, "错误", "图标路径无效，无法使用");
+        return;
+    }
+    
+    accept();
 }
 
 QString AIIconGeneratorDialog::getGeneratedIconPath() const
 {
     return m_generatedIconPath;
+}
+
+void AIIconGeneratorDialog::setTemplateIcon(const QString &iconPath)
+{
+    QPixmap pixmap(iconPath);
+    if (!pixmap.isNull()) {
+        previewLabel->setPixmap(pixmap.scaled(PREVIEW_SIZE, PREVIEW_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        statusLabel->setText("📋 已选择模板图标");
+        
+        QFile file(iconPath);
+        if (file.open(QIODevice::ReadOnly)) {
+            m_lastImageData = file.readAll();
+            file.close();
+            if (m_lastImageData.isEmpty()) {
+                QMessageBox::warning(this, "错误", "无法读取模板图标文件");
+                return;
+            }
+        } else {
+            QMessageBox::warning(this, "错误", "无法打开模板图标文件");
+            return;
+        }
+        
+        QString fileName = QFileInfo(iconPath).baseName();
+        promptEdit->setText(fileName);
+        
+        methodCombo->setCurrentIndex(METHOD_SILICONFLOW);
+    } else {
+        QMessageBox::warning(this, "错误", "无法加载模板图标");
+    }
+}
+
+QString AIIconGeneratorDialog::decryptApiKey(const QString &encryptedKey)
+{
+    if (encryptedKey.isEmpty()) {
+        return QString();
+    }
+    
+    QByteArray key = QCryptographicHash::hash(QByteArray("PonyWorkAI").append(QHostInfo::localHostName().toUtf8()), QCryptographicHash::Sha256);
+    QByteArray data = QByteArray::fromBase64(encryptedKey.toUtf8());
+    QByteArray decrypted;
+    for (int i = 0; i < data.size(); ++i) {
+        decrypted.append(data.at(i) ^ key.at(i % key.size()));
+    }
+    return QString::fromUtf8(decrypted);
+}
+
+QString AIIconGeneratorDialog::buildPrompt(const QString &basePrompt)
+{
+    QString prompt = basePrompt;
+    
+    QString iconType = iconTypeCombo->currentData().toString();
+    QString designStyle = designStyleCombo->currentData().toString();
+    QString size = sizeCombo->currentData().toString();
+    QString background = backgroundCombo->currentData().toString();
+    
+    prompt += ", " + iconType;
+    prompt += ", " + designStyle;
+    prompt += ", " + size;
+    prompt += ", " + background;
+    
+    if (!styleEdit->toPlainText().isEmpty()) {
+        prompt += ", " + styleEdit->toPlainText();
+    }
+    
+    return prompt;
 }

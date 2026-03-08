@@ -3,6 +3,7 @@
 #include "modules/dialogs/shortcutdialog.h"
 #include "modules/dialogs/aisettingsdialog.h"
 #include "modules/dialogs/chattestdialog.h"
+#include "modules/dialogs/aicongeneratordialog.h"
 #include "modules/core/aiconfig.h"
 #include <QApplication>
 #include <QStyle>
@@ -490,6 +491,14 @@ QWidget *SettingsWidget::createAIPage()
     connect(setDefaultImageKeyBtn, &QPushButton::clicked, this, &SettingsWidget::onSetDefaultImageKey);
     imageAiButtonLayout->addWidget(setDefaultImageKeyBtn);
 
+    QPushButton *iconGenTestBtn = new QPushButton("🎨 图标生成测试", imageAiButtonContainer);
+    iconGenTestBtn->setStyleSheet(
+        "QPushButton { background-color: #27ae60; color: white; padding: 8px 16px; border-radius: 4px; } "
+        "QPushButton:hover { background-color: #229954; }"
+    );
+    connect(iconGenTestBtn, &QPushButton::clicked, this, &SettingsWidget::onIconGenTestClicked);
+    imageAiButtonLayout->addWidget(iconGenTestBtn);
+
     imageAiButtonLayout->addStretch();
     imageAiLayout->addWidget(imageAiButtonContainer);
 
@@ -894,6 +903,24 @@ void SettingsWidget::onChatTestClicked()
     delete chatDialog;
 }
 
+void SettingsWidget::onIconGenTestClicked()
+{
+    AIImageConfig defaultKey = AIConfig::instance().getDefaultImageKey();
+    if (defaultKey.apiKey.isEmpty()) {
+        QMessageBox::warning(this, "提示", "请先添加并配置图像AI API Key");
+        return;
+    }
+
+    AIIconGeneratorDialog *iconGenDialog = new AIIconGeneratorDialog(this);
+    if (iconGenDialog->exec() == QDialog::Accepted) {
+        QString iconPath = iconGenDialog->getGeneratedIconPath();
+        if (!iconPath.isEmpty()) {
+            QMessageBox::information(this, "成功", "图标已生成并保存到:\n" + iconPath);
+        }
+    }
+    delete iconGenDialog;
+}
+
 QString SettingsWidget::getDefaultEndpoint(const QString &model)
 {
     static QMap<QString, QString> endpoints = {
@@ -1106,7 +1133,7 @@ void SettingsWidget::onAddAIKey()
         QString endpoint = endpointEdit->text().trimmed();
 
         if (apiKey.isEmpty()) {
-            verifyStatusLabel->setText("❌ 请输入API Key");
+            verifyStatusLabel->setText("❌ 没有可验证的API Key");
             verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
             verifyStatusLabel->setVisible(true);
             return;
@@ -1734,6 +1761,36 @@ void SettingsWidget::onAddImageKey()
 
     mainLayout->addWidget(formGroup);
 
+    QFrame *verifyFrame = new QFrame(&dialog);
+    verifyFrame->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
+    verifyFrame->setStyleSheet("QFrame { background-color: #f8f9fa; border-radius: 8px; padding: 15px; }");
+    QVBoxLayout *verifyLayout = new QVBoxLayout(verifyFrame);
+    verifyLayout->setSpacing(10);
+
+    QHBoxLayout *verifyBtnLayout = new QHBoxLayout();
+    verifyBtnLayout->setSpacing(10);
+
+    QPushButton *verifyBtn = new QPushButton("🔐 验证连接", &dialog);
+    verifyBtn->setStyleSheet(
+        "QPushButton { background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+        "QPushButton:hover { background-color: #2980b9; } "
+        "QPushButton:disabled { background-color: #bdc3c7; }"
+    );
+
+    QLabel *verifyStatusLabel = new QLabel("", verifyFrame);
+    verifyStatusLabel->setAlignment(Qt::AlignCenter);
+    verifyStatusLabel->setStyleSheet("padding: 10px; border-radius: 4px; font-size: 13px;");
+    verifyStatusLabel->setVisible(false);
+
+    verifyBtnLayout->addStretch();
+    verifyBtnLayout->addWidget(verifyBtn);
+    verifyBtnLayout->addStretch();
+
+    verifyLayout->addLayout(verifyBtnLayout);
+    verifyLayout->addWidget(verifyStatusLabel);
+
+    mainLayout->addWidget(verifyFrame);
+
     QCheckBox *defaultCheck = new QCheckBox("设为默认", &dialog);
     defaultCheck->setStyleSheet("QCheckBox { font-size: 14px; padding: 5px; }");
     mainLayout->addWidget(defaultCheck);
@@ -1757,6 +1814,143 @@ void SettingsWidget::onAddImageKey()
     buttonLayout->addWidget(okBtn);
     buttonLayout->addWidget(cancelBtn);
     mainLayout->addLayout(buttonLayout);
+
+    QNetworkAccessManager *verifyManager = new QNetworkAccessManager(&dialog);
+
+    connect(verifyBtn, &QPushButton::clicked, [&]() {
+        QString apiKey = apiKeyEdit->text().trimmed();
+        QString modelId = modelCombo->currentData().toString();
+        if (modelId.isEmpty()) {
+            modelId = modelCombo->currentText().trimmed();
+        }
+        QString providerId = providerCombo->currentData().toString();
+        QString endpoint = endpointEdit->text().trimmed();
+
+        if (apiKey.isEmpty()) {
+            verifyStatusLabel->setText("❌ 没有可验证的API Key");
+            verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+            verifyStatusLabel->setVisible(true);
+            return;
+        }
+
+        verifyBtn->setEnabled(false);
+        verifyBtn->setText("🔄 验证中...");
+        verifyBtn->setStyleSheet(
+            "QPushButton { background-color: #f39c12; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+            "QPushButton:disabled { background-color: #f39c12; }"
+        );
+        verifyStatusLabel->setVisible(false);
+
+        QList<AIImageModelInfo> models = AIConfig::instance().getAllImageModels();
+        QString actualEndpoint;
+        for (const AIImageModelInfo &model : models) {
+            if (model.provider == providerId && model.id == modelId) {
+                actualEndpoint = model.defaultEndpoint;
+                break;
+            }
+        }
+        if (actualEndpoint.isEmpty()) {
+            actualEndpoint = endpoint;
+        }
+
+        if (actualEndpoint.isEmpty()) {
+            verifyStatusLabel->setText("❌ 未配置API地址");
+            verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+            verifyStatusLabel->setVisible(true);
+            verifyBtn->setEnabled(true);
+            verifyBtn->setText("🔐 验证连接");
+            verifyBtn->setStyleSheet(
+                "QPushButton { background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+                "QPushButton:hover { background-color: #2980b9; }"
+            );
+            return;
+        }
+
+        QUrl url(actualEndpoint);
+        QNetworkRequest request;
+        request.setUrl(url);
+        request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+        request.setRawHeader("Authorization", QString("Bearer %1").arg(apiKey).toUtf8());
+
+        QJsonObject json;
+        json["model"] = modelId;
+        json["prompt"] = "test";
+        json["n"] = 1;
+        json["size"] = "1024x1024";
+
+        QJsonDocument doc(json);
+        QPointer<QNetworkReply> reply = verifyManager->post(request, doc.toJson());
+
+        connect(reply, &QNetworkReply::finished, [=]() {
+            verifyBtn->setEnabled(true);
+            verifyBtn->setText("🔐 验证连接");
+            verifyBtn->setStyleSheet(
+                "QPushButton { background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+                "QPushButton:hover { background-color: #2980b9; }"
+            );
+
+            if (reply->error() == QNetworkReply::NoError) {
+                QByteArray responseData = reply->readAll();
+                QJsonParseError parseError;
+                QJsonDocument responseDoc = QJsonDocument::fromJson(responseData, &parseError);
+
+                if (parseError.error == QJsonParseError::NoError && !responseDoc.isNull()) {
+                    if (providerId == "openai" || providerId == "siliconflow") {
+                        if (responseDoc.object().contains("data") || responseDoc.object().contains("url")) {
+                            verifyStatusLabel->setText("✅ 连接成功！API Key有效");
+                            verifyStatusLabel->setStyleSheet("padding: 10px; color: #27ae60; background-color: #d5f4e6; border-radius: 4px;");
+                        } else if (responseDoc.object().contains("error")) {
+                            QString errorMsg = responseDoc.object()["error"].toObject()["message"].toString();
+                            verifyStatusLabel->setText("❌ API错误: " + errorMsg);
+                            verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+                        } else {
+                            verifyStatusLabel->setText("⚠️ 连接成功，但响应格式异常");
+                            verifyStatusLabel->setStyleSheet("padding: 10px; color: #f39c12; background-color: #fdebd0; border-radius: 4px;");
+                        }
+                    } else if (providerId == "stability") {
+                        if (responseDoc.object().contains("artifacts")) {
+                            verifyStatusLabel->setText("✅ 连接成功！API Key有效");
+                            verifyStatusLabel->setStyleSheet("padding: 10px; color: #27ae60; background-color: #d5f4e6; border-radius: 4px;");
+                        } else if (responseDoc.object().contains("errors")) {
+                            QString errorMsg = responseDoc.object()["errors"].toArray().first().toObject()["message"].toString();
+                            verifyStatusLabel->setText("❌ API错误: " + errorMsg);
+                            verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+                        } else {
+                            verifyStatusLabel->setText("⚠️ 连接成功，但响应格式异常");
+                            verifyStatusLabel->setStyleSheet("padding: 10px; color: #f39c12; background-color: #fdebd0; border-radius: 4px;");
+                        }
+                    } else {
+                        verifyStatusLabel->setText("✅ 连接成功！API Key有效");
+                        verifyStatusLabel->setStyleSheet("padding: 10px; color: #27ae60; background-color: #d5f4e6; border-radius: 4px;");
+                    }
+                } else {
+                    verifyStatusLabel->setText("⚠️ 连接成功，但响应解析失败");
+                    verifyStatusLabel->setStyleSheet("padding: 10px; color: #f39c12; background-color: #fdebd0; border-radius: 4px;");
+                }
+            } else {
+                QString errorMsg = reply->errorString();
+                QByteArray errorData = reply->readAll();
+                QString detailedError = errorMsg;
+
+                if (!errorData.isEmpty()) {
+                    QJsonParseError parseError;
+                    QJsonDocument errorDoc = QJsonDocument::fromJson(errorData, &parseError);
+                    if (parseError.error == QJsonParseError::NoError) {
+                        if (errorDoc.object().contains("error")) {
+                            detailedError = errorDoc.object()["error"].toObject()["message"].toString();
+                        } else if (errorDoc.object().contains("errors")) {
+                            detailedError = errorDoc.object()["errors"].toArray().first().toObject()["message"].toString();
+                        }
+                    }
+                }
+
+                verifyStatusLabel->setText("❌ 连接失败: " + detailedError);
+                verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+            }
+            verifyStatusLabel->setVisible(true);
+            reply->deleteLater();
+        });
+    });
 
     connect(okBtn, &QPushButton::clicked, [&]() {
         QString apiKey = apiKeyEdit->text().trimmed();
@@ -1902,6 +2096,36 @@ void SettingsWidget::onEditImageKey()
 
     mainLayout->addWidget(formGroup);
 
+    QFrame *verifyFrame = new QFrame(&dialog);
+    verifyFrame->setFrameShape(QFrame::StyledPanel);
+    verifyFrame->setStyleSheet("QFrame { background-color: #f8f9fa; border-radius: 8px; padding: 10px; }");
+    QVBoxLayout *verifyLayout = new QVBoxLayout(verifyFrame);
+    verifyLayout->setSpacing(10);
+
+    QHBoxLayout *verifyBtnLayout = new QHBoxLayout();
+    verifyBtnLayout->setSpacing(10);
+
+    QPushButton *verifyBtn = new QPushButton("🔐 验证连接", &dialog);
+    verifyBtn->setStyleSheet(
+        "QPushButton { background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+        "QPushButton:hover { background-color: #2980b9; } "
+        "QPushButton:disabled { background-color: #bdc3c7; }"
+    );
+
+    QLabel *verifyStatusLabel = new QLabel("", verifyFrame);
+    verifyStatusLabel->setAlignment(Qt::AlignCenter);
+    verifyStatusLabel->setStyleSheet("padding: 10px; border-radius: 4px; font-size: 13px;");
+    verifyStatusLabel->setVisible(false);
+
+    verifyBtnLayout->addStretch();
+    verifyBtnLayout->addWidget(verifyBtn);
+    verifyBtnLayout->addStretch();
+
+    verifyLayout->addLayout(verifyBtnLayout);
+    verifyLayout->addWidget(verifyStatusLabel);
+
+    mainLayout->addWidget(verifyFrame);
+
     QCheckBox *defaultCheck = new QCheckBox("设为默认", &dialog);
     defaultCheck->setChecked(config.isDefault);
     defaultCheck->setStyleSheet("QCheckBox { font-size: 14px; padding: 5px; }");
@@ -1926,6 +2150,143 @@ void SettingsWidget::onEditImageKey()
     buttonLayout->addWidget(okBtn);
     buttonLayout->addWidget(cancelBtn);
     mainLayout->addLayout(buttonLayout);
+
+    QNetworkAccessManager *verifyManager = new QNetworkAccessManager(&dialog);
+
+    connect(verifyBtn, &QPushButton::clicked, [&]() {
+        QString apiKey = apiKeyEdit->text().trimmed();
+        QString modelId = modelCombo->currentData().toString();
+        if (modelId.isEmpty()) {
+            modelId = modelCombo->currentText().trimmed();
+        }
+        QString providerId = providerCombo->currentData().toString();
+        QString endpoint = endpointEdit->text().trimmed();
+
+        if (apiKey.isEmpty()) {
+            verifyStatusLabel->setText("❌ 请输入API Key");
+            verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+            verifyStatusLabel->setVisible(true);
+            return;
+        }
+
+        verifyBtn->setEnabled(false);
+        verifyBtn->setText("🔄 验证中...");
+        verifyBtn->setStyleSheet(
+            "QPushButton { background-color: #f39c12; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+            "QPushButton:disabled { background-color: #f39c12; }"
+        );
+        verifyStatusLabel->setVisible(false);
+
+        QList<AIImageModelInfo> models = AIConfig::instance().getAllImageModels();
+        QString actualEndpoint;
+        for (const AIImageModelInfo &model : models) {
+            if (model.provider == providerId && model.id == modelId) {
+                actualEndpoint = model.defaultEndpoint;
+                break;
+            }
+        }
+        if (actualEndpoint.isEmpty()) {
+            actualEndpoint = endpoint;
+        }
+
+        if (actualEndpoint.isEmpty()) {
+            verifyStatusLabel->setText("❌ 未配置API地址");
+            verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+            verifyStatusLabel->setVisible(true);
+            verifyBtn->setEnabled(true);
+            verifyBtn->setText("🔐 验证连接");
+            verifyBtn->setStyleSheet(
+                "QPushButton { background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+                "QPushButton:hover { background-color: #2980b9; }"
+            );
+            return;
+        }
+
+        QUrl url(actualEndpoint);
+        QNetworkRequest request;
+        request.setUrl(url);
+        request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+        request.setRawHeader("Authorization", QString("Bearer %1").arg(apiKey).toUtf8());
+
+        QJsonObject json;
+        json["model"] = modelId;
+        json["prompt"] = "test";
+        json["n"] = 1;
+        json["size"] = "1024x1024";
+
+        QJsonDocument doc(json);
+        QPointer<QNetworkReply> reply = verifyManager->post(request, doc.toJson());
+
+        connect(reply, &QNetworkReply::finished, [=]() {
+            verifyBtn->setEnabled(true);
+            verifyBtn->setText("🔐 验证连接");
+            verifyBtn->setStyleSheet(
+                "QPushButton { background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; font-weight: bold; } "
+                "QPushButton:hover { background-color: #2980b9; }"
+            );
+
+            if (reply->error() == QNetworkReply::NoError) {
+                QByteArray responseData = reply->readAll();
+                QJsonParseError parseError;
+                QJsonDocument responseDoc = QJsonDocument::fromJson(responseData, &parseError);
+
+                if (parseError.error == QJsonParseError::NoError && !responseDoc.isNull()) {
+                    if (providerId == "openai" || providerId == "siliconflow") {
+                        if (responseDoc.object().contains("data") || responseDoc.object().contains("url")) {
+                            verifyStatusLabel->setText("✅ 连接成功！API Key有效");
+                            verifyStatusLabel->setStyleSheet("padding: 10px; color: #27ae60; background-color: #d5f4e6; border-radius: 4px;");
+                        } else if (responseDoc.object().contains("error")) {
+                            QString errorMsg = responseDoc.object()["error"].toObject()["message"].toString();
+                            verifyStatusLabel->setText("❌ API错误: " + errorMsg);
+                            verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+                        } else {
+                            verifyStatusLabel->setText("⚠️ 连接成功，但响应格式异常");
+                            verifyStatusLabel->setStyleSheet("padding: 10px; color: #f39c12; background-color: #fdebd0; border-radius: 4px;");
+                        }
+                    } else if (providerId == "stability") {
+                        if (responseDoc.object().contains("artifacts")) {
+                            verifyStatusLabel->setText("✅ 连接成功！API Key有效");
+                            verifyStatusLabel->setStyleSheet("padding: 10px; color: #27ae60; background-color: #d5f4e6; border-radius: 4px;");
+                        } else if (responseDoc.object().contains("errors")) {
+                            QString errorMsg = responseDoc.object()["errors"].toArray().first().toObject()["message"].toString();
+                            verifyStatusLabel->setText("❌ API错误: " + errorMsg);
+                            verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+                        } else {
+                            verifyStatusLabel->setText("⚠️ 连接成功，但响应格式异常");
+                            verifyStatusLabel->setStyleSheet("padding: 10px; color: #f39c12; background-color: #fdebd0; border-radius: 4px;");
+                        }
+                    } else {
+                        verifyStatusLabel->setText("✅ 连接成功！API Key有效");
+                        verifyStatusLabel->setStyleSheet("padding: 10px; color: #27ae60; background-color: #d5f4e6; border-radius: 4px;");
+                    }
+                } else {
+                    verifyStatusLabel->setText("⚠️ 连接成功，但响应解析失败");
+                    verifyStatusLabel->setStyleSheet("padding: 10px; color: #f39c12; background-color: #fdebd0; border-radius: 4px;");
+                }
+            } else {
+                QString errorMsg = reply->errorString();
+                QByteArray errorData = reply->readAll();
+                QString detailedError = errorMsg;
+
+                if (!errorData.isEmpty()) {
+                    QJsonParseError parseError;
+                    QJsonDocument errorDoc = QJsonDocument::fromJson(errorData, &parseError);
+                    if (parseError.error == QJsonParseError::NoError) {
+                        if (errorDoc.object().contains("error")) {
+                            detailedError = errorDoc.object()["error"].toObject()["message"].toString();
+                        } else if (errorDoc.object().contains("errors")) {
+                            detailedError = errorDoc.object()["errors"].toArray().first().toObject()["message"].toString();
+                        }
+                    }
+                }
+
+                verifyStatusLabel->setText("❌ 连接失败: " + detailedError);
+                verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
+            }
+            verifyStatusLabel->setVisible(true);
+            reply->deleteLater();
+        });
+    });
 
     connect(okBtn, &QPushButton::clicked, [&]() {
         QString apiKey = apiKeyEdit->text().trimmed();

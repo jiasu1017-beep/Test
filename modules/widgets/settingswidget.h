@@ -61,6 +61,7 @@ private slots:
     void onSaveAIConfig();
     void onTestAIConnection();
     void onChatTestClicked();
+    void onIconGenTestClicked();
     void onAddAIKey();
     void onEditAIKey();
     void onDeleteAIKey();

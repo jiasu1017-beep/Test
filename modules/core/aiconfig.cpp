@@ -107,7 +107,7 @@ void AIConfig::load()
         defaultKey.id = generateId();
         defaultKey.name = "默认图像配置";
         defaultKey.provider = "siliconflow";
-        defaultKey.model = "flux-schnell";
+        defaultKey.model = "black-forest-labs/FLUX.1-schnell";
         defaultKey.apiKey = "";
         defaultKey.endpoint = "";
         defaultKey.isDefault = true;

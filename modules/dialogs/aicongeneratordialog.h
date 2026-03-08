@@ -10,6 +10,7 @@
 #include <QRadioButton>
 #include <QNetworkAccessManager>
 #include <QPixmap>
+#include <QString>
 
 enum IconGenMethod {
     METHOD_TEMPLATE,
@@ -29,10 +30,13 @@ public:
     ~AIIconGeneratorDialog();
     
     QString getGeneratedIconPath() const;
+    void setTemplateIcon(const QString &iconPath);
 
 private slots:
     void onGenerateClicked();
     void onRegenerateClicked();
+    void onSaveIconClicked();
+    void onUseIconClicked();
     void onDownloadFinished(QNetworkReply *reply);
     void onMethodChanged();
     void onColorChanged(const QString &color);
@@ -46,24 +50,34 @@ private:
     bool useStabilityAPI();
     void callImageAPI(const QString &provider, const QString &model, const QString &prompt, const QString &endpoint, const QString &apiKey);
     void downloadImage(const QString &url);
-    void saveGeneratedIcon(const QByteArray &imageData);
+    bool saveGeneratedIcon(const QByteArray &imageData);
     void generateTemplateIcon(const QString &iconType, const QString &color);
+    QString decryptApiKey(const QString &encryptedKey);
+    QString buildPrompt(const QString &basePrompt);
     
     QLineEdit *promptEdit;
     QTextEdit *styleEdit;
     QComboBox *methodCombo;
     QComboBox *colorCombo;
     QComboBox *templateCombo;
+    QComboBox *iconTypeCombo;
+    QComboBox *designStyleCombo;
+    QComboBox *sizeCombo;
+    QComboBox *backgroundCombo;
     QPushButton *generateBtn;
     QPushButton *regenerateBtn;
+    QPushButton *saveBtn;
     QPushButton *okBtn;
     QLabel *previewLabel;
     QLabel *statusLabel;
     QNetworkAccessManager *networkManager;
+    QNetworkReply *m_currentReply;
     
     QString m_generatedIconPath;
     QByteArray m_lastImageData;
     QString m_lastPrompt;
+    QString m_logFileName;
+    bool m_iconSaved;
 };
 
 #endif
