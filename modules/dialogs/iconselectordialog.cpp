@@ -1,4 +1,5 @@
 #include "iconselectordialog.h"
+#include "aicongeneratordialog.h"
 #include <QCoreApplication>
 #include <QMessageBox>
 #include <QIcon>
@@ -73,6 +74,11 @@ void IconSelectorDialog::setupUI()
     browseButton = new QPushButton("浏览自定义图标...", this);
     connect(browseButton, &QPushButton::clicked, this, &IconSelectorDialog::onBrowseCustomIcon);
     buttonLayout->addWidget(browseButton);
+
+    QPushButton *aiGenerateButton = new QPushButton("🤖 AI生成图标...", this);
+    aiGenerateButton->setStyleSheet("QPushButton { background-color: #9b59b6; color: white; padding: 8px 15px; border-radius: 4px; } QPushButton:hover { background-color: #8e44ad; }");
+    connect(aiGenerateButton, &QPushButton::clicked, this, &IconSelectorDialog::onAIGenerateIcon);
+    buttonLayout->addWidget(aiGenerateButton);
     buttonLayout->addStretch();
 
     okButton = new QPushButton("确定", this);
@@ -298,6 +304,18 @@ void IconSelectorDialog::onOkClicked()
 void IconSelectorDialog::onCancelClicked()
 {
     reject();
+}
+
+void IconSelectorDialog::onAIGenerateIcon()
+{
+    AIIconGeneratorDialog aiDialog(this);
+    if (aiDialog.exec() == QDialog::Accepted) {
+        QString iconPath = aiDialog.getGeneratedIconPath();
+        if (!iconPath.isEmpty()) {
+            selectedIconPath = iconPath;
+            accept();
+        }
+    }
 }
 
 QString IconSelectorDialog::getSelectedIconPath() const

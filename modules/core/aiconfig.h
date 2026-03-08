@@ -30,6 +30,25 @@ struct AIProviderInfo {
     QString displayName;
 };
 
+struct AIImageConfig {
+    QString id;
+    QString name;
+    QString provider;
+    QString model;
+    QString apiKey;
+    QString endpoint;
+    bool isDefault;
+    QString createdAt;
+    QString updatedAt;
+};
+
+struct AIImageModelInfo {
+    QString id;
+    QString name;
+    QString provider;
+    QString defaultEndpoint;
+};
+
 class AIConfig
 {
 public:
@@ -66,6 +85,19 @@ public:
 
     QString maskAPIKey(const QString &apiKey);
 
+    QList<AIImageConfig> getAllImageKeys();
+    AIImageConfig getImageKey(const QString &id);
+    AIImageConfig getImageKeyByProvider(const QString &provider);
+    AIImageConfig getDefaultImageKey();
+    void addImageKey(const AIImageConfig &config);
+    void updateImageKey(const AIImageConfig &config);
+    void deleteImageKey(const QString &id);
+    void setDefaultImageKey(const QString &id);
+
+    QList<AIImageModelInfo> getAllImageModels();
+    QList<AIImageModelInfo> getImageModelsByProvider(const QString &providerId);
+    AIImageModelInfo getImageModelInfo(const QString &modelId);
+
 private:
     AIConfig();
     ~AIConfig();
@@ -87,6 +119,11 @@ private:
     QList<AIProviderInfo> m_providers;
     QList<AIModelInfo> m_models;
     void initProvidersAndModels();
+
+    QList<AIImageConfig> m_imageKeys;
+    QString m_defaultImageKeyId;
+    QList<AIImageModelInfo> m_imageModels;
+    void initImageProvidersAndModels();
 };
 
 #endif // AICONFIG_H

@@ -30,6 +30,7 @@ SOURCES += main.cpp \
            modules/dialogs/desktopsnapshotdialog.cpp \
            modules/dialogs/shortcutdialog.cpp \
            modules/dialogs/iconselectordialog.cpp \
+           modules/dialogs/aicongeneratordialog.cpp \
            modules/dialogs/chattestdialog.cpp \
            modules/dialogs/aisettingsdialog.cpp
 
@@ -56,6 +57,7 @@ HEADERS  += mainwindow.h \
             modules/dialogs/desktopsnapshotdialog.h \
             modules/dialogs/shortcutdialog.h \
             modules/dialogs/iconselectordialog.h \
+            modules/dialogs/aicongeneratordialog.h \
             modules/dialogs/chattestdialog.h \
             modules/dialogs/aisettingsdialog.h \
             modules/core/core.h \

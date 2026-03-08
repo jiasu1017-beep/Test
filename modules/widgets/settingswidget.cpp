@@ -345,16 +345,19 @@ QWidget *SettingsWidget::createAIPage()
     line->setStyleSheet("color: #e0e0e0;");
     layout->addWidget(line);
 
-    QGroupBox *aiKeysGroup = new QGroupBox("API密钥管理", contentWidget);
-    QVBoxLayout *aiKeysLayout = new QVBoxLayout(aiKeysGroup);
-    aiKeysLayout->setSpacing(10);
+    QTabWidget *aiTabWidget = new QTabWidget(contentWidget);
+    aiTabWidget->setDocumentMode(true);
 
-    QLabel *aiKeysDesc = new QLabel("管理多个AI模型的API密钥，支持同时配置和使用多个不同的大模型服务", aiKeysGroup);
-    aiKeysDesc->setStyleSheet("color: #666; font-size: 13px; padding: 5px;");
-    aiKeysDesc->setWordWrap(true);
-    aiKeysLayout->addWidget(aiKeysDesc);
+    QWidget *textAiTab = new QWidget();
+    QVBoxLayout *textAiLayout = new QVBoxLayout(textAiTab);
+    textAiLayout->setSpacing(10);
 
-    aiKeysTable = new QTableWidget(aiKeysGroup);
+    QLabel *textAiDesc = new QLabel("管理多个文本AI模型的API密钥，支持同时配置和使用多个不同的大模型服务", textAiTab);
+    textAiDesc->setStyleSheet("color: #666; font-size: 13px; padding: 5px;");
+    textAiDesc->setWordWrap(true);
+    textAiLayout->addWidget(textAiDesc);
+
+    aiKeysTable = new QTableWidget(textAiTab);
     aiKeysTable->setColumnCount(7);
     aiKeysTable->setHorizontalHeaderLabels({"默认", "名称", "服务商", "模型", "API Key", "API地址", "状态"});
     aiKeysTable->horizontalHeader()->setStretchLastSection(true);
@@ -362,52 +365,137 @@ QWidget *SettingsWidget::createAIPage()
     aiKeysTable->setSelectionMode(QAbstractItemView::SingleSelection);
     aiKeysTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     aiKeysTable->setAlternatingRowColors(true);
-    aiKeysTable->setMinimumHeight(200);
+    aiKeysTable->setMinimumHeight(250);
     connect(aiKeysTable, &QTableWidget::itemSelectionChanged, this, &SettingsWidget::onAIKeyTableSelectionChanged);
-    aiKeysLayout->addWidget(aiKeysTable);
+    textAiLayout->addWidget(aiKeysTable);
 
-    QHBoxLayout *keyButtonLayout = new QHBoxLayout();
-    keyButtonLayout->setSpacing(10);
+    QWidget *textAiButtonContainer = new QWidget(textAiTab);
+    QHBoxLayout *textAiButtonLayout = new QHBoxLayout(textAiButtonContainer);
+    textAiButtonContainer->setStyleSheet("QWidget { margin-top: 10px; }");
+    textAiButtonLayout->setSpacing(10);
 
-    addAIKeyBtn = new QPushButton("➕ 添加", aiKeysGroup);
+    addAIKeyBtn = new QPushButton("➕ 添加", textAiButtonContainer);
     addAIKeyBtn->setStyleSheet(
         "QPushButton { background-color: #3498db; color: white; padding: 8px 16px; border-radius: 4px; } "
         "QPushButton:hover { background-color: #2980b9; }"
     );
     connect(addAIKeyBtn, &QPushButton::clicked, this, &SettingsWidget::onAddAIKey);
-    keyButtonLayout->addWidget(addAIKeyBtn);
+    textAiButtonLayout->addWidget(addAIKeyBtn);
 
-    editAIKeyBtn = new QPushButton("✏️ 编辑", aiKeysGroup);
+    editAIKeyBtn = new QPushButton("✏️ 编辑", textAiButtonContainer);
     editAIKeyBtn->setStyleSheet(
         "QPushButton { background-color: #f39c12; color: white; padding: 8px 16px; border-radius: 4px; } "
         "QPushButton:hover { background-color: #e67e22; }"
     );
     editAIKeyBtn->setEnabled(false);
     connect(editAIKeyBtn, &QPushButton::clicked, this, &SettingsWidget::onEditAIKey);
-    keyButtonLayout->addWidget(editAIKeyBtn);
+    textAiButtonLayout->addWidget(editAIKeyBtn);
 
-    deleteAIKeyBtn = new QPushButton("🗑️ 删除", aiKeysGroup);
+    deleteAIKeyBtn = new QPushButton("🗑️ 删除", textAiButtonContainer);
     deleteAIKeyBtn->setStyleSheet(
         "QPushButton { background-color: #e74c3c; color: white; padding: 8px 16px; border-radius: 4px; } "
         "QPushButton:hover { background-color: #c0392b; }"
     );
     deleteAIKeyBtn->setEnabled(false);
     connect(deleteAIKeyBtn, &QPushButton::clicked, this, &SettingsWidget::onDeleteAIKey);
-    keyButtonLayout->addWidget(deleteAIKeyBtn);
+    textAiButtonLayout->addWidget(deleteAIKeyBtn);
 
-    setDefaultAIKeyBtn = new QPushButton("⭐ 设为默认", aiKeysGroup);
+    setDefaultAIKeyBtn = new QPushButton("⭐ 设为默认", textAiButtonContainer);
     setDefaultAIKeyBtn->setStyleSheet(
         "QPushButton { background-color: #9b59b6; color: white; padding: 8px 16px; border-radius: 4px; } "
         "QPushButton:hover { background-color: #8e44ad; }"
     );
     setDefaultAIKeyBtn->setEnabled(false);
     connect(setDefaultAIKeyBtn, &QPushButton::clicked, this, &SettingsWidget::onSetDefaultAIKey);
-    keyButtonLayout->addWidget(setDefaultAIKeyBtn);
+    textAiButtonLayout->addWidget(setDefaultAIKeyBtn);
 
-    keyButtonLayout->addStretch();
-    aiKeysLayout->addLayout(keyButtonLayout);
+    QPushButton *openAISettingsBtn = new QPushButton("📖 AI配置指南", textAiButtonContainer);
+    openAISettingsBtn->setStyleSheet(
+        "QPushButton { background-color: #9b59b6; color: white; padding: 8px 16px; border-radius: 4px; } "
+        "QPushButton:hover { background-color: #8e44ad; }"
+    );
+    openAISettingsBtn->setToolTip("打开完整的AI设置对话框，包含图像生成配置");
+    connect(openAISettingsBtn, &QPushButton::clicked, this, &SettingsWidget::onOpenAISettings);
+    textAiButtonLayout->addWidget(openAISettingsBtn);
 
-    layout->addWidget(aiKeysGroup);
+    chatTestBtn = new QPushButton("💬 AI对话测试", textAiButtonContainer);
+    chatTestBtn->setStyleSheet(
+        "QPushButton { background-color: #e67e22; color: white; padding: 8px 16px; border-radius: 4px; } "
+        "QPushButton:hover { background-color: #d35400; }"
+    );
+    connect(chatTestBtn, &QPushButton::clicked, this, &SettingsWidget::onChatTestClicked);
+    textAiButtonLayout->addWidget(chatTestBtn);
+
+    textAiButtonLayout->addStretch();
+    textAiLayout->addWidget(textAiButtonContainer);
+
+    QWidget *imageAiTab = new QWidget();
+    QVBoxLayout *imageAiLayout = new QVBoxLayout(imageAiTab);
+    imageAiLayout->setSpacing(10);
+
+    QLabel *imageAiDesc = new QLabel("管理图像生成API密钥，用于AI图标生成功能", imageAiTab);
+    imageAiDesc->setStyleSheet("color: #666; font-size: 13px; padding: 5px;");
+    imageAiDesc->setWordWrap(true);
+    imageAiLayout->addWidget(imageAiDesc);
+
+    aiImageKeysTable = new QTableWidget(imageAiTab);
+    aiImageKeysTable->setColumnCount(7);
+    aiImageKeysTable->setHorizontalHeaderLabels({"默认", "名称", "服务商", "模型", "API Key", "API地址", "状态"});
+    aiImageKeysTable->horizontalHeader()->setStretchLastSection(true);
+    aiImageKeysTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    aiImageKeysTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    aiImageKeysTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    aiImageKeysTable->setAlternatingRowColors(true);
+    aiImageKeysTable->setMinimumHeight(250);
+    connect(aiImageKeysTable, &QTableWidget::itemSelectionChanged, this, &SettingsWidget::onAIImageKeyTableSelectionChanged);
+    imageAiLayout->addWidget(aiImageKeysTable);
+
+    QWidget *imageAiButtonContainer = new QWidget(imageAiTab);
+    QHBoxLayout *imageAiButtonLayout = new QHBoxLayout(imageAiButtonContainer);
+    imageAiButtonContainer->setStyleSheet("QWidget { margin-top: 10px; }");
+    imageAiButtonLayout->setSpacing(10);
+
+    addImageKeyBtn = new QPushButton("➕ 添加", imageAiButtonContainer);
+    addImageKeyBtn->setStyleSheet(
+        "QPushButton { background-color: #3498db; color: white; padding: 8px 16px; border-radius: 4px; } "
+        "QPushButton:hover { background-color: #2980b9; }"
+    );
+    connect(addImageKeyBtn, &QPushButton::clicked, this, &SettingsWidget::onAddImageKey);
+    imageAiButtonLayout->addWidget(addImageKeyBtn);
+
+    editImageKeyBtn = new QPushButton("✏️ 编辑", imageAiButtonContainer);
+    editImageKeyBtn->setStyleSheet(
+        "QPushButton { background-color: #f39c12; color: white; padding: 8px 16px; border-radius: 4px; } "
+        "QPushButton:hover { background-color: #e67e22; }"
+    );
+    editImageKeyBtn->setEnabled(false);
+    connect(editImageKeyBtn, &QPushButton::clicked, this, &SettingsWidget::onEditImageKey);
+    imageAiButtonLayout->addWidget(editImageKeyBtn);
+
+    deleteImageKeyBtn = new QPushButton("🗑️ 删除", imageAiButtonContainer);
+    deleteImageKeyBtn->setStyleSheet(
+        "QPushButton { background-color: #e74c3c; color: white; padding: 8px 16px; border-radius: 4px; } "
+        "QPushButton:hover { background-color: #c0392b; }"
+    );
+    deleteImageKeyBtn->setEnabled(false);
+    connect(deleteImageKeyBtn, &QPushButton::clicked, this, &SettingsWidget::onDeleteImageKey);
+    imageAiButtonLayout->addWidget(deleteImageKeyBtn);
+
+    setDefaultImageKeyBtn = new QPushButton("⭐ 设为默认", imageAiButtonContainer);
+    setDefaultImageKeyBtn->setStyleSheet(
+        "QPushButton { background-color: #9b59b6; color: white; padding: 8px 16px; border-radius: 4px; } "
+        "QPushButton:hover { background-color: #8e44ad; }"
+    );
+    setDefaultImageKeyBtn->setEnabled(false);
+    connect(setDefaultImageKeyBtn, &QPushButton::clicked, this, &SettingsWidget::onSetDefaultImageKey);
+    imageAiButtonLayout->addWidget(setDefaultImageKeyBtn);
+
+    imageAiButtonLayout->addStretch();
+    imageAiLayout->addWidget(imageAiButtonContainer);
+
+    aiTabWidget->addTab(textAiTab, "📝 文本AI");
+    aiTabWidget->addTab(imageAiTab, "🎨 图像AI");
+    layout->addWidget(aiTabWidget);
 
     QGroupBox *aiFeaturesGroup = new QGroupBox("AI功能开关", contentWidget);
     QVBoxLayout *aiFeaturesLayout = new QVBoxLayout(aiFeaturesGroup);
@@ -457,20 +545,6 @@ QWidget *SettingsWidget::createAIPage()
 
     aiTimeoutLayout->addStretch();
     layout->addWidget(aiTimeoutGroup);
-
-    QGroupBox *aiTestGroup = new QGroupBox("AI测试", contentWidget);
-    QHBoxLayout *aiTestLayout = new QHBoxLayout(aiTestGroup);
-
-    chatTestBtn = new QPushButton("💬 AI对话测试", aiTestGroup);
-    chatTestBtn->setStyleSheet(
-        "QPushButton { background-color: #e67e22; color: white; padding: 10px 20px; border-radius: 5px; } "
-        "QPushButton:hover { background-color: #d35400; }"
-    );
-    connect(chatTestBtn, &QPushButton::clicked, this, &SettingsWidget::onChatTestClicked);
-    aiTestLayout->addWidget(chatTestBtn);
-    aiTestLayout->addStretch();
-
-    layout->addWidget(aiTestGroup);
 
     aiStatusLabel = new QLabel(contentWidget);
     aiStatusLabel->setAlignment(Qt::AlignCenter);
@@ -570,7 +644,69 @@ void SettingsWidget::loadAISettings()
         aiKeysTable->setItem(row, 6, statusItem);
     }
 
+    aiImageKeysTable->setRowCount(0);
+
+    QList<AIImageConfig> imageKeys = AIConfig::instance().getAllImageKeys();
+    for (const AIImageConfig &key : imageKeys) {
+        int row = aiImageKeysTable->rowCount();
+        aiImageKeysTable->insertRow(row);
+
+        QTableWidgetItem *defaultItem = new QTableWidgetItem(key.isDefault ? "⭐ 默认" : "");
+        defaultItem->setTextAlignment(Qt::AlignCenter);
+        defaultItem->setData(Qt::UserRole, key.id);
+        aiImageKeysTable->setItem(row, 0, defaultItem);
+
+        QTableWidgetItem *nameItem = new QTableWidgetItem(key.name);
+        nameItem->setData(Qt::UserRole, key.id);
+        aiImageKeysTable->setItem(row, 1, nameItem);
+
+        QString providerDisplay = key.provider;
+        QList<AIImageModelInfo> models = AIConfig::instance().getAllImageModels();
+        for (const AIImageModelInfo &m : models) {
+            if (m.provider == key.provider) {
+                AIProviderInfo providerInfo = AIConfig::instance().getProviderInfo(m.provider);
+                providerDisplay = providerInfo.displayName.isEmpty() ? key.provider : providerInfo.displayName;
+                break;
+            }
+        }
+        QTableWidgetItem *providerItem = new QTableWidgetItem(providerDisplay);
+        providerItem->setData(Qt::UserRole, key.id);
+        aiImageKeysTable->setItem(row, 2, providerItem);
+
+        QTableWidgetItem *modelItem = new QTableWidgetItem(key.model);
+        modelItem->setData(Qt::UserRole, key.id);
+        aiImageKeysTable->setItem(row, 3, modelItem);
+
+        QString maskedKey = key.apiKey.isEmpty() ? "未配置" : AIConfig::instance().maskAPIKey(key.apiKey);
+        QTableWidgetItem *apiKeyItem = new QTableWidgetItem(maskedKey);
+        apiKeyItem->setData(Qt::UserRole, key.id);
+        if (!key.apiKey.isEmpty()) {
+            apiKeyItem->setForeground(QColor("#7f8c8d"));
+            apiKeyItem->setToolTip("点击查看完整密钥");
+        }
+        aiImageKeysTable->setItem(row, 4, apiKeyItem);
+
+        QString endpointDisplay = key.endpoint.isEmpty() ? "默认" : key.endpoint;
+        QTableWidgetItem *endpointItem = new QTableWidgetItem(endpointDisplay);
+        endpointItem->setData(Qt::UserRole, key.id);
+        if (!key.endpoint.isEmpty()) {
+            endpointItem->setForeground(QColor("#7f8c8d"));
+        }
+        aiImageKeysTable->setItem(row, 5, endpointItem);
+
+        QString status = key.apiKey.isEmpty() ? "未配置" : "已配置";
+        QTableWidgetItem *statusItem = new QTableWidgetItem(status);
+        statusItem->setData(Qt::UserRole, key.id);
+        if (key.apiKey.isEmpty()) {
+            statusItem->setForeground(QColor("#e74c3c"));
+        } else {
+            statusItem->setForeground(QColor("#27ae60"));
+        }
+        aiImageKeysTable->setItem(row, 6, statusItem);
+    }
+
     onAIKeyTableSelectionChanged();
+    onAIImageKeyTableSelectionChanged();
 }
 
 QString SettingsWidget::loadSavedAPIKey()
@@ -1489,6 +1625,364 @@ void SettingsWidget::onSetDefaultAIKey()
 
     QString keyId = aiKeysTable->item(currentRow, 0)->data(Qt::UserRole).toString();
     AIConfig::instance().setDefaultKey(keyId);
+    loadAISettings();
+}
+
+void SettingsWidget::onAIImageKeyTableSelectionChanged()
+{
+    bool hasSelection = aiImageKeysTable->selectedItems().size() > 0;
+    editImageKeyBtn->setEnabled(hasSelection);
+    deleteImageKeyBtn->setEnabled(hasSelection);
+    setDefaultImageKeyBtn->setEnabled(hasSelection);
+}
+
+void SettingsWidget::onAddImageKey()
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle("添加图像生成API");
+    dialog.setMinimumWidth(550);
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
+    mainLayout->setSpacing(15);
+
+    QGroupBox *formGroup = new QGroupBox("图像生成配置", &dialog);
+    QFormLayout *formLayout = new QFormLayout(formGroup);
+    formLayout->setSpacing(12);
+    formLayout->setLabelAlignment(Qt::AlignRight);
+
+    QLabel *providerLabel = new QLabel("服务商:", formGroup);
+    QComboBox *providerCombo = new QComboBox(formGroup);
+    providerCombo->setEditable(true);
+    providerCombo->setInsertPolicy(QComboBox::NoInsert);
+    providerCombo->setMinimumWidth(250);
+
+    QList<AIImageModelInfo> imageModels = AIConfig::instance().getAllImageModels();
+    QSet<QString> addedProviders;
+    for (const AIImageModelInfo &model : imageModels) {
+        if (!addedProviders.contains(model.provider)) {
+            QString displayName = model.provider;
+            if (model.provider == "siliconflow") displayName = "🚀 硅基流动";
+            else if (model.provider == "openai") displayName = "🔵 OpenAI DALL-E";
+            else if (model.provider == "stability") displayName = "🎭 Stability AI";
+            providerCombo->addItem(displayName, model.provider);
+            addedProviders.insert(model.provider);
+        }
+    }
+    formLayout->addRow(providerLabel, providerCombo);
+
+    QLabel *modelLabel = new QLabel("模型:", formGroup);
+    QComboBox *modelCombo = new QComboBox(formGroup);
+    modelCombo->setEditable(true);
+    modelCombo->setInsertPolicy(QComboBox::NoInsert);
+    modelCombo->setMinimumWidth(250);
+
+    auto updateImageModels = [&](const QString &providerId) {
+        modelCombo->clear();
+        QList<AIImageModelInfo> models = AIConfig::instance().getImageModelsByProvider(providerId);
+        for (const AIImageModelInfo &model : models) {
+            modelCombo->addItem(model.name.isEmpty() ? model.id : model.name, model.id);
+        }
+    };
+    updateImageModels(providerCombo->currentData().toString());
+    connect(providerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [&](int index) {
+        if (index >= 0) {
+            updateImageModels(providerCombo->itemData(index).toString());
+        }
+    });
+
+    formLayout->addRow(modelLabel, modelCombo);
+
+    QLabel *nameLabel = new QLabel("配置名称:", formGroup);
+    QLineEdit *nameEdit = new QLineEdit(formGroup);
+    nameEdit->setPlaceholderText("自定义名称（可选）");
+    formLayout->addRow(nameLabel, nameEdit);
+
+    QLabel *apiKeyLabel = new QLabel("API Key:", formGroup);
+    QWidget *apiKeyContainer = new QWidget(formGroup);
+    QHBoxLayout *apiKeyLayout = new QHBoxLayout(apiKeyContainer);
+    apiKeyLayout->setContentsMargins(0, 0, 0, 0);
+    apiKeyLayout->setSpacing(8);
+
+    QLineEdit *apiKeyEdit = new QLineEdit(apiKeyContainer);
+    apiKeyEdit->setPlaceholderText("请输入API Key");
+    apiKeyEdit->setEchoMode(QLineEdit::Password);
+    apiKeyEdit->setMinimumWidth(200);
+
+    QPushButton *togglePasswordBtn = new QPushButton("👁", apiKeyContainer);
+    togglePasswordBtn->setFixedWidth(35);
+    togglePasswordBtn->setToolTip("显示/隐藏密码");
+    togglePasswordBtn->setStyleSheet("QPushButton { border: 1px solid #ccc; border-radius: 3px; padding: 4px; }");
+
+    connect(togglePasswordBtn, &QPushButton::clicked, [&]() {
+        if (apiKeyEdit->echoMode() == QLineEdit::Password) {
+            apiKeyEdit->setEchoMode(QLineEdit::Normal);
+            togglePasswordBtn->setText("🔒");
+        } else {
+            apiKeyEdit->setEchoMode(QLineEdit::Password);
+            togglePasswordBtn->setText("👁");
+        }
+    });
+
+    apiKeyLayout->addWidget(apiKeyEdit);
+    apiKeyLayout->addWidget(togglePasswordBtn);
+    formLayout->addRow(apiKeyLabel, apiKeyContainer);
+
+    QLabel *endpointLabel = new QLabel("API地址:", formGroup);
+    QLineEdit *endpointEdit = new QLineEdit(formGroup);
+    endpointEdit->setPlaceholderText("留空使用默认地址（可选）");
+    formLayout->addRow(endpointLabel, endpointEdit);
+
+    mainLayout->addWidget(formGroup);
+
+    QCheckBox *defaultCheck = new QCheckBox("设为默认", &dialog);
+    defaultCheck->setStyleSheet("QCheckBox { font-size: 14px; padding: 5px; }");
+    mainLayout->addWidget(defaultCheck);
+
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    buttonLayout->setSpacing(15);
+
+    QPushButton *okBtn = new QPushButton("✅ 添加", &dialog);
+    okBtn->setStyleSheet(
+        "QPushButton { background-color: #27ae60; color: white; padding: 10px 25px; border-radius: 5px; font-weight: bold; font-size: 14px; } "
+        "QPushButton:hover { background-color: #219a52; }"
+    );
+
+    QPushButton *cancelBtn = new QPushButton("取消", &dialog);
+    cancelBtn->setStyleSheet(
+        "QPushButton { background-color: #95a5a6; color: white; padding: 10px 25px; border-radius: 5px; font-size: 14px; } "
+        "QPushButton:hover { background-color: #7f8c8d; }"
+    );
+
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(okBtn);
+    buttonLayout->addWidget(cancelBtn);
+    mainLayout->addLayout(buttonLayout);
+
+    connect(okBtn, &QPushButton::clicked, [&]() {
+        QString apiKey = apiKeyEdit->text().trimmed();
+        QString modelId = modelCombo->currentData().toString();
+        if (modelId.isEmpty()) {
+            modelId = modelCombo->currentText().trimmed();
+        }
+        QString providerId = providerCombo->currentData().toString();
+        QString endpoint = endpointEdit->text().trimmed();
+
+        if (apiKey.isEmpty()) {
+            QMessageBox::warning(&dialog, "警告", "请输入API Key");
+            return;
+        }
+
+        AIImageConfig config;
+        config.id = QUuid::createUuid().toString();
+        config.name = nameEdit->text().trimmed().isEmpty() ? providerCombo->currentText() : nameEdit->text().trimmed();
+        config.provider = providerId;
+        config.model = modelId;
+        config.apiKey = apiKey;
+        config.endpoint = endpoint;
+        config.isDefault = defaultCheck->isChecked();
+
+        AIConfig::instance().addImageKey(config);
+        loadAISettings();
+        dialog.accept();
+    });
+
+    connect(cancelBtn, &QPushButton::clicked, &dialog, &QDialog::reject);
+
+    dialog.exec();
+}
+
+void SettingsWidget::onEditImageKey()
+{
+    int currentRow = aiImageKeysTable->currentRow();
+    if (currentRow < 0) return;
+
+    QString keyId = aiImageKeysTable->item(currentRow, 0)->data(Qt::UserRole).toString();
+    AIImageConfig config = AIConfig::instance().getImageKey(keyId);
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("编辑图像生成API");
+    dialog.setMinimumWidth(550);
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
+    mainLayout->setSpacing(15);
+
+    QGroupBox *formGroup = new QGroupBox("图像生成配置", &dialog);
+    QFormLayout *formLayout = new QFormLayout(formGroup);
+    formLayout->setSpacing(12);
+    formLayout->setLabelAlignment(Qt::AlignRight);
+
+    QLabel *providerLabel = new QLabel("服务商:", formGroup);
+    QComboBox *providerCombo = new QComboBox(formGroup);
+    providerCombo->setEditable(true);
+    providerCombo->setInsertPolicy(QComboBox::NoInsert);
+    providerCombo->setMinimumWidth(250);
+
+    QList<AIImageModelInfo> imageModels = AIConfig::instance().getAllImageModels();
+    QSet<QString> addedProviders;
+    for (const AIImageModelInfo &model : imageModels) {
+        if (!addedProviders.contains(model.provider)) {
+            QString displayName = model.provider;
+            if (model.provider == "siliconflow") displayName = "🚀 硅基流动";
+            else if (model.provider == "openai") displayName = "🔵 OpenAI DALL-E";
+            else if (model.provider == "stability") displayName = "🎭 Stability AI";
+            providerCombo->addItem(displayName, model.provider);
+            addedProviders.insert(model.provider);
+        }
+    }
+
+    int providerIndex = providerCombo->findData(config.provider);
+    if (providerIndex >= 0) providerCombo->setCurrentIndex(providerIndex);
+    formLayout->addRow(providerLabel, providerCombo);
+
+    QLabel *modelLabel = new QLabel("模型:", formGroup);
+    QComboBox *modelCombo = new QComboBox(formGroup);
+    modelCombo->setEditable(true);
+    modelCombo->setInsertPolicy(QComboBox::NoInsert);
+    modelCombo->setMinimumWidth(250);
+
+    auto updateImageModels = [&](const QString &providerId) {
+        modelCombo->clear();
+        QList<AIImageModelInfo> models = AIConfig::instance().getImageModelsByProvider(providerId);
+        for (const AIImageModelInfo &model : models) {
+            modelCombo->addItem(model.name.isEmpty() ? model.id : model.name, model.id);
+        }
+    };
+    updateImageModels(config.provider);
+    int modelIndex = modelCombo->findData(config.model);
+    if (modelIndex >= 0) modelCombo->setCurrentIndex(modelIndex);
+
+    connect(providerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [&](int index) {
+        if (index >= 0) {
+            updateImageModels(providerCombo->itemData(index).toString());
+        }
+    });
+
+    formLayout->addRow(modelLabel, modelCombo);
+
+    QLabel *nameLabel = new QLabel("配置名称:", formGroup);
+    QLineEdit *nameEdit = new QLineEdit(config.name, formGroup);
+    nameEdit->setPlaceholderText("自定义名称（可选）");
+    formLayout->addRow(nameLabel, nameEdit);
+
+    QLabel *apiKeyLabel = new QLabel("API Key:", formGroup);
+    QWidget *apiKeyContainer = new QWidget(formGroup);
+    QHBoxLayout *apiKeyLayout = new QHBoxLayout(apiKeyContainer);
+    apiKeyLayout->setContentsMargins(0, 0, 0, 0);
+    apiKeyLayout->setSpacing(8);
+
+    QLineEdit *apiKeyEdit = new QLineEdit(apiKeyContainer);
+    apiKeyEdit->setPlaceholderText("留空保持原值");
+    apiKeyEdit->setEchoMode(QLineEdit::Password);
+    apiKeyEdit->setMinimumWidth(200);
+
+    QPushButton *togglePasswordBtn = new QPushButton("👁", apiKeyContainer);
+    togglePasswordBtn->setFixedWidth(35);
+    togglePasswordBtn->setToolTip("显示/隐藏密码");
+    togglePasswordBtn->setStyleSheet("QPushButton { border: 1px solid #ccc; border-radius: 3px; padding: 4px; }");
+
+    connect(togglePasswordBtn, &QPushButton::clicked, [&]() {
+        if (apiKeyEdit->echoMode() == QLineEdit::Password) {
+            apiKeyEdit->setEchoMode(QLineEdit::Normal);
+            togglePasswordBtn->setText("🔒");
+        } else {
+            apiKeyEdit->setEchoMode(QLineEdit::Password);
+            togglePasswordBtn->setText("👁");
+        }
+    });
+
+    apiKeyLayout->addWidget(apiKeyEdit);
+    apiKeyLayout->addWidget(togglePasswordBtn);
+    formLayout->addRow(apiKeyLabel, apiKeyContainer);
+
+    QLabel *endpointLabel = new QLabel("API地址:", formGroup);
+    QLineEdit *endpointEdit = new QLineEdit(formGroup);
+    endpointEdit->setPlaceholderText("留空使用默认值");
+    endpointEdit->setText(config.endpoint);
+    formLayout->addRow(endpointLabel, endpointEdit);
+
+    mainLayout->addWidget(formGroup);
+
+    QCheckBox *defaultCheck = new QCheckBox("设为默认", &dialog);
+    defaultCheck->setChecked(config.isDefault);
+    defaultCheck->setStyleSheet("QCheckBox { font-size: 14px; padding: 5px; }");
+    mainLayout->addWidget(defaultCheck);
+
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    buttonLayout->setSpacing(15);
+
+    QPushButton *okBtn = new QPushButton("✅ 保存", &dialog);
+    okBtn->setStyleSheet(
+        "QPushButton { background-color: #27ae60; color: white; padding: 10px 25px; border-radius: 5px; font-weight: bold; font-size: 14px; } "
+        "QPushButton:hover { background-color: #219a52; }"
+    );
+
+    QPushButton *cancelBtn = new QPushButton("取消", &dialog);
+    cancelBtn->setStyleSheet(
+        "QPushButton { background-color: #95a5a6; color: white; padding: 10px 25px; border-radius: 5px; font-size: 14px; } "
+        "QPushButton:hover { background-color: #7f8c8d; }"
+    );
+
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(okBtn);
+    buttonLayout->addWidget(cancelBtn);
+    mainLayout->addLayout(buttonLayout);
+
+    connect(okBtn, &QPushButton::clicked, [&]() {
+        QString apiKey = apiKeyEdit->text().trimmed();
+        QString modelId = modelCombo->currentData().toString();
+        if (modelId.isEmpty()) {
+            modelId = modelCombo->currentText().trimmed();
+        }
+        QString providerId = providerCombo->currentData().toString();
+        QString endpoint = endpointEdit->text().trimmed();
+
+        if (apiKey.isEmpty()) {
+            QMessageBox::warning(&dialog, "警告", "请输入API Key");
+            return;
+        }
+
+        config.name = nameEdit->text().trimmed();
+        config.provider = providerId;
+        config.model = modelId;
+        config.apiKey = apiKey;
+        config.endpoint = endpoint;
+        config.isDefault = defaultCheck->isChecked();
+
+        AIConfig::instance().updateImageKey(config);
+        loadAISettings();
+        dialog.accept();
+    });
+
+    connect(cancelBtn, &QPushButton::clicked, &dialog, &QDialog::reject);
+
+    dialog.exec();
+}
+
+void SettingsWidget::onDeleteImageKey()
+{
+    int currentRow = aiImageKeysTable->currentRow();
+    if (currentRow < 0) return;
+
+    QString keyId = aiImageKeysTable->item(currentRow, 0)->data(Qt::UserRole).toString();
+
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this, "确认删除", "确定要删除此图像生成API配置吗？",
+        QMessageBox::Yes | QMessageBox::No
+    );
+
+    if (reply == QMessageBox::Yes) {
+        AIConfig::instance().deleteImageKey(keyId);
+        loadAISettings();
+    }
+}
+
+void SettingsWidget::onSetDefaultImageKey()
+{
+    int currentRow = aiImageKeysTable->currentRow();
+    if (currentRow < 0) return;
+
+    QString keyId = aiImageKeysTable->item(currentRow, 0)->data(Qt::UserRole).toString();
+    AIConfig::instance().setDefaultImageKey(keyId);
     loadAISettings();
 }
 

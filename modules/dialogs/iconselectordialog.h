@@ -30,6 +30,7 @@ public:
 private slots:
     void onIconDoubleClicked(QListWidgetItem *item);
     void onBrowseCustomIcon();
+    void onAIGenerateIcon();
     void onOkClicked();
     void onCancelClicked();
 

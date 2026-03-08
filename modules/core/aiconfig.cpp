@@ -12,6 +12,7 @@
 AIConfig::AIConfig()
 {
     initProvidersAndModels();
+    initImageProvidersAndModels();
     load();
 }
 
@@ -78,6 +79,44 @@ void AIConfig::load()
         m_defaultKeyId = defaultKey.id;
         save();
     }
+
+    m_defaultImageKeyId = settings.value("ai_default_image_key_id", "").toString();
+
+    QString imageKeysJson = settings.value("ai_image_keys", "[]").toString();
+    QJsonDocument imageKeysDoc = QJsonDocument::fromJson(imageKeysJson.toUtf8());
+    if (imageKeysDoc.isArray()) {
+        QJsonArray keysArray = imageKeysDoc.array();
+        for (int i = 0; i < keysArray.size(); ++i) {
+            QJsonObject obj = keysArray[i].toObject();
+            AIImageConfig key;
+            key.id = obj["id"].toString();
+            key.name = obj["name"].toString();
+            key.provider = obj["provider"].toString();
+            key.model = obj["model"].toString();
+            key.apiKey = decryptAPIKey(obj["encryptedKey"].toString());
+            key.endpoint = obj["endpoint"].toString();
+            key.isDefault = obj["isDefault"].toBool();
+            key.createdAt = obj["createdAt"].toString();
+            key.updatedAt = obj["updatedAt"].toString();
+            m_imageKeys.append(key);
+        }
+    }
+
+    if (m_imageKeys.isEmpty()) {
+        AIImageConfig defaultKey;
+        defaultKey.id = generateId();
+        defaultKey.name = "默认图像配置";
+        defaultKey.provider = "siliconflow";
+        defaultKey.model = "flux-schnell";
+        defaultKey.apiKey = "";
+        defaultKey.endpoint = "";
+        defaultKey.isDefault = true;
+        defaultKey.createdAt = QDateTime::currentDateTime().toString(Qt::ISODate);
+        defaultKey.updatedAt = defaultKey.createdAt;
+        m_imageKeys.append(defaultKey);
+        m_defaultImageKeyId = defaultKey.id;
+        save();
+    }
 }
 
 void AIConfig::save()
@@ -109,6 +148,24 @@ void AIConfig::save()
         keysArray.append(obj);
     }
     settings.setValue("ai_keys", QJsonDocument(keysArray).toJson(QJsonDocument::Compact));
+
+    settings.setValue("ai_default_image_key_id", m_defaultImageKeyId);
+
+    QJsonArray imageKeysArray;
+    for (const AIImageConfig &key : m_imageKeys) {
+        QJsonObject obj;
+        obj["id"] = key.id;
+        obj["name"] = key.name;
+        obj["provider"] = key.provider;
+        obj["model"] = key.model;
+        obj["encryptedKey"] = encryptAPIKey(key.apiKey);
+        obj["endpoint"] = key.endpoint;
+        obj["isDefault"] = key.isDefault;
+        obj["createdAt"] = key.createdAt;
+        obj["updatedAt"] = key.updatedAt;
+        imageKeysArray.append(obj);
+    }
+    settings.setValue("ai_image_keys", QJsonDocument(imageKeysArray).toJson(QJsonDocument::Compact));
 }
 
 QList<AIKeyConfig> AIConfig::getAllKeys()
@@ -311,6 +368,7 @@ void AIConfig::initProvidersAndModels()
         {"iflytek", "iFlytek", "讯飞星火"},
         {"siliconflow", "SiliconFlow", "硅基流动"},
         {"deepseek", "DeepSeek", "DeepSeek"},
+        {"stability", "Stability AI", "Stability AI"},
         {"local", "Local", "本地模式"}
     };
 
@@ -394,4 +452,146 @@ QString AIConfig::maskAPIKey(const QString &apiKey)
         return "****";
     }
     return apiKey.left(4) + "****" + apiKey.right(4);
+}
+
+QList<AIImageConfig> AIConfig::getAllImageKeys()
+{
+    return m_imageKeys;
+}
+
+AIImageConfig AIConfig::getImageKey(const QString &id)
+{
+    for (const AIImageConfig &key : m_imageKeys) {
+        if (key.id == id) {
+            return key;
+        }
+    }
+    return AIImageConfig();
+}
+
+AIImageConfig AIConfig::getImageKeyByProvider(const QString &provider)
+{
+    for (const AIImageConfig &key : m_imageKeys) {
+        if (key.provider == provider) {
+            return key;
+        }
+    }
+    return AIImageConfig();
+}
+
+AIImageConfig AIConfig::getDefaultImageKey()
+{
+    if (!m_defaultImageKeyId.isEmpty()) {
+        for (const AIImageConfig &key : m_imageKeys) {
+            if (key.id == m_defaultImageKeyId) {
+                return key;
+            }
+        }
+    }
+    if (!m_imageKeys.isEmpty()) {
+        return m_imageKeys.first();
+    }
+    return AIImageConfig();
+}
+
+void AIConfig::addImageKey(const AIImageConfig &config)
+{
+    AIImageConfig newKey = config;
+    newKey.id = generateId();
+    newKey.createdAt = QDateTime::currentDateTime().toString(Qt::ISODate);
+    newKey.updatedAt = newKey.createdAt;
+
+    if (newKey.isDefault) {
+        for (AIImageConfig &key : m_imageKeys) {
+            key.isDefault = false;
+        }
+        m_defaultImageKeyId = newKey.id;
+    }
+
+    m_imageKeys.append(newKey);
+    save();
+}
+
+void AIConfig::updateImageKey(const AIImageConfig &config)
+{
+    for (int i = 0; i < m_imageKeys.size(); ++i) {
+        if (m_imageKeys[i].id == config.id) {
+            if (config.isDefault) {
+                for (int j = 0; j < m_imageKeys.size(); ++j) {
+                    m_imageKeys[j].isDefault = (j == i);
+                }
+                m_defaultImageKeyId = config.id;
+            }
+            m_imageKeys[i] = config;
+            m_imageKeys[i].updatedAt = QDateTime::currentDateTime().toString(Qt::ISODate);
+            save();
+            return;
+        }
+    }
+}
+
+void AIConfig::deleteImageKey(const QString &id)
+{
+    for (int i = 0; i < m_imageKeys.size(); ++i) {
+        if (m_imageKeys[i].id == id) {
+            m_imageKeys.removeAt(i);
+            if (m_defaultImageKeyId == id) {
+                if (!m_imageKeys.isEmpty()) {
+                    m_imageKeys.first().isDefault = true;
+                    m_defaultImageKeyId = m_imageKeys.first().id;
+                } else {
+                    m_defaultImageKeyId = "";
+                }
+            }
+            save();
+            return;
+        }
+    }
+}
+
+void AIConfig::setDefaultImageKey(const QString &id)
+{
+    m_defaultImageKeyId = id;
+    for (AIImageConfig &key : m_imageKeys) {
+        key.isDefault = (key.id == id);
+    }
+    save();
+}
+
+QList<AIImageModelInfo> AIConfig::getAllImageModels()
+{
+    return m_imageModels;
+}
+
+QList<AIImageModelInfo> AIConfig::getImageModelsByProvider(const QString &providerId)
+{
+    QList<AIImageModelInfo> result;
+    for (const AIImageModelInfo &model : m_imageModels) {
+        if (model.provider == providerId) {
+            result.append(model);
+        }
+    }
+    return result;
+}
+
+AIImageModelInfo AIConfig::getImageModelInfo(const QString &modelId)
+{
+    for (const AIImageModelInfo &model : m_imageModels) {
+        if (model.id == modelId) {
+            return model;
+        }
+    }
+    return AIImageModelInfo();
+}
+
+void AIConfig::initImageProvidersAndModels()
+{
+    m_imageModels = {
+        {"dalle3", "DALL-E 3", "openai", "https://api.openai.com/v1/images/generations"},
+        {"stable-diffusion", "Stable Diffusion", "stability", "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image"},
+        {"flux-schnell", "Flux Schnell", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"flux-pro", "Flux Pro", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"sd3-medium", "Stable Diffusion 3 Medium", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"sd3-large", "Stable Diffusion 3 Large", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"}
+    };
 }

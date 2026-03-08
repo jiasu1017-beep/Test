@@ -106,10 +106,22 @@ private:
     QPushButton *chatTestBtn;
     QLabel *aiStatusLabel;
     QTableWidget *aiKeysTable;
+    QTableWidget *aiImageKeysTable;
     QPushButton *addAIKeyBtn;
     QPushButton *editAIKeyBtn;
     QPushButton *deleteAIKeyBtn;
     QPushButton *setDefaultAIKeyBtn;
+    QPushButton *addImageKeyBtn;
+    QPushButton *editImageKeyBtn;
+    QPushButton *deleteImageKeyBtn;
+    QPushButton *setDefaultImageKeyBtn;
+
+private slots:
+    void onAIImageKeyTableSelectionChanged();
+    void onAddImageKey();
+    void onEditImageKey();
+    void onDeleteImageKey();
+    void onSetDefaultImageKey();
 };
 
 #endif
