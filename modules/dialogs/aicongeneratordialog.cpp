@@ -1,4 +1,5 @@
 #include "aicongeneratordialog.h"
+#include "modules/core/aiconfig.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QStandardPaths>
@@ -64,10 +65,36 @@ void AIIconGeneratorDialog::setupUI()
     methodCombo = new QComboBox(this);
     methodCombo->addItem("📋 预设模板 (免费)", METHOD_TEMPLATE);
     methodCombo->addItem("🔍 图标库搜索 (免费)", METHOD_ICONFINDER);
-    methodCombo->addItem("🎨 硅基流动 (低成本)", METHOD_SILICONFLOW);
-    methodCombo->addItem("🌟 OpenAI DALL-E 3 (付费)", METHOD_DALLE3);
-    methodCombo->addItem("⚡ Stability AI (付费)", METHOD_STABILITY);
-    methodCombo->setCurrentIndex(0);
+
+    QList<AIImageConfig> imageKeys = AIConfig::instance().getAllImageKeys();
+    bool hasConfiguredAI = false;
+    int defaultIndex = 0;
+    int aiStartIndex = methodCombo->count();
+    int currentIndex = aiStartIndex;
+    for (const AIImageConfig &key : imageKeys) {
+        if (!key.apiKey.isEmpty()) {
+            hasConfiguredAI = true;
+            QString displayText = key.name.isEmpty() ? key.provider : key.name;
+            int methodValue = 0;
+            if (key.provider == "siliconflow") methodValue = METHOD_SILICONFLOW;
+            else if (key.provider == "openai") methodValue = METHOD_DALLE3;
+            else if (key.provider == "stability") methodValue = METHOD_STABILITY;
+            methodCombo->addItem(displayText, key.id);
+
+            if (key.isDefault) {
+                defaultIndex = currentIndex;
+            }
+            currentIndex++;
+        }
+    }
+
+    if (!hasConfiguredAI) {
+        methodCombo->addItem("⚠️ 无可用AI服务", "");
+        defaultIndex = 0;
+    }
+
+    methodCombo->setCurrentIndex(defaultIndex);
+
     connect(methodCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AIIconGeneratorDialog::onMethodChanged);
     methodRow->addWidget(methodLabel);
     methodRow->addWidget(methodCombo);
@@ -263,8 +290,26 @@ void AIIconGeneratorDialog::setupUI()
 
 void AIIconGeneratorDialog::onMethodChanged()
 {
-    int method = methodCombo->currentData().toInt();
-    
+    QString keyId = methodCombo->currentData().toString();
+
+    if (keyId.isEmpty() || keyId == "-1") {
+        QMessageBox::warning(this, "提示", "请先在设置中配置AI图像生成服务");
+        methodCombo->setCurrentIndex(0);
+        keyId = methodCombo->currentData().toString();
+    }
+
+    int method = 0;
+    QString provider;
+    AIImageConfig keyConfig = AIConfig::instance().getImageKey(keyId);
+    if (!keyConfig.id.isEmpty()) {
+        provider = keyConfig.provider;
+        if (provider == "siliconflow") method = METHOD_SILICONFLOW;
+        else if (provider == "openai") method = METHOD_DALLE3;
+        else if (provider == "stability") method = METHOD_STABILITY;
+    } else {
+        method = keyId.toInt();
+    }
+
     bool isTemplate = (method == METHOD_TEMPLATE);
     bool isIconFinder = (method == METHOD_ICONFINDER);
     bool isAPI = (method == METHOD_SILICONFLOW || method == METHOD_DALLE3 || method == METHOD_STABILITY);
@@ -292,7 +337,18 @@ void AIIconGeneratorDialog::onMethodChanged()
 
 void AIIconGeneratorDialog::onColorChanged(const QString &color)
 {
-    if (methodCombo->currentData().toInt() == METHOD_TEMPLATE) {
+    QString keyId = methodCombo->currentData().toString();
+    int method = 0;
+    if (!AIConfig::instance().getImageKey(keyId).id.isEmpty()) {
+        QString provider = AIConfig::instance().getImageKey(keyId).provider;
+        if (provider == "siliconflow") method = METHOD_SILICONFLOW;
+        else if (provider == "openai") method = METHOD_DALLE3;
+        else if (provider == "stability") method = METHOD_STABILITY;
+    } else {
+        method = keyId.toInt();
+    }
+
+    if (method == METHOD_TEMPLATE) {
         QString iconType = templateCombo->currentData().toString();
         generateTemplateIcon(iconType, color);
     }
@@ -300,8 +356,20 @@ void AIIconGeneratorDialog::onColorChanged(const QString &color)
 
 void AIIconGeneratorDialog::onGenerateClicked()
 {
-    int method = methodCombo->currentData().toInt();
-    
+    QString keyId = methodCombo->currentData().toString();
+
+    int method = 0;
+    QString provider;
+    AIImageConfig keyConfig = AIConfig::instance().getImageKey(keyId);
+    if (!keyConfig.id.isEmpty()) {
+        provider = keyConfig.provider;
+        if (provider == "siliconflow") method = METHOD_SILICONFLOW;
+        else if (provider == "openai") method = METHOD_DALLE3;
+        else if (provider == "stability") method = METHOD_STABILITY;
+    } else {
+        method = keyId.toInt();
+    }
+
     switch (method) {
         case METHOD_TEMPLATE:
             if (tryTemplateMatch()) {
