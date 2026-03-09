@@ -590,8 +590,16 @@ void AIConfig::initImageProvidersAndModels()
         {"dalle3", "DALL-E 3", "openai", "https://api.openai.com/v1/images/generations"},
         {"stable-diffusion", "Stable Diffusion", "stability", "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image"},
         {"black-forest-labs/flux.1-schnell", "Flux Schnell", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"black-forest-labs/flux.1-dev", "Flux Dev", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
         {"black-forest-labs/flux.1-pro", "Flux Pro", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
-        {"sd3-medium", "Stable Diffusion 3 Medium", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
-        {"sd3-large", "Stable Diffusion 3 Large", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"}
+        {"Kwai-Kolors/Kolors", "Kolors", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"stabilityai/stable-diffusion-xl-base-1.0", "Stable Diffusion XL", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"stabilityai/sdxl-turbo", "SDXL Turbo", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"stabilityai/stable-diffusion-2-1", "Stable Diffusion 2.1", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"stabilityai/sd-turbo", "SD Turbo", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"ByteDance/SDXL-Lightning", "SDXL Lightning", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"playgroundai/playground-v2.5-1024px-aesthetic", "Playground V2.5", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"THUDM/CogView-3-Plus", "CogView-3-Plus", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"HiDream-ai/HiDream-I1-Dev", "HiDream-I1-Dev", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"}
     };
 }

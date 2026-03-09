@@ -75,10 +75,6 @@ void AIIconGeneratorDialog::setupUI()
         if (!key.apiKey.isEmpty()) {
             hasConfiguredAI = true;
             QString displayText = key.name.isEmpty() ? key.provider : key.name;
-            int methodValue = 0;
-            if (key.provider == "siliconflow") methodValue = METHOD_SILICONFLOW;
-            else if (key.provider == "openai") methodValue = METHOD_DALLE3;
-            else if (key.provider == "stability") methodValue = METHOD_STABILITY;
             methodCombo->addItem(displayText, key.id);
 
             if (key.isDefault) {
@@ -382,20 +378,29 @@ void AIIconGeneratorDialog::onGenerateClicked()
             }
             break;
         case METHOD_SILICONFLOW:
-            if (useSiliconFlowAPI()) {
-                return;
-            }
-            break;
         case METHOD_DALLE3:
-            if (useDALLE3()) {
+        case METHOD_STABILITY: {
+            if (!keyConfig.id.isEmpty()) {
+                QString prompt = promptEdit->text().trimmed();
+                if (prompt.isEmpty()) {
+                    QMessageBox::warning(this, "提示", "请输入图标描述");
+                    return;
+                }
+                m_lastPrompt = buildPrompt(prompt);
+                QString actualEndpoint = keyConfig.endpoint.isEmpty() ?
+                    QString("https://api.siliconflow.cn/v1/images/generations") : keyConfig.endpoint;
+
+                if (provider == "openai") {
+                    actualEndpoint = "https://api.openai.com/v1/images/generations";
+                } else if (provider == "stability") {
+                    actualEndpoint = "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image";
+                }
+
+                callImageAPI(provider, keyConfig.model, m_lastPrompt, actualEndpoint, keyConfig.apiKey);
                 return;
             }
             break;
-        case METHOD_STABILITY:
-            if (useStabilityAPI()) {
-                return;
-            }
-            break;
+        }
     }
 }
 
