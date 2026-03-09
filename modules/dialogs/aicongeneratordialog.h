@@ -12,6 +12,8 @@
 #include <QPixmap>
 #include <QString>
 
+#include "modules/core/aiconfig.h"
+
 enum IconGenMethod {
     METHOD_TEMPLATE,
     METHOD_ICONFINDER,
@@ -45,15 +47,13 @@ private:
     void setupUI();
     bool tryTemplateMatch();
     bool searchIconLibraries();
-    bool useSiliconFlowAPI();
-    bool useDALLE3();
-    bool useStabilityAPI();
     void callImageAPI(const QString &provider, const QString &model, const QString &prompt, const QString &endpoint, const QString &apiKey);
     void downloadImage(const QString &url);
     bool saveGeneratedIcon(const QByteArray &imageData);
     void generateTemplateIcon(const QString &iconType, const QString &color);
     QString decryptApiKey(const QString &encryptedKey);
     QString buildPrompt(const QString &basePrompt);
+    void getMethodAndProviderFromKeyId(const QString &keyId, int &method, QString &provider, AIImageConfig &config);
     
     QLineEdit *promptEdit;
     QTextEdit *styleEdit;

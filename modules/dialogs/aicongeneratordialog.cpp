@@ -296,15 +296,8 @@ void AIIconGeneratorDialog::onMethodChanged()
 
     int method = 0;
     QString provider;
-    AIImageConfig keyConfig = AIConfig::instance().getImageKey(keyId);
-    if (!keyConfig.id.isEmpty()) {
-        provider = keyConfig.provider;
-        if (provider == "siliconflow") method = METHOD_SILICONFLOW;
-        else if (provider == "openai") method = METHOD_DALLE3;
-        else if (provider == "stability") method = METHOD_STABILITY;
-    } else {
-        method = keyId.toInt();
-    }
+    AIImageConfig keyConfig;
+    getMethodAndProviderFromKeyId(keyId, method, provider, keyConfig);
 
     bool isTemplate = (method == METHOD_TEMPLATE);
     bool isIconFinder = (method == METHOD_ICONFINDER);
@@ -335,14 +328,9 @@ void AIIconGeneratorDialog::onColorChanged(const QString &color)
 {
     QString keyId = methodCombo->currentData().toString();
     int method = 0;
-    if (!AIConfig::instance().getImageKey(keyId).id.isEmpty()) {
-        QString provider = AIConfig::instance().getImageKey(keyId).provider;
-        if (provider == "siliconflow") method = METHOD_SILICONFLOW;
-        else if (provider == "openai") method = METHOD_DALLE3;
-        else if (provider == "stability") method = METHOD_STABILITY;
-    } else {
-        method = keyId.toInt();
-    }
+    QString provider;
+    AIImageConfig config;
+    getMethodAndProviderFromKeyId(keyId, method, provider, config);
 
     if (method == METHOD_TEMPLATE) {
         QString iconType = templateCombo->currentData().toString();
@@ -356,15 +344,8 @@ void AIIconGeneratorDialog::onGenerateClicked()
 
     int method = 0;
     QString provider;
-    AIImageConfig keyConfig = AIConfig::instance().getImageKey(keyId);
-    if (!keyConfig.id.isEmpty()) {
-        provider = keyConfig.provider;
-        if (provider == "siliconflow") method = METHOD_SILICONFLOW;
-        else if (provider == "openai") method = METHOD_DALLE3;
-        else if (provider == "stability") method = METHOD_STABILITY;
-    } else {
-        method = keyId.toInt();
-    }
+    AIImageConfig keyConfig;
+    getMethodAndProviderFromKeyId(keyId, method, provider, keyConfig);
 
     switch (method) {
         case METHOD_TEMPLATE:
@@ -387,13 +368,19 @@ void AIIconGeneratorDialog::onGenerateClicked()
                     return;
                 }
                 m_lastPrompt = buildPrompt(prompt);
-                QString actualEndpoint = keyConfig.endpoint.isEmpty() ?
-                    QString("https://api.siliconflow.cn/v1/images/generations") : keyConfig.endpoint;
-
-                if (provider == "openai") {
-                    actualEndpoint = "https://api.openai.com/v1/images/generations";
-                } else if (provider == "stability") {
-                    actualEndpoint = "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image";
+                QString actualEndpoint = keyConfig.endpoint;
+                if (actualEndpoint.isEmpty()) {
+                    AIImageModelInfo modelInfo = AIConfig::instance().getImageModelInfo(keyConfig.model);
+                    actualEndpoint = modelInfo.defaultEndpoint;
+                }
+                if (actualEndpoint.isEmpty()) {
+                    if (provider == "siliconflow") {
+                        actualEndpoint = "https://api.siliconflow.cn/v1/images/generations";
+                    } else if (provider == "openai") {
+                        actualEndpoint = "https://api.openai.com/v1/images/generations";
+                    } else if (provider == "stability") {
+                        actualEndpoint = "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image";
+                    }
                 }
 
                 callImageAPI(provider, keyConfig.model, m_lastPrompt, actualEndpoint, keyConfig.apiKey);
@@ -750,87 +737,6 @@ bool AIIconGeneratorDialog::searchIconLibraries()
     }
 }
 
-bool AIIconGeneratorDialog::useSiliconFlowAPI()
-{
-    QSettings settings("PonyWork", "WorkLog");
-    QString encryptedKey = settings.value("ai_image_api_key", "").toString();
-    
-    if (encryptedKey.isEmpty()) {
-        QMessageBox::warning(this, "提示", "请先在设置中配置硅基流动API Key\n\n获取地址: https://siliconflow.cn");
-        return false;
-    }
-    
-    QString apiKey = decryptApiKey(encryptedKey);
-    
-    QString endpoint = settings.value("ai_image_endpoint", "").toString();
-    
-    QString prompt = promptEdit->text().trimmed();
-    if (prompt.isEmpty()) {
-        QMessageBox::warning(this, "提示", "请输入图标描述");
-        return false;
-    }
-    
-    m_lastPrompt = buildPrompt(prompt);
-    
-    QString actualEndpoint = endpoint.isEmpty() ? "https://api.siliconflow.cn/v1/images/generations" : endpoint;
-    callImageAPI("siliconflow", "black-forest-labs/FLUX.1-schnell", m_lastPrompt, actualEndpoint, apiKey);
-    return true;
-}
-
-bool AIIconGeneratorDialog::useDALLE3()
-{
-    QSettings settings("PonyWork", "WorkLog");
-    QString encryptedKey = settings.value("ai_image_api_key", "").toString();
-    
-    if (encryptedKey.isEmpty()) {
-        QMessageBox::warning(this, "提示", "请先在设置中配置OpenAI API Key\n\n获取地址: https://platform.openai.com");
-        return false;
-    }
-    
-    QString apiKey = decryptApiKey(encryptedKey);
-    
-    QString endpoint = settings.value("ai_image_endpoint", "").toString();
-    
-    QString prompt = promptEdit->text().trimmed();
-    if (prompt.isEmpty()) {
-        QMessageBox::warning(this, "提示", "请输入图标描述");
-        return false;
-    }
-    
-    m_lastPrompt = buildPrompt(prompt);
-    
-    QString actualEndpoint = endpoint.isEmpty() ? "https://api.openai.com/v1/images/generations" : endpoint;
-    callImageAPI("openai", "dall-e-3", m_lastPrompt, actualEndpoint, apiKey);
-    return true;
-}
-
-bool AIIconGeneratorDialog::useStabilityAPI()
-{
-    QSettings settings("PonyWork", "WorkLog");
-    QString encryptedKey = settings.value("ai_image_api_key", "").toString();
-    
-    if (encryptedKey.isEmpty()) {
-        QMessageBox::warning(this, "提示", "请先在设置中配置Stability AI API Key\n\n获取地址: https://platform.stability.ai");
-        return false;
-    }
-    
-    QString apiKey = decryptApiKey(encryptedKey);
-    
-    QString endpoint = settings.value("ai_image_endpoint", "").toString();
-    
-    QString prompt = promptEdit->text().trimmed();
-    if (prompt.isEmpty()) {
-        QMessageBox::warning(this, "提示", "请输入图标描述");
-        return false;
-    }
-    
-    m_lastPrompt = buildPrompt(prompt);
-    
-    QString actualEndpoint = endpoint.isEmpty() ? "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image" : endpoint;
-    callImageAPI("stability", "stable-diffusion-xl-1024-v1-0", m_lastPrompt, actualEndpoint, apiKey);
-    return true;
-}
-
 void AIIconGeneratorDialog::callImageAPI(const QString &provider, const QString &model, const QString &prompt, const QString &endpoint, const QString &apiKey)
 {
     statusLabel->setText("🔄 正在生成图标...");
@@ -944,7 +850,14 @@ void AIIconGeneratorDialog::callImageAPI(const QString &provider, const QString 
                     QString base64Data = artifactsArray[0].toObject()["base64"].toString();
                     m_lastImageData = QByteArray::fromBase64(base64Data.toUtf8());
                     QPixmap pixmap;
-                    pixmap.loadFromData(m_lastImageData);
+                    if (!pixmap.loadFromData(m_lastImageData)) {
+                        statusLabel->setText("❌ 图标加载失败");
+                        generateBtn->setEnabled(true);
+                        regenerateBtn->setEnabled(true);
+                        reply->deleteLater();
+                        m_currentReply = nullptr;
+                        return;
+                    }
                     previewLabel->setPixmap(pixmap.scaled(PREVIEW_SIZE, PREVIEW_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation));
                     statusLabel->setText("✅ 图标生成成功！");
                     m_iconSaved = false;
@@ -1048,8 +961,14 @@ void AIIconGeneratorDialog::onDownloadFinished(QNetworkReply *reply)
     if (reply->error() == QNetworkReply::NoError) {
         m_lastImageData = reply->readAll();
         QPixmap pixmap;
-        pixmap.loadFromData(m_lastImageData);
-        
+        if (!pixmap.loadFromData(m_lastImageData)) {
+            statusLabel->setText("❌ 图标加载失败");
+            generateBtn->setEnabled(true);
+            reply->deleteLater();
+            m_currentReply = nullptr;
+            return;
+        }
+
         previewLabel->setPixmap(pixmap.scaled(PREVIEW_SIZE, PREVIEW_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         statusLabel->setText("✅ 图标生成成功！");
         
@@ -1211,6 +1130,21 @@ QString AIIconGeneratorDialog::decryptApiKey(const QString &encryptedKey)
         decrypted.append(data.at(i) ^ key.at(i % key.size()));
     }
     return QString::fromUtf8(decrypted);
+}
+
+void AIIconGeneratorDialog::getMethodAndProviderFromKeyId(const QString &keyId, int &method, QString &provider, AIImageConfig &config)
+{
+    method = 0;
+    provider.clear();
+    config = AIConfig::instance().getImageKey(keyId);
+    if (!config.id.isEmpty()) {
+        provider = config.provider;
+        if (provider == "siliconflow") method = METHOD_SILICONFLOW;
+        else if (provider == "openai") method = METHOD_DALLE3;
+        else if (provider == "stability") method = METHOD_STABILITY;
+    } else {
+        method = keyId.toInt();
+    }
 }
 
 QString AIIconGeneratorDialog::buildPrompt(const QString &basePrompt)
