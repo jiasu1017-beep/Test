@@ -589,8 +589,8 @@ void AIConfig::initImageProvidersAndModels()
     m_imageModels = {
         {"dalle3", "DALL-E 3", "openai", "https://api.openai.com/v1/images/generations"},
         {"stable-diffusion", "Stable Diffusion", "stability", "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image"},
-        {"flux-schnell", "Flux Schnell", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
-        {"flux-pro", "Flux Pro", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"black-forest-labs/flux.1-schnell", "Flux Schnell", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
+        {"black-forest-labs/flux.1-pro", "Flux Pro", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
         {"sd3-medium", "Stable Diffusion 3 Medium", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"},
         {"sd3-large", "Stable Diffusion 3 Large", "siliconflow", "https://api.siliconflow.cn/v1/images/generations"}
     };

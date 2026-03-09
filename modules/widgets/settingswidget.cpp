@@ -40,8 +40,14 @@
 #include <QMap>
 #include <QUrl>
 #include <QColor>
+#include <QDir>
+#include <QFile>
+#include <QTextStream>
+#include <QDateTime>
+#include <QStandardPaths>
 #include "modules/update/updatedialog.h"
 #include "modules/update/updateprogressdialog.h"
+#include "modules/core/ailogger.h"
 
 SettingsWidget::SettingsWidget(Database *db, QWidget *parent)
     : QWidget(parent), db(db), mainWindow(nullptr), updateManager(nullptr), progressDialog(nullptr), networkManager(nullptr)
@@ -1121,6 +1127,16 @@ void SettingsWidget::onAddAIKey()
     buttonLayout->addWidget(cancelBtn);
     mainLayout->addLayout(buttonLayout);
 
+    QString verifyLogFileName;
+    {
+        QString logDir = QCoreApplication::applicationDirPath() + "/logs";
+        QDir dir(logDir);
+        if (!dir.exists()) {
+            dir.mkpath(logDir);
+        }
+        verifyLogFileName = logDir + "/ai_image_verify_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".log";
+    }
+
     QNetworkAccessManager *verifyManager = new QNetworkAccessManager(&dialog);
 
     connect(verifyBtn, &QPushButton::clicked, [&]() {
@@ -1457,14 +1473,20 @@ void SettingsWidget::onEditAIKey()
     buttonLayout->addWidget(cancelBtn);
     mainLayout->addLayout(buttonLayout);
 
-    QString originalApiKey = key.apiKey;
+    QString verifyLogFileName;
+    {
+        QString logDir = QCoreApplication::applicationDirPath() + "/logs";
+        QDir dir(logDir);
+        if (!dir.exists()) {
+            dir.mkpath(logDir);
+        }
+        verifyLogFileName = logDir + "/ai_image_verify_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".log";
+    }
+
     QNetworkAccessManager *verifyManager = new QNetworkAccessManager(&dialog);
 
     connect(verifyBtn, &QPushButton::clicked, [&]() {
         QString apiKey = apiKeyEdit->text().trimmed();
-        if (apiKey.isEmpty()) {
-            apiKey = originalApiKey;
-        }
         QString modelId = modelCombo->currentData().toString();
         if (modelId.isEmpty()) {
             modelId = modelCombo->currentText().trimmed();
@@ -1815,6 +1837,11 @@ void SettingsWidget::onAddImageKey()
     buttonLayout->addWidget(cancelBtn);
     mainLayout->addLayout(buttonLayout);
 
+    QString verifyLogFileName;
+    {
+        verifyLogFileName = AILogger::initLogFile(AILogger::ImageVerify);
+    }
+
     QNetworkAccessManager *verifyManager = new QNetworkAccessManager(&dialog);
 
     connect(verifyBtn, &QPushButton::clicked, [&]() {
@@ -1879,6 +1906,9 @@ void SettingsWidget::onAddImageKey()
         json["size"] = "1024x1024";
 
         QJsonDocument doc(json);
+
+        AILogger::logVerifyRequest(verifyLogFileName, providerId, modelId, actualEndpoint, json);
+
         QPointer<QNetworkReply> reply = verifyManager->post(request, doc.toJson());
 
         connect(reply, &QNetworkReply::finished, [=]() {
@@ -1893,6 +1923,9 @@ void SettingsWidget::onAddImageKey()
                 QByteArray responseData = reply->readAll();
                 QJsonParseError parseError;
                 QJsonDocument responseDoc = QJsonDocument::fromJson(responseData, &parseError);
+
+                AILogger::logVerifyResponse(verifyLogFileName, reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(),
+                                           responseDoc.object());
 
                 if (parseError.error == QJsonParseError::NoError && !responseDoc.isNull()) {
                     if (providerId == "openai" || providerId == "siliconflow") {
@@ -1943,6 +1976,8 @@ void SettingsWidget::onAddImageKey()
                         }
                     }
                 }
+
+                AILogger::logVerifyError(verifyLogFileName, detailedError, errorData);
 
                 verifyStatusLabel->setText("❌ 连接失败: " + detailedError);
                 verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
@@ -2151,10 +2186,24 @@ void SettingsWidget::onEditImageKey()
     buttonLayout->addWidget(cancelBtn);
     mainLayout->addLayout(buttonLayout);
 
+    QString verifyLogFileName;
+    {
+        QString logDir = QCoreApplication::applicationDirPath() + "/logs";
+        QDir dir(logDir);
+        if (!dir.exists()) {
+            dir.mkpath(logDir);
+        }
+        verifyLogFileName = logDir + "/ai_image_verify_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".log";
+    }
+
+    QString originalApiKey = config.apiKey;
     QNetworkAccessManager *verifyManager = new QNetworkAccessManager(&dialog);
 
     connect(verifyBtn, &QPushButton::clicked, [&]() {
         QString apiKey = apiKeyEdit->text().trimmed();
+        if (apiKey.isEmpty()) {
+            apiKey = originalApiKey;
+        }
         QString modelId = modelCombo->currentData().toString();
         if (modelId.isEmpty()) {
             modelId = modelCombo->currentText().trimmed();
@@ -2163,7 +2212,7 @@ void SettingsWidget::onEditImageKey()
         QString endpoint = endpointEdit->text().trimmed();
 
         if (apiKey.isEmpty()) {
-            verifyStatusLabel->setText("❌ 请输入API Key");
+            verifyStatusLabel->setText("❌ 没有可验证的API Key");
             verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
             verifyStatusLabel->setVisible(true);
             return;
@@ -2215,6 +2264,9 @@ void SettingsWidget::onEditImageKey()
         json["size"] = "1024x1024";
 
         QJsonDocument doc(json);
+
+        AILogger::logVerifyRequest(verifyLogFileName, providerId, modelId, actualEndpoint, json);
+
         QPointer<QNetworkReply> reply = verifyManager->post(request, doc.toJson());
 
         connect(reply, &QNetworkReply::finished, [=]() {
@@ -2229,6 +2281,9 @@ void SettingsWidget::onEditImageKey()
                 QByteArray responseData = reply->readAll();
                 QJsonParseError parseError;
                 QJsonDocument responseDoc = QJsonDocument::fromJson(responseData, &parseError);
+
+                AILogger::logVerifyResponse(verifyLogFileName, reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(),
+                                           responseDoc.object());
 
                 if (parseError.error == QJsonParseError::NoError && !responseDoc.isNull()) {
                     if (providerId == "openai" || providerId == "siliconflow") {
@@ -2280,6 +2335,8 @@ void SettingsWidget::onEditImageKey()
                     }
                 }
 
+                AILogger::logVerifyError(verifyLogFileName, detailedError, errorData);
+
                 verifyStatusLabel->setText("❌ 连接失败: " + detailedError);
                 verifyStatusLabel->setStyleSheet("padding: 10px; color: #c0392b; background-color: #fadbd8; border-radius: 4px;");
             }
@@ -2297,6 +2354,11 @@ void SettingsWidget::onEditImageKey()
         QString providerId = providerCombo->currentData().toString();
         QString endpoint = endpointEdit->text().trimmed();
 
+        QString originalApiKey = config.apiKey;
+        if (apiKey.isEmpty()) {
+            apiKey = originalApiKey;
+        }
+
         if (apiKey.isEmpty()) {
             QMessageBox::warning(&dialog, "警告", "请输入API Key");
             return;
@@ -2305,7 +2367,11 @@ void SettingsWidget::onEditImageKey()
         config.name = nameEdit->text().trimmed();
         config.provider = providerId;
         config.model = modelId;
-        config.apiKey = apiKey;
+
+        if (!apiKeyEdit->text().trimmed().isEmpty()) {
+            config.apiKey = apiKey;
+        }
+
         config.endpoint = endpoint;
         config.isDefault = defaultCheck->isChecked();
 
