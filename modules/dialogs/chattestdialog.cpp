@@ -1,8 +1,10 @@
 #include "chattestdialog.h"
 #include "modules/core/aiconfig.h"
+#include "modules/core/ailogger.h"
 #include <QSplitter>
 #include <QGroupBox>
 #include <QScrollBar>
+#include <QCoreApplication>
 
 ChatTestDialog::ChatTestDialog(QWidget *parent)
     : QDialog(parent), networkManager(nullptr), isProcessing(false)
@@ -184,34 +186,38 @@ void ChatTestDialog::callAI(const QString &message)
         return;
     }
 
-    if (!networkManager) {
-        networkManager = new QNetworkAccessManager(this);
-    }
+    m_logFileName = AILogger::initLogFile(AILogger::TextCall);
 
-    QJsonObject json;
-    json["model"] = getModelName(currentModel);
-    json["stream"] = false;
-
+    AIKeyConfig keyConfig = AIConfig::instance().getDefaultKey();
+    QJsonObject requestJson;
+    requestJson["model"] = getModelName(currentModel);
+    requestJson["stream"] = false;
     QJsonArray messages;
     QJsonObject msg;
     msg["role"] = "user";
     msg["content"] = message;
     messages.append(msg);
-    json["messages"] = messages;
+    requestJson["messages"] = messages;
 
     if (currentModel.startsWith("qwen")) {
         QJsonObject input;
-        input["messages"] = json.take("messages");
-        json["input"] = input;
-        json.remove("stream");
-        json["parameters"] = QJsonObject({
+        input["messages"] = requestJson.take("messages");
+        requestJson["input"] = input;
+        requestJson.remove("stream");
+        requestJson["parameters"] = QJsonObject({
             {"temperature", 0.7},
             {"max_tokens", 1024},
             {"result_format", "message"}
         });
     }
 
-    QJsonDocument doc(json);
+    AILogger::logVerifyRequest(m_logFileName, keyConfig.provider, getModelName(currentModel), endpoint, requestJson);
+
+    if (!networkManager) {
+        networkManager = new QNetworkAccessManager(this);
+    }
+
+    QJsonDocument doc(requestJson);
     QByteArray postData = doc.toJson();
 
     QNetworkRequest request;
@@ -257,7 +263,9 @@ void ChatTestDialog::onAIResponse(QPointer<QNetworkReply> reply)
         int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         QByteArray responseData = reply->readAll();
         QString responseText = QString::fromUtf8(responseData);
-        
+
+        AILogger::logVerifyError(m_logFileName, QString("HTTP %1: %2").arg(httpStatus).arg(errorMsg), responseText);
+
         QString detailedMsg = QString("错误: %1 (HTTP %2)\n响应: %3").arg(errorMsg).arg(httpStatus).arg(responseText.left(200));
         statusLabel->setText(QString("❌ 调用失败: %1").arg(detailedMsg));
         appendMessage(detailedMsg, false, aiName);
@@ -268,6 +276,8 @@ void ChatTestDialog::onAIResponse(QPointer<QNetworkReply> reply)
     QByteArray data = reply->readAll();
     QJsonDocument doc = QJsonDocument::fromJson(data);
     if (!doc.isObject()) {
+        AILogger::logVerifyError(m_logFileName, "Response is not JSON object", QString::fromUtf8(data));
+
         statusLabel->setText("❌ 响应格式错误");
         appendMessage("错误: 响应格式不正确", false, aiName);
         reply->deleteLater();
@@ -280,6 +290,8 @@ void ChatTestDialog::onAIResponse(QPointer<QNetworkReply> reply)
         int statusCode = rootObj["base_resp"].toObject()["status_code"].toInt();
         if (statusCode != 0) {
             QString errorMsg = rootObj["base_resp"].toObject()["status_msg"].toString();
+            AILogger::logVerifyError(m_logFileName, QString("API Error %1: %2").arg(statusCode).arg(errorMsg), QString::fromUtf8(data));
+
             statusLabel->setText(QString("❌ API错误: %1").arg(errorMsg));
             appendMessage(QString("API错误: %1").arg(errorMsg), false, aiName);
             reply->deleteLater();
@@ -310,9 +322,13 @@ void ChatTestDialog::onAIResponse(QPointer<QNetworkReply> reply)
     }
 
     if (responseText.isEmpty()) {
+        AILogger::logVerifyError(m_logFileName, "Could not parse response text", QString::fromUtf8(data));
+
         statusLabel->setText("❌ 无法解析响应");
         appendMessage("错误: 无法解析AI响应", false, aiName);
     } else {
+        AILogger::logVerifySuccess(m_logFileName, responseText);
+
         statusLabel->setText("✅ 调用成功");
         appendMessage(responseText, false, aiName);
     }
@@ -399,7 +415,15 @@ QString ChatTestDialog::getModelName(const QString &model)
         {"deepseek-v3", "deepseek-ai/DeepSeek-V3"},
         {"deepseek-v3.2", "deepseek-ai/DeepSeek-V3.2"},
         {"deepseek-coder", "deepseek-ai/DeepSeek-Coder-V2"},
-        {"qwen-coder", "qwen-coder-7b-instruct"}
+        {"qwen-coder", "qwen-coder-7b-instruct"},
+        {"glm", "glm-4-flash"},
+        {"glm-4", "glm-4"},
+        {"glm-4-flash", "glm-4-flash"},
+        {"glm-4-plus", "glm-4-plus"},
+        {"glm-4-flashx", "glm-4-flashx"},
+        {"glm-3-turbo", "glm-3-turbo"},
+        {"glm-4.6v", "glm-4.6v-flash"},
+        {"glm-4.7", "glm-4.7"}
     };
     
     if (models.contains(model)) {
@@ -460,6 +484,14 @@ QString ChatTestDialog::getModelDisplayName(const QString &model)
         {"deepseek-v3.2", "DeepSeek V3.2"},
         {"deepseek-coder", "DeepSeek Coder V2"},
         {"qwen-coder", "Qwen Coder"},
+        {"glm", "智谱AI GLM-4"},
+        {"glm-4", "智谱AI GLM-4"},
+        {"glm-4-flash", "智谱AI GLM-4 Flash"},
+        {"glm-4-plus", "智谱AI GLM-4 Plus"},
+        {"glm-4-flashx", "智谱AI GLM-4 FlashX"},
+        {"glm-3-turbo", "智谱AI GLM-3 Turbo"},
+        {"glm-4.6v", "智谱AI GLM-4.6V"},
+        {"glm-4.7", "智谱AI GLM-4.7"},
         {"local", "本地关键词匹配"}
     };
     
@@ -477,7 +509,9 @@ QString ChatTestDialog::getModelDisplayName(const QString &model)
         return "Google Gemini";
     } else if (model.startsWith("minimax") || model.startsWith("abab")) {
         return "MiniMax";
+    } else if (model.startsWith("glm")) {
+        return "智谱AI";
     }
-    
+
     return displayNames.value(model, "AI");
 }

@@ -369,6 +369,7 @@ void AIConfig::initProvidersAndModels()
         {"siliconflow", "SiliconFlow", "硅基流动"},
         {"deepseek", "DeepSeek", "DeepSeek"},
         {"stability", "Stability AI", "Stability AI"},
+        {"glm", "ZhipuAI", "智谱AI"},
         {"local", "Local", "本地模式"}
     };
 
@@ -401,6 +402,13 @@ void AIConfig::initProvidersAndModels()
         {"qwen-coder", "qwen-coder-7b-instruct", "siliconflow", "https://api.siliconflow.cn/v1/chat/completions"},
         {"minimax-m2.5", "MiniMaxAI/MiniMax-M2.5", "siliconflow", "https://api.siliconflow.cn/v1/chat/completions"},
         {"minimax-m2.1", "MiniMaxAI/MiniMax-M2.1", "siliconflow", "https://api.siliconflow.cn/v1/chat/completions"},
+        {"glm-4.7", "glm-4.7", "glm", "https://open.bigmodel.cn/api/paas/v4/chat/completions"},
+        {"glm-4.6v", "glm-4.6v-flash", "glm", "https://open.bigmodel.cn/api/paas/v4/chat/completions"},
+        {"glm-4", "glm-4", "glm", "https://open.bigmodel.cn/api/paas/v4/chat/completions"},
+        {"glm-4-flash", "glm-4-flash", "glm", "https://open.bigmodel.cn/api/paas/v4/chat/completions"},
+        {"glm-4-plus", "glm-4-plus", "glm", "https://open.bigmodel.cn/api/paas/v4/chat/completions"},
+        {"glm-4-flashx", "glm-4-flashx", "glm", "https://open.bigmodel.cn/api/paas/v4/chat/completions"},
+        {"glm-3-turbo", "glm-3-turbo", "glm", "https://open.bigmodel.cn/api/paas/v4/chat/completions"},
         {"local", "local", "local", ""}
     };
 }

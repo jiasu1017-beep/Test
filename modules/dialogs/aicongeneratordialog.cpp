@@ -1,5 +1,6 @@
 #include "aicongeneratordialog.h"
 #include "modules/core/aiconfig.h"
+#include "modules/core/ailogger.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QStandardPaths>
@@ -742,15 +743,12 @@ void AIIconGeneratorDialog::callImageAPI(const QString &provider, const QString 
     statusLabel->setText("🔄 正在生成图标...");
     generateBtn->setEnabled(false);
     regenerateBtn->setEnabled(false);
-    
-    QString logDir = QCoreApplication::applicationDirPath() + "/logs";
-    QDir dir(logDir);
-    if (!dir.exists()) {
-        dir.mkpath(logDir);
-    }
-    
-    m_logFileName = logDir + "/ai_icon_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".log";
-    
+
+    m_logFileName = AILogger::initLogFile(AILogger::ImageCall);
+
+    QJsonObject requestJson;
+    QString selectedSize = sizeCombo->currentData().toString();
+
     QNetworkRequest request;
     QUrl url(endpoint);
     if (!url.isValid()) {
@@ -761,77 +759,52 @@ void AIIconGeneratorDialog::callImageAPI(const QString &provider, const QString 
     request.setUrl(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("Authorization", QString("Bearer %1").arg(apiKey).toUtf8());
-    
-    QJsonObject json;
-    QString selectedSize = sizeCombo->currentData().toString();
-    
+
     if (provider == "openai") {
-        json["model"] = "dall-e-3";
-        json["prompt"] = prompt;
-        json["n"] = 1;
-        json["size"] = selectedSize;
-        json["response_format"] = "url";
+        requestJson["model"] = "dall-e-3";
+        requestJson["prompt"] = prompt;
+        requestJson["n"] = 1;
+        requestJson["size"] = selectedSize;
+        requestJson["response_format"] = "url";
     } else if (provider == "siliconflow") {
-        json["model"] = model;
-        json["prompt"] = prompt;
-        json["image_size"] = selectedSize;
-        json["batch_size"] = 1;
-        json["num_inference_steps"] = 20;
-        json["guidance_scale"] = 7.5;
+        requestJson["model"] = model;
+        requestJson["prompt"] = prompt;
+        requestJson["image_size"] = selectedSize;
+        requestJson["batch_size"] = 1;
+        requestJson["num_inference_steps"] = 20;
+        requestJson["guidance_scale"] = 7.5;
     } else if (provider == "stability") {
         QJsonObject textPrompts;
         textPrompts["text"] = prompt;
         textPrompts["weight"] = 1;
         QJsonArray promptsArray;
         promptsArray.append(textPrompts);
-        
+
         QStringList sizeParts = selectedSize.split("x");
         int width = sizeParts.size() > 0 ? sizeParts[0].toInt() : 1024;
         int height = sizeParts.size() > 1 ? sizeParts[1].toInt() : 1024;
-        
-        json["text_prompts"] = promptsArray;
-        json["cfg_scale"] = 7;
-        json["height"] = height;
-        json["width"] = width;
-        json["steps"] = 30;
-        json["samples"] = 1;
+
+        requestJson["text_prompts"] = promptsArray;
+        requestJson["cfg_scale"] = 7;
+        requestJson["height"] = height;
+        requestJson["width"] = width;
+        requestJson["steps"] = 30;
+        requestJson["samples"] = 1;
     }
-    
-    QJsonDocument doc(json);
-    
-    QFile logFile(m_logFileName);
-    if (logFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&logFile);
-        out.setCodec("UTF-8");
-        out << "=== AI Icon Generation Request ===" << "\n";
-        out << "Time: " << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << "\n";
-        out << "Provider: " << provider << "\n";
-        out << "Model: " << model << "\n";
-        out << "Endpoint: " << endpoint << "\n";
-        out << "Prompt: " << prompt << "\n";
-        out << "Request JSON:\n" << doc.toJson(QJsonDocument::Indented) << "\n\n";
-        logFile.close();
-    }
-    
+
+    AILogger::logVerifyRequest(m_logFileName, provider, model, endpoint, requestJson);
+
+    QJsonDocument doc(requestJson);
     m_currentReply = networkManager->post(request, doc.toJson());
     QNetworkReply *reply = m_currentReply;
     connect(reply, &QNetworkReply::finished, this, [this, reply, provider]() {
         if (reply->error() == QNetworkReply::NoError) {
             QByteArray data = reply->readAll();
             QJsonDocument responseDoc = QJsonDocument::fromJson(data);
-            
-            {
-                QFile logFile(m_logFileName);
-                if (logFile.open(QIODevice::Append | QIODevice::Text)) {
-                    QTextStream out(&logFile);
-                    out.setCodec("UTF-8");
-                    out << "\n=== AI Icon Generation Response ===" << "\n";
-                    out << "Status Code: " << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() << "\n";
-                    out << "Response:\n" << responseDoc.toJson(QJsonDocument::Indented) << "\n\n";
-                    logFile.close();
-                }
-            }
-            
+
+            int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            AILogger::logVerifyResponse(m_logFileName, httpStatus, responseDoc.object());
+
             QString imageUrl;
             
             if (provider == "openai") {
@@ -860,6 +833,7 @@ void AIIconGeneratorDialog::callImageAPI(const QString &provider, const QString 
                     }
                     previewLabel->setPixmap(pixmap.scaled(PREVIEW_SIZE, PREVIEW_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation));
                     statusLabel->setText("✅ 图标生成成功！");
+                    AILogger::logVerifySuccess(m_logFileName, "Icon generated and displayed successfully");
                     m_iconSaved = false;
                     
                     // 设置生成的图标路径
@@ -897,18 +871,9 @@ void AIIconGeneratorDialog::callImageAPI(const QString &provider, const QString 
         } else {
             QString errorMsg = reply->errorString();
             QByteArray errorData = reply->readAll();
-            
-            QFile logFile(m_logFileName);
-            if (logFile.open(QIODevice::Append | QIODevice::Text)) {
-                QTextStream out(&logFile);
-                out.setCodec("UTF-8");
-                out << "\n=== AI Icon Generation Response (ERROR) ===" << "\n";
-                out << "Error Code: " << reply->error() << "\n";
-                out << "Error: " << errorMsg << "\n";
-                out << "Response:\n" << errorData << "\n\n";
-                logFile.close();
-            }
-            
+
+            AILogger::logVerifyError(m_logFileName, errorMsg, QString::fromUtf8(errorData));
+
             if (!errorData.isEmpty()) {
                 QJsonDocument errorDoc = QJsonDocument::fromJson(errorData);
                 if (errorDoc.isObject()) {
@@ -928,16 +893,9 @@ void AIIconGeneratorDialog::callImageAPI(const QString &provider, const QString 
     QTimer::singleShot(60000, this, [this]() {
         if (m_currentReply && m_currentReply->isRunning()) {
             m_currentReply->abort();
-            
-            QFile logFile(m_logFileName);
-            if (logFile.open(QIODevice::Append | QIODevice::Text)) {
-                QTextStream out(&logFile);
-                out.setCodec("UTF-8");
-                out << "\n=== AI Icon Generation Response (TIMEOUT) ===" << "\n";
-                out << "Error: Request timeout after 60 seconds\n\n";
-                logFile.close();
-            }
-            
+
+            AILogger::logVerifyError(m_logFileName, "Request timeout after 60 seconds", "");
+
             statusLabel->setText("❌ 生成超时");
             generateBtn->setEnabled(true);
             m_currentReply = nullptr;
@@ -971,7 +929,8 @@ void AIIconGeneratorDialog::onDownloadFinished(QNetworkReply *reply)
 
         previewLabel->setPixmap(pixmap.scaled(PREVIEW_SIZE, PREVIEW_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         statusLabel->setText("✅ 图标生成成功！");
-        
+        AILogger::logVerifySuccess(m_logFileName, "Icon URL retrieved successfully");
+
         m_iconSaved = false;
         
         // 设置生成的图标路径
@@ -996,17 +955,9 @@ void AIIconGeneratorDialog::onDownloadFinished(QNetworkReply *reply)
         okBtn->setEnabled(true);
     } else {
         QString errorMsg = reply->errorString();
-        
-        QFile logFile(m_logFileName);
-        if (logFile.open(QIODevice::Append | QIODevice::Text)) {
-            QTextStream out(&logFile);
-            out.setCodec("UTF-8");
-            out << "\n=== AI Icon Generation Response (DOWNLOAD ERROR) ===" << "\n";
-            out << "Error Code: " << reply->error() << "\n";
-            out << "Error: " << errorMsg << "\n\n";
-            logFile.close();
-        }
-        
+
+        AILogger::logVerifyError(m_logFileName, errorMsg, "");
+
         statusLabel->setText("❌ 下载失败: " + errorMsg);
         generateBtn->setEnabled(true);
     }

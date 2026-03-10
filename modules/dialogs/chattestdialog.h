@@ -18,6 +18,10 @@
 #include <QHostInfo>
 #include <QCryptographicHash>
 #include <QTimer>
+#include <QDir>
+#include <QFile>
+#include <QTextStream>
+#include <QDateTime>
 
 class ChatTestDialog : public QDialog
 {
@@ -52,6 +56,7 @@ private:
     QNetworkAccessManager *networkManager;
     QPointer<QNetworkReply> currentReply;
     bool isProcessing;
+    QString m_logFileName;
 };
 
 #endif // CHATTESTDIALOG_H
