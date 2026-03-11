@@ -36,6 +36,8 @@ struct AppInfo {
     int remoteDesktopId;
 };
 
+Q_DECLARE_METATYPE(AppInfo)
+
 struct SnapshotInfo {
     int id;
     QString name;
@@ -256,5 +258,11 @@ private:
     int getDailyTaskCount(const QString &dateStr);
     bool taskExists(const QString &taskId);
 };
+
+Q_DECLARE_METATYPE(RemoteDesktopConnection)
+Q_DECLARE_METATYPE(SnapshotInfo)
+Q_DECLARE_METATYPE(AppCollection)
+Q_DECLARE_METATYPE(Task)
+Q_DECLARE_METATYPE(Category)
 
 #endif

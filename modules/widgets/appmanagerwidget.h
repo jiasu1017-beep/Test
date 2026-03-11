@@ -20,6 +20,7 @@
 #include <QStandardItemModel>
 #include "modules/core/database.h"
 #include "modules/core/applicationmanager.h"
+#include "modules/dialogs/batchimportdialog.h"
 #include "modules/dialogs/iconselectordialog.h"
 
 QT_BEGIN_NAMESPACE
@@ -73,6 +74,9 @@ private:
     void addWebsiteApp();
     void addFolderApp();
     void addDocumentApp();
+    void addAppsFromRegistry();
+    void addBookmarksFromBrowsers();
+    void addRunningApps();
     
     Database *db;
     ApplicationManager *appManager;

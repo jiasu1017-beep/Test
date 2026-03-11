@@ -10,6 +10,13 @@
 #include <QStyle>
 #include <QApplication>
 #include <QFileIconProvider>
+#include <QSettings>
+#include <QRegExp>
+#include <windows.h>
+#include <tlhelp32.h>
+#include <psapi.h>
+#include <shlobj.h>
+#include <processthreadsapi.h>
 
 ApplicationManager::ApplicationManager(Database *db, QObject *parent)
     : QObject(parent), m_db(db)
@@ -325,4 +332,320 @@ QIcon ApplicationManager::getAppIcon(const AppInfo &app)
     }
 
     return getFileIcon(app.path);
+}
+
+QList<AppInfo> ApplicationManager::getAppsFromRegistry()
+{
+    QList<AppInfo> apps;
+
+    QStringList registryPaths = {
+        R"(HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall)",
+        R"(HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall)",
+        R"(HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall)"
+    };
+
+    for (const QString &regPath : registryPaths) {
+        QSettings settings(regPath, QSettings::Registry64Format);
+        QStringList subkeys = settings.childGroups();
+
+        for (const QString &subkey : subkeys) {
+            settings.beginGroup(subkey);
+            QString displayName = settings.value("DisplayName").toString();
+            QString installLocation = settings.value("InstallLocation").toString();
+            QString displayIcon = settings.value("DisplayIcon").toString();
+            settings.endGroup();
+
+            if (displayName.isEmpty()) continue;
+
+            QString exePath;
+            if (!displayIcon.isEmpty()) {
+                QRegExp rx("\"?([^\"]+\\.exe)\"?.*");
+                if (rx.indexIn(displayIcon) != -1) {
+                    exePath = rx.cap(1);
+                }
+                if (exePath.isEmpty() && displayIcon.contains(".exe", Qt::CaseInsensitive)) {
+                    QStringList parts = displayIcon.split(",");
+                    if (!parts.isEmpty()) {
+                        exePath = parts.first().trimmed().remove("\"");
+                    }
+                }
+            }
+
+            if (exePath.isEmpty() && !installLocation.isEmpty()) {
+                QDir dir(installLocation);
+                QFileInfoList exeFiles = dir.entryInfoList(QStringList() << "*.exe", QDir::Files | QDir::Readable, QDir::Name);
+                if (!exeFiles.isEmpty()) {
+                    exePath = exeFiles.first().filePath();
+                }
+            }
+
+            if (exePath.isEmpty()) continue;
+
+            QFileInfo fileInfo(exePath);
+            if (!fileInfo.exists()) continue;
+
+            AppInfo app;
+            app.name = displayName;
+            app.path = exePath;
+            app.arguments = "";
+            app.iconPath = "";
+            app.category = "从注册表导入";
+            app.useCount = 0;
+            app.isFavorite = false;
+            app.type = AppType_Executable;
+            app.remoteDesktopId = -1;
+            app.sortOrder = 0;
+
+            bool exists = false;
+            for (const AppInfo &existing : apps) {
+                if (existing.path.compare(app.path, Qt::CaseInsensitive) == 0) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                apps.append(app);
+            }
+        }
+    }
+
+    return apps;
+}
+
+QList<AppInfo> ApplicationManager::getBookmarksFromBrowsers()
+{
+    QList<AppInfo> bookmarks;
+
+    QStringList browserPaths = {
+        QDir::homePath() + R"(/AppData/Local/Google/Chrome/User Data/Default/Bookmarks)",
+        QDir::homePath() + R"(/AppData/Roaming/Mozilla/Firefox/Profiles)",
+        QDir::homePath() + R"(/AppData/Local/Microsoft/Edge/User Data/Default/Bookmarks)",
+        QDir::homePath() + R"(/AppData/Roaming/Opera Software/Opera Stable/Bookmarks)"
+    };
+
+    QString chromePath = browserPaths[0];
+    if (QFile::exists(chromePath)) {
+        QFile file(chromePath);
+        if (file.open(QIODevice::ReadOnly)) {
+            QByteArray data = file.readAll();
+            file.close();
+
+            QJsonDocument doc = QJsonDocument::fromJson(data);
+            if (!doc.isNull() && doc.isObject()) {
+                parseChromeBookmarks(doc.object(), bookmarks, "Chrome");
+            }
+        }
+    }
+
+    QString edgePath = browserPaths[2];
+    if (QFile::exists(edgePath)) {
+        QFile file(edgePath);
+        if (file.open(QIODevice::ReadOnly)) {
+            QByteArray data = file.readAll();
+            file.close();
+
+            QJsonDocument doc = QJsonDocument::fromJson(data);
+            if (!doc.isNull() && doc.isObject()) {
+                parseChromeBookmarks(doc.object(), bookmarks, "Edge");
+            }
+        }
+    }
+
+    QString operaPath = browserPaths[3];
+    if (QFile::exists(operaPath)) {
+        QFile file(operaPath);
+        if (file.open(QIODevice::ReadOnly)) {
+            QByteArray data = file.readAll();
+            file.close();
+
+            QJsonDocument doc = QJsonDocument::fromJson(data);
+            if (!doc.isNull() && doc.isObject()) {
+                parseChromeBookmarks(doc.object(), bookmarks, "Opera");
+            }
+        }
+    }
+
+    QString firefoxBasePath = browserPaths[1];
+    QDir firefoxDir(firefoxBasePath);
+    if (firefoxDir.exists()) {
+        QStringList profiles = firefoxDir.entryList(QDir::Dirs);
+        for (const QString &profile : profiles) {
+            if (profile == "." || profile == "..") continue;
+            QString placesPath = firefoxBasePath + "/" + profile + "/places.sqlite";
+            if (QFile::exists(placesPath)) {
+                parseFirefoxBookmarks(placesPath, bookmarks);
+                break;
+            }
+        }
+    }
+
+    return bookmarks;
+}
+
+void ApplicationManager::parseChromeBookmarks(const QJsonObject &root, QList<AppInfo> &bookmarks, const QString &source)
+{
+    if (root.contains("roots")) {
+        QJsonObject roots = root["roots"].toObject();
+        parseChromeBookmarkFolder(roots["bookmark_bar"].toObject(), bookmarks, source);
+        parseChromeBookmarkFolder(roots["other"].toObject(), bookmarks, source);
+        parseChromeBookmarkFolder(roots["synced"].toObject(), bookmarks, source);
+    }
+}
+
+void ApplicationManager::parseChromeBookmarkFolder(const QJsonObject &folder, QList<AppInfo> &bookmarks, const QString &source)
+{
+    if (folder.isEmpty()) return;
+
+    if (folder["type"].toString() == "url") {
+        QString url = folder["url"].toString();
+        QString name = folder["name"].toString();
+
+        if (url.startsWith("http://", Qt::CaseInsensitive) || url.startsWith("https://", Qt::CaseInsensitive)) {
+            AppInfo app;
+            app.name = name;
+            app.path = url;
+            app.arguments = "";
+            app.iconPath = "";
+            app.category = "浏览器收藏夹-" + source;
+            app.useCount = 0;
+            app.isFavorite = false;
+            app.type = AppType_Website;
+            app.remoteDesktopId = -1;
+            app.sortOrder = 0;
+
+            bool exists = false;
+            for (const AppInfo &existing : bookmarks) {
+                if (existing.path.compare(app.path, Qt::CaseInsensitive) == 0) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                bookmarks.append(app);
+            }
+        }
+        return;
+    }
+
+    if (folder.contains("children")) {
+        QJsonArray children = folder["children"].toArray();
+        for (int i = 0; i < children.size(); ++i) {
+            if (children[i].isObject()) {
+                parseChromeBookmarkFolder(children[i].toObject(), bookmarks, source);
+            }
+        }
+    }
+}
+
+void ApplicationManager::parseFirefoxBookmarks(const QString &dbPath, QList<AppInfo> &bookmarks)
+{
+    Q_UNUSED(dbPath);
+    Q_UNUSED(bookmarks);
+}
+
+QList<AppInfo> ApplicationManager::getRunningApps()
+{
+    QList<AppInfo> runningApps;
+
+    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnapshot == INVALID_HANDLE_VALUE) {
+        return runningApps;
+    }
+
+    PROCESSENTRY32 pe32;
+    pe32.dwSize = sizeof(PROCESSENTRY32);
+
+    if (!Process32First(hSnapshot, &pe32)) {
+        CloseHandle(hSnapshot);
+        return runningApps;
+    }
+
+    QStringList excludedProcesses = {
+        "System", "Registry", "smss.exe", "csrss.exe", "wininit.exe", "services.exe",
+        "lsass.exe", "svchost.exe", "winlogon.exe", "dwm.exe", "explorer.exe",
+        "taskhostw.exe", "RuntimeBroker.exe", "SearchHost.exe", "StartMenuExperienceHost.exe",
+        "textinputhost.exe", "ShellExperienceHost.exe", "sihost.exe", "ctfmon.exe",
+        "fontdrvhost.exe", "conhost.exe", "dllhost.exe", "WmiPrvSE.exe",
+        "audiodg.exe", "SearchIndexer.exe", "SecurityHealthService.exe",
+        "MsMpEng.exe", "NisSrv.exe", "spoolsv.exe"
+    };
+
+    do {
+        QString processName = QString::fromUtf16(reinterpret_cast<const ushort*>(pe32.szExeFile));
+
+        bool shouldExclude = false;
+        for (const QString &excluded : excludedProcesses) {
+            if (processName.compare(excluded, Qt::CaseInsensitive) == 0) {
+                shouldExclude = true;
+                break;
+            }
+        }
+        if (shouldExclude) continue;
+
+        if (pe32.th32ProcessID == 0 || pe32.th32ProcessID == 4) continue;
+
+        QString exePath = getProcessPath(pe32.th32ProcessID);
+        if (exePath.isEmpty()) continue;
+
+        QFileInfo fileInfo(exePath);
+        if (!fileInfo.exists()) continue;
+
+        AppInfo app;
+        app.name = fileInfo.baseName();
+        app.path = exePath;
+        app.arguments = "";
+        app.iconPath = "";
+        app.category = "正在运行";
+        app.useCount = 0;
+        app.isFavorite = false;
+        app.type = AppType_Executable;
+        app.remoteDesktopId = -1;
+        app.sortOrder = 0;
+
+        bool exists = false;
+        for (const AppInfo &existing : runningApps) {
+            if (existing.path.compare(app.path, Qt::CaseInsensitive) == 0) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists) {
+            runningApps.append(app);
+        }
+
+    } while (Process32Next(hSnapshot, &pe32));
+
+    CloseHandle(hSnapshot);
+    return runningApps;
+}
+
+QString ApplicationManager::getProcessPath(DWORD processID)
+{
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processID);
+    if (!hProcess) {
+        return QString();
+    }
+
+    wchar_t path[MAX_PATH];
+    DWORD size = MAX_PATH;
+
+    typedef BOOL (WINAPI * QueryFullProcessImageNameWType)(HANDLE, DWORD, LPWSTR, PDWORD);
+    HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
+    QueryFullProcessImageNameWType QueryFullProcessImageNameWFunc = (QueryFullProcessImageNameWType)GetProcAddress(kernel32, "QueryFullProcessImageNameW");
+
+    if (QueryFullProcessImageNameWFunc) {
+        if (QueryFullProcessImageNameWFunc(hProcess, 0, path, &size)) {
+            CloseHandle(hProcess);
+            return QString::fromUtf16(reinterpret_cast<const ushort*>(path));
+        }
+    }
+
+    size = MAX_PATH;
+    if (GetModuleFileNameExW(hProcess, NULL, path, size) > 0) {
+        CloseHandle(hProcess);
+        return QString::fromUtf16(reinterpret_cast<const ushort*>(path));
+    }
+
+    CloseHandle(hProcess);
+    return QString();
 }

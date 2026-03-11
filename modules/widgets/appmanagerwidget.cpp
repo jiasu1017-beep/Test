@@ -11,6 +11,11 @@
 #include <QPainter>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QListWidget>
+#include <QListWidgetItem>
+#include <QLineEdit>
+#include <QCheckBox>
+#include <QTimer>
 #include <windows.h>
 #include <shellapi.h>
 
@@ -270,80 +275,123 @@ void AppManagerWidget::onAddApp()
 {
     QDialog dialog(this);
     dialog.setWindowTitle("添加应用");
-    dialog.setMinimumWidth(400);
+    dialog.setMinimumWidth(450);
     dialog.setStyleSheet("QDialog { background-color: #fafbfc; }");
-    
+
     QVBoxLayout *layout = new QVBoxLayout(&dialog);
     layout->setSpacing(16);
     layout->setContentsMargins(24, 24, 24, 24);
-    
+
     QLabel *label = new QLabel("请选择要添加的内容类型：", &dialog);
     label->setStyleSheet("font-size: 14px; color: #2d3436; font-weight: 500;");
     layout->addWidget(label);
-    
+
     QPushButton *btnExecutable = new QPushButton("应用程序 (.exe/.bat/.cmd)", &dialog);
     btnExecutable->setStyleSheet(
         "QPushButton { background-color: #00b894; color: white; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
         "QPushButton:hover { background-color: #00a085; }"
     );
     layout->addWidget(btnExecutable);
-    
+
     QPushButton *btnWebsite = new QPushButton("网站链接", &dialog);
     btnWebsite->setStyleSheet(
         "QPushButton { background-color: #0984e3; color: white; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
         "QPushButton:hover { background-color: #0770c4; }"
     );
     layout->addWidget(btnWebsite);
-    
+
     QPushButton *btnFolder = new QPushButton("文件夹", &dialog);
     btnFolder->setStyleSheet(
         "QPushButton { background-color: #fd79a8; color: white; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
         "QPushButton:hover { background-color: #f06795; }"
     );
     layout->addWidget(btnFolder);
-    
+
     QPushButton *btnDocument = new QPushButton("文档文件 (.docx/.pdf/.txt等)", &dialog);
     btnDocument->setStyleSheet(
         "QPushButton { background-color: #6c5ce7; color: white; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
         "QPushButton:hover { background-color: #5f4fd6; }"
     );
     layout->addWidget(btnDocument);
-    
+
+    QLabel *label2 = new QLabel("批量导入：", &dialog);
+    label2->setStyleSheet("font-size: 13px; color: #636e72; font-weight: 500; margin-top: 8px;");
+    layout->addWidget(label2);
+
+    QPushButton *btnRegistry = new QPushButton("从注册表导入应用", &dialog);
+    btnRegistry->setStyleSheet(
+        "QPushButton { background-color: #e17055; color: white; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
+        "QPushButton:hover { background-color: #d35d4c; }"
+    );
+    layout->addWidget(btnRegistry);
+
+    QPushButton *btnBookmarks = new QPushButton("从浏览器收藏夹导入", &dialog);
+    btnBookmarks->setStyleSheet(
+        "QPushButton { background-color: #00cec9; color: white; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
+        "QPushButton:hover { background-color: #00b5b0; }"
+    );
+    layout->addWidget(btnBookmarks);
+
+    QPushButton *btnRunning = new QPushButton("导入当前运行的应用", &dialog);
+    btnRunning->setStyleSheet(
+        "QPushButton { background-color: #fdcb6e; color: white; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
+        "QPushButton:hover { background-color: #f0b960; }"
+    );
+    layout->addWidget(btnRunning);
+
     QPushButton *btnCancel = new QPushButton("取消", &dialog);
     btnCancel->setStyleSheet(
         "QPushButton { background-color: #b2bec3; color: white; padding: 12px 28px; border-radius: 8px; font-weight: bold; font-size: 13px; } "
         "QPushButton:hover { background-color: #a0aab0; }"
     );
     layout->addWidget(btnCancel, 0, Qt::AlignCenter);
-    
+
     bool *accepted = new bool(false);
-    
+
     connect(btnExecutable, &QPushButton::clicked, [&]() {
         *accepted = true;
         addExecutableApp();
         dialog.accept();
     });
-    
+
     connect(btnWebsite, &QPushButton::clicked, [&]() {
         *accepted = true;
         addWebsiteApp();
         dialog.accept();
     });
-    
+
     connect(btnFolder, &QPushButton::clicked, [&]() {
         *accepted = true;
         addFolderApp();
         dialog.accept();
     });
-    
+
     connect(btnDocument, &QPushButton::clicked, [&]() {
         *accepted = true;
         addDocumentApp();
         dialog.accept();
     });
-    
+
+    connect(btnRegistry, &QPushButton::clicked, [&]() {
+        *accepted = true;
+        addAppsFromRegistry();
+        dialog.accept();
+    });
+
+    connect(btnBookmarks, &QPushButton::clicked, [&]() {
+        *accepted = true;
+        addBookmarksFromBrowsers();
+        dialog.accept();
+    });
+
+    connect(btnRunning, &QPushButton::clicked, [&]() {
+        *accepted = true;
+        addRunningApps();
+        dialog.accept();
+    });
+
     connect(btnCancel, &QPushButton::clicked, &dialog, &QDialog::reject);
-    
+
     dialog.exec();
     delete accepted;
 }
@@ -458,9 +506,54 @@ void AppManagerWidget::addDocumentApp()
     app.remoteDesktopId = -1;
     
     app.sortOrder = db->getMaxSortOrder() + 1;
-    
+
     db->addApp(app);
     refreshAppList();
+}
+
+void AppManagerWidget::addAppsFromRegistry()
+{
+    QList<AppInfo> apps = ApplicationManager::getAppsFromRegistry();
+
+    if (apps.isEmpty()) {
+        QMessageBox::information(this, "提示", "未从注册表中找到任何应用程序");
+        return;
+    }
+
+    BatchImportDialog dialog("从注册表导入应用", "找到", apps, db, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        refreshAppList();
+    }
+}
+
+void AppManagerWidget::addBookmarksFromBrowsers()
+{
+    QList<AppInfo> bookmarks = ApplicationManager::getBookmarksFromBrowsers();
+
+    if (bookmarks.isEmpty()) {
+        QMessageBox::information(this, "提示", "未从浏览器收藏夹中找到任何网址\n支持的浏览器：Chrome、Edge、Opera");
+        return;
+    }
+
+    BatchImportDialog dialog("从浏览器收藏夹导入", "找到", bookmarks, db, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        refreshAppList();
+    }
+}
+
+void AppManagerWidget::addRunningApps()
+{
+    QList<AppInfo> runningApps = ApplicationManager::getRunningApps();
+
+    if (runningApps.isEmpty()) {
+        QMessageBox::information(this, "提示", "未找到任何正在运行的用户应用程序");
+        return;
+    }
+
+    BatchImportDialog dialog("导入当前运行的应用", "找到", runningApps, db, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        refreshAppList();
+    }
 }
 
 void AppManagerWidget::onDeleteApp()

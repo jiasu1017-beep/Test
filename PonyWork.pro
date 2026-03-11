@@ -28,6 +28,7 @@ SOURCES += main.cpp \
            modules/update/updatedialog.cpp \
            modules/update/updateprogressdialog.cpp \
            modules/dialogs/desktopsnapshotdialog.cpp \
+           modules/dialogs/batchimportdialog.cpp \
            modules/dialogs/shortcutdialog.cpp \
            modules/dialogs/iconselectordialog.cpp \
            modules/dialogs/aicongeneratordialog.cpp \
@@ -55,6 +56,7 @@ HEADERS  += mainwindow.h \
             modules/update/updatedialog.h \
             modules/update/updateprogressdialog.h \
             modules/dialogs/desktopsnapshotdialog.h \
+            modules/dialogs/batchimportdialog.h \
             modules/dialogs/shortcutdialog.h \
             modules/dialogs/iconselectordialog.h \
             modules/dialogs/aicongeneratordialog.h \
