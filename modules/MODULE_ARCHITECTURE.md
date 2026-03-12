@@ -66,11 +66,9 @@ PonyWork/
 
 **包含文件**:
 - `appmanagerwidget.h/cpp` - 应用管理器组件
-- `fishmodewidget.h/cpp` - 鱼模式组件
 - `shutdownwidget.h/cpp` - 关机管理组件
 - `settingswidget.h/cpp` - 设置组件
 - `collectionmanagerwidget.h/cpp` - 收藏管理器组件
-- `recommendedappswidget.h/cpp` - 推荐应用组件
 - `remotedesktopwidget.h/cpp` - 远程桌面组件
 - `snapshotmanagerwidget.h/cpp` - 快照管理组件
 - `widgets_module.h` - 模块导出头文件

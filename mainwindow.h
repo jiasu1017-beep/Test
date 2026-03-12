@@ -22,11 +22,9 @@
 struct ShortcutStat;
 
 class AppManagerWidget;
-class FishModeWidget;
 class ShutdownWidget;
 class SettingsWidget;
 class CollectionManagerWidget;
-class RecommendedAppsWidget;
 class UpdateDialog;
 class UpdateProgressDialog;
 class RemoteDesktopWidget;
@@ -93,11 +91,9 @@ private:
     Database *db;
     QTabWidget *tabWidget;
     AppManagerWidget *appManagerWidget;
-    FishModeWidget *fishModeWidget;
     ShutdownWidget *shutdownWidget;
     SettingsWidget *settingsWidget;
     CollectionManagerWidget *collectionManagerWidget;
-    RecommendedAppsWidget *recommendedAppsWidget;
     QSystemTrayIcon *trayIcon;
     QMenu *trayMenu;
     QAction *showWindowAction;

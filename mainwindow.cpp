@@ -1,10 +1,8 @@
 #include "mainwindow.h"
 #include "modules/widgets/appmanagerwidget.h"
-#include "modules/widgets/fishmodewidget.h"
 #include "modules/widgets/shutdownwidget.h"
 #include "modules/widgets/settingswidget.h"
 #include "modules/widgets/collectionmanagerwidget.h"
-#include "modules/widgets/recommendedappswidget.h"
 #include "modules/widgets/worklogwidget.h"
 #include "modules/widgets/bottomappbar.h"
 #include "modules/update/updatedialog.h"
@@ -105,12 +103,10 @@ void MainWindow::setupUI()
     appManagerWidget = new AppManagerWidget(db, this);
     collectionManagerWidget = new CollectionManagerWidget(db, this);
     remoteDesktopWidget = new RemoteDesktopWidget(db, this);
-    fishModeWidget = new FishModeWidget(this);
     shutdownWidget = new ShutdownWidget(this);
     settingsWidget = new SettingsWidget(db, this);
     settingsWidget->setUpdateManager(updateManager);
     settingsWidget->setMainWindow(this);
-    recommendedAppsWidget = new RecommendedAppsWidget(this);
     workLogWidget = new WorkLogWidget(db, this);
     
     connect(appManagerWidget, &AppManagerWidget::resetAppsRequested, this, &MainWindow::resetApps);
@@ -124,8 +120,6 @@ void MainWindow::setupUI()
     tabWidget->addTab(collectionManagerWidget, QApplication::style()->standardIcon(QStyle::SP_DirHomeIcon), "集合管理");
     tabWidget->addTab(workLogWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView), "工作日志");
     tabWidget->addTab(remoteDesktopWidget, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "远程桌面");
-    tabWidget->addTab(recommendedAppsWidget, QApplication::style()->standardIcon(QStyle::SP_ArrowForward), "推荐应用");
-    tabWidget->addTab(fishModeWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogListView), "摸鱼模式");
     tabWidget->addTab(shutdownWidget, QApplication::style()->standardIcon(QStyle::SP_BrowserStop), "定时关机");
     tabWidget->addTab(settingsWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogInfoView), "设置");
  

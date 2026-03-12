@@ -14,11 +14,9 @@ SOURCES += main.cpp \
            modules/core/logger.cpp \
            modules/core/applicationmanager.cpp \
            modules/widgets/appmanagerwidget.cpp \
-           modules/widgets/fishmodewidget.cpp \
            modules/widgets/shutdownwidget.cpp \
            modules/widgets/settingswidget.cpp \
            modules/widgets/collectionmanagerwidget.cpp \
-           modules/widgets/recommendedappswidget.cpp \
            modules/widgets/remotedesktopwidget.cpp \
            modules/widgets/snapshotmanagerwidget.cpp \
            modules/widgets/appcollectionupdater.cpp \
@@ -41,11 +39,9 @@ HEADERS  += mainwindow.h \
             modules/core/logger.h \
             modules/core/applicationmanager.h \
             modules/widgets/appmanagerwidget.h \
-            modules/widgets/fishmodewidget.h \
             modules/widgets/shutdownwidget.h \
             modules/widgets/settingswidget.h \
             modules/widgets/collectionmanagerwidget.h \
-            modules/widgets/recommendedappswidget.h \
             modules/widgets/remotedesktopwidget.h \
             modules/widgets/snapshotmanagerwidget.h \
             modules/widgets/appcollectionupdater.h \
@@ -68,7 +64,6 @@ HEADERS  += mainwindow.h \
             modules/dialogs/dialogs_module.h
 
 FORMS += modules/ui/appmanagerwidget.ui \
-         modules/ui/fishmodewidget.ui \
          modules/ui/shutdownwidget.ui \
          modules/ui/settingswidget.ui \
          modules/ui/mainwindow.ui

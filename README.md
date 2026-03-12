@@ -67,11 +67,6 @@
 - ✅ 定时休眠功能
 - ✅ 取消定时任务
 
-### 🐟 摸鱼模式
-- ✅ 老板键功能
-- ✅ 快速切换状态
-- ✅ 伪装窗口功能
-
 ### ⚙️ 设置
 - ✅ 开机自动启动
 - ✅ 关闭行为设置
@@ -119,17 +114,14 @@ PonyWork/
 │   └── wechater.jpg        # 微信公众号图片
 ├── ui/                      # Qt Designer UI 文件
 │   ├── appmanagerwidget.ui
-│   ├── fishmodewidget.ui
 │   ├── mainwindow.ui
 │   ├── settingswidget.ui
 │   └── shutdownwidget.ui
 ├── appmanagerwidget.cpp/h   # 应用管理模块
 ├── collectionmanagerwidget.cpp/h # 集合管理模块
 ├── database.cpp/h          # 数据存储模块
-├── fishmodewidget.cpp/h    # 摸鱼模式模块
 ├── main.cpp                # 程序入口
 ├── mainwindow.cpp/h        # 主窗口模块
-├── recommendedappswidget.cpp/h # 推荐应用模块
 ├── settingswidget.cpp/h    # 设置模块
 ├── shutdownwidget.cpp/h    # 定时关机模块
 ├── PonyWork.pro            # qmake 项目文件
@@ -146,10 +138,8 @@ PonyWork/
 | 应用管理 | appmanagerwidget.cpp/h | 应用列表的显示、添加、删除、启动 |
 | 集合管理 | collectionmanagerwidget.cpp/h | 应用集合的管理和批量启动 |
 | 数据存储 | database.cpp/h | JSON 数据的读写和管理 |
-| 摸鱼模式 | fishmodewidget.cpp/h | 老板键和状态切换功能 |
 | 定时关机 | shutdownwidget.cpp/h | 定时关机、重启、休眠功能 |
 | 设置 | settingswidget.cpp/h | 应用设置和关于对话框 |
-| 推荐应用 | recommendedappswidget.cpp/h | 推荐应用的浏览和搜索 |
 
 ---
 
