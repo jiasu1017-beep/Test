@@ -16,6 +16,7 @@
 #include <QLineEdit>
 #include <QCheckBox>
 #include <QTimer>
+#include <QMetaType>
 #include <windows.h>
 #include <shellapi.h>
 
@@ -36,7 +37,14 @@ void AppIconDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
         painter->setBrush(Qt::NoBrush);
         painter->drawRoundedRect(rect.adjusted(2, 2, -2, -2), 8, 8);
     } else if (option.state & QStyle::State_MouseOver) {
-        painter->fillRect(rect, QColor(240, 248, 255, 150));
+        QLinearGradient hoverGradient(rect.topLeft(), rect.bottomLeft());
+        hoverGradient.setColorAt(0, QColor(66, 165, 245, 40));
+        hoverGradient.setColorAt(1, QColor(30, 136, 229, 25));
+        painter->fillRect(rect, hoverGradient);
+        
+        painter->setPen(QColor(66, 165, 245, 80));
+        painter->setBrush(Qt::NoBrush);
+        painter->drawRoundedRect(rect.adjusted(2, 2, -2, -2), 8, 8);
     }
     
     int iconSize = 72;
@@ -91,10 +99,112 @@ QSize AppIconDelegate::sizeHint(const QStyleOptionViewItem &option, const QModel
     return QSize(110, 130);
 }
 
+void AppListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    
+    QRect rect = option.rect;
+    
+    if (option.state & QStyle::State_Selected) {
+        QLinearGradient gradient(rect.topLeft(), rect.bottomRight());
+        gradient.setColorAt(0, QColor(66, 165, 245, 60));
+        gradient.setColorAt(1, QColor(30, 136, 229, 40));
+        painter->fillRect(rect, gradient);
+    } else if (option.state & QStyle::State_MouseOver) {
+        QLinearGradient hoverGradient(rect.topLeft(), rect.bottomRight());
+        hoverGradient.setColorAt(0, QColor(66, 165, 245, 25));
+        hoverGradient.setColorAt(1, QColor(30, 136, 229, 15));
+        painter->fillRect(rect, hoverGradient);
+    }
+    
+    AppInfo app = index.data(Qt::UserRole + 1).value<AppInfo>();
+    
+    QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
+    if (!icon.isNull()) {
+        QPixmap pixmap = icon.pixmap(QSize(32, 32));
+        int iconY = rect.top() + (rect.height() - 32) / 2;
+        painter->drawPixmap(QRect(rect.left() + 10, iconY, 32, 32), pixmap);
+    }
+    
+    QString typeText;
+    switch (app.type) {
+        case AppType_Executable: typeText = "应用程序"; break;
+        case AppType_Website: typeText = "网站"; break;
+        case AppType_Folder: typeText = "文件夹"; break;
+        case AppType_Document: typeText = "文档"; break;
+        case AppType_RemoteDesktop: typeText = "远程桌面"; break;
+        default: typeText = "未知"; break;
+    }
+    
+    QString infoText = QString("%1 | %2").arg(typeText, app.path);
+    if (app.useCount > 0) {
+        infoText += QString(" | 使用次数: %1").arg(app.useCount);
+    }
+    
+    QString nameText = index.data(Qt::DisplayRole).toString();
+    
+    QFont nameFont = painter->font();
+    nameFont.setPixelSize(13);
+    nameFont.setBold(true);
+    painter->setFont(nameFont);
+    painter->setPen(QColor(51, 51, 51));
+    
+    QRect nameRect(rect.left() + 52, rect.top() + 8, rect.width() - 140, 20);
+    painter->drawText(nameRect, Qt::AlignLeft | Qt::AlignVCenter, nameText);
+    
+    QFont infoFont = painter->font();
+    infoFont.setPixelSize(10);
+    infoFont.setBold(false);
+    painter->setFont(infoFont);
+    painter->setPen(QColor(149, 165, 166));
+    
+    QRect infoRect(rect.left() + 52, rect.top() + 28, rect.width() - 140, 18);
+    QString elidedInfo = painter->fontMetrics().elidedText(infoText, Qt::ElideMiddle, infoRect.width());
+    painter->drawText(infoRect, Qt::AlignLeft | Qt::AlignVCenter, elidedInfo);
+    
+    if (app.isFavorite) {
+        QRect favRect(rect.right() - 28, rect.top() + (rect.height() - 14) / 2, 14, 14);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(QColor(241, 196, 15));
+        
+        QPainterPath starPath;
+        QPointF center = favRect.center();
+        qreal outerRadius = 7;
+        qreal innerRadius = 3;
+        const int points = 5;
+        
+        for (int i = 0; i < points * 2; ++i) {
+            qreal radius = (i % 2 == 0) ? outerRadius : innerRadius;
+            qreal angle = i * M_PI / points - M_PI / 2;
+            qreal x = center.x() + radius * qCos(angle);
+            qreal y = center.y() + radius * qSin(angle);
+            if (i == 0) {
+                starPath.moveTo(x, y);
+            } else {
+                starPath.lineTo(x, y);
+            }
+        }
+        starPath.closeSubpath();
+        painter->drawPath(starPath);
+    }
+    
+    painter->restore();
+}
+
+QSize AppListDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    Q_UNUSED(option);
+    Q_UNUSED(index);
+    return QSize(300, 56);
+}
+
 AppManagerWidget::AppManagerWidget(Database *db, QWidget *parent)
     : QWidget(parent), db(db), ui(new Ui::AppManagerWidget)
 {
     ui->setupUi(this);
+    
+    qRegisterMetaType<AppInfo>("AppInfo");
     
     appManager = new ApplicationManager(db, this);
     connect(appManager, &ApplicationManager::appLaunched, this, [this](const AppInfo &app) {
@@ -102,6 +212,7 @@ AppManagerWidget::AppManagerWidget(Database *db, QWidget *parent)
     });
     
     iconDelegate = new AppIconDelegate(this);
+    listDelegate = new AppListDelegate(this);
     appModel = new QStandardItemModel(this);
     ui->appListView->setModel(appModel);
     ui->appListView->setItemDelegate(iconDelegate);
@@ -177,7 +288,7 @@ void AppManagerWidget::onIconViewMode()
 void AppManagerWidget::onListViewMode()
 {
     ui->appListView->setViewMode(QListView::ListMode);
-    ui->appListView->setItemDelegate(nullptr);
+    ui->appListView->setItemDelegate(listDelegate);
     ui->appListView->setIconSize(QSize(32, 32));
     ui->appListView->setSpacing(5);
     ui->iconViewButton->setChecked(false);
@@ -256,6 +367,7 @@ void AppManagerWidget::refreshAppList()
     for (const AppInfo &app : apps) {
         QStandardItem *item = new QStandardItem(app.name);
         item->setData(app.id, Qt::UserRole);
+        item->setData(QVariant::fromValue(app), Qt::UserRole + 1);
         item->setIcon(getAppIcon(app));
         
         if (app.isFavorite) {

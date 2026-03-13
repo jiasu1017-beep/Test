@@ -91,7 +91,7 @@
      <item>
       <widget class="QPushButton" name="iconViewButton">
        <property name="text">
-        <string>大图标</string>
+        <string>图标</string>
        </property>
        <property name="checkable">
         <bool>true</bool>

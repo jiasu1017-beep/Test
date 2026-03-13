@@ -32,7 +32,7 @@ void drawProfessionalIconBackground(QPainter *painter, const QRect &rect, const 
     if (isSelected) {
         baseColor = baseColor.lighter(115);
     } else if (isHovered) {
-        baseColor = baseColor.lighter(108);
+        baseColor = baseColor.lighter(115);
     }
     
     QLinearGradient gradient(rect.topLeft(), rect.bottomRight());
@@ -216,9 +216,13 @@ void CollectionItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem
         painter->drawRoundedRect(itemRect.adjusted(1, 1, -1, -1), 12, 12);
     } else if (isHovered) {
         QLinearGradient bgGrad(itemRect.topLeft(), itemRect.bottomLeft());
-        bgGrad.setColorAt(0, QColor(0, 0, 0, 10));
-        bgGrad.setColorAt(1, QColor(0, 0, 0, 4));
+        bgGrad.setColorAt(0, QColor(52, 152, 219, 30));
+        bgGrad.setColorAt(1, QColor(52, 152, 219, 18));
         painter->fillRect(itemRect, bgGrad);
+        
+        painter->setPen(QColor(52, 152, 219, 80));
+        painter->setBrush(Qt::NoBrush);
+        painter->drawRoundedRect(itemRect.adjusted(1, 1, -1, -1), 12, 12);
     }
     
     int collectionId = index.data(Qt::UserRole).toInt();

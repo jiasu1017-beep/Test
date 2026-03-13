@@ -18,6 +18,8 @@
 #include <QStyledItemDelegate>
 #include <QPainter>
 #include <QStandardItemModel>
+#include <QPainterPath>
+#include <QtMath>
 #include "modules/core/database.h"
 #include "modules/core/applicationmanager.h"
 #include "modules/dialogs/batchimportdialog.h"
@@ -31,6 +33,15 @@ class AppIconDelegate : public QStyledItemDelegate
 {
 public:
     explicit AppIconDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+    
+    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+};
+
+class AppListDelegate : public QStyledItemDelegate
+{
+public:
+    explicit AppListDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
     
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
@@ -84,6 +95,7 @@ private:
     QStandardItemModel *appModel;
     QFileIconProvider iconProvider;
     AppIconDelegate *iconDelegate;
+    AppListDelegate *listDelegate;
 };
 
 #endif
