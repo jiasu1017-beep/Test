@@ -114,6 +114,36 @@
        </property>
       </widget>
      </item>
+     <item>
+      <spacer name="categorySpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>20</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QLabel" name="categoryLabel">
+       <property name="text">
+        <string>分类:</string>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QLabel { padding-right: 5px; }</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="categoryComboBox">
+       <property name="minimumWidth">
+        <number>120</number>
+       </property>
+      </widget>
+     </item>
     </layout>
    </item>
    <item>

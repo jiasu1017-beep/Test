@@ -271,6 +271,94 @@ void AppManagerWidget::setupUI()
                                     "QPushButton { background-color: #e0e0e0; color: #333; }");
     connect(ui->listViewButton, &QPushButton::clicked, this, &AppManagerWidget::onListViewMode);
     
+    ui->categoryComboBox->setStyleSheet(
+        "QComboBox {"
+        "   padding: 6px 12px;"
+        "   border: 1px solid #dcdcdc;"
+        "   border-radius: 6px;"
+        "   background-color: white;"
+        "   color: #333;"
+        "   font-size: 13px;"
+        "}"
+        "QComboBox:hover {"
+        "   border-color: #1976d2;"
+        "}"
+        "QComboBox:focus {"
+        "   border-color: #1976d2;"
+        "}"
+        "QComboBox::drop-down {"
+        "   border: none;"
+        "   width: 24px;"
+        "}"
+        "QComboBox::down-arrow {"
+        "   image: none;"
+        "   border-left: 4px solid transparent;"
+        "   border-right: 4px solid transparent;"
+        "   border-top: 6px solid #666;"
+        "   margin-right: 8px;"
+        "}"
+        "QComboBox QAbstractItemView {"
+        "   border: 1px solid #e0e0e0;"
+        "   border-radius: 6px;"
+        "   background-color: white;"
+        "   selection-background-color: #e3f2fd;"
+        "   selection-color: #1976d2;"
+        "   padding: 4px;"
+        "}"
+        "QComboBox QAbstractItemView::item {"
+        "   padding: 8px 12px;"
+        "   border-radius: 4px;"
+        "}"
+        "QComboBox QAbstractItemView::item:selected {"
+        "   background-color: #e3f2fd;"
+        "   color: #1976d2;"
+        "}"
+        "QComboBox QAbstractItemView::item:hover {"
+        "   background-color: #f5f5f5;"
+        "}"
+    );
+    
+    QListView *listView = new QListView();
+    listView->setSpacing(2);
+    ui->categoryComboBox->setView(listView);
+    
+    connect(ui->categoryComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        QStandardItemModel *model = qobject_cast<QStandardItemModel*>(ui->categoryComboBox->model());
+        if (!model) return;
+        
+        QStandardItem *item = model->item(index);
+        if (!item) return;
+        
+        QString data = item->data(Qt::UserRole).toString();
+        
+        if (data == "all") {
+            currentCategory = "";
+            currentType = -1;
+        } else if (data == "type_Executable") {
+            currentCategory = "";
+            currentType = AppType_Executable;
+        } else if (data == "type_Website") {
+            currentCategory = "";
+            currentType = AppType_Website;
+        } else if (data == "type_Folder") {
+            currentCategory = "";
+            currentType = AppType_Folder;
+        } else if (data == "type_Document") {
+            currentCategory = "";
+            currentType = AppType_Document;
+        } else if (data == "type_RemoteDesktop") {
+            currentCategory = "";
+            currentType = AppType_RemoteDesktop;
+        } else if (data.startsWith("category_")) {
+            currentCategory = data.mid(9);
+            currentType = -1;
+        }
+        
+        filterAppsByCategory(currentCategory);
+    });
+    
+    loadCategories();
+    
     connect(ui->appListView, &QListView::customContextMenuRequested, this, &AppManagerWidget::onShowContextMenu);
     connect(ui->appListView, &QListView::doubleClicked, this, &AppManagerWidget::onAppItemDoubleClicked);
 }
@@ -362,9 +450,9 @@ void AppManagerWidget::refreshAppList()
 {
     appModel->clear();
     
-    QList<AppInfo> apps = db->getAllApps();
+    allApps = db->getAllApps();
     
-    for (const AppInfo &app : apps) {
+    for (const AppInfo &app : allApps) {
         QStandardItem *item = new QStandardItem(app.name);
         item->setData(app.id, Qt::UserRole);
         item->setData(QVariant::fromValue(app), Qt::UserRole + 1);
@@ -375,6 +463,84 @@ void AppManagerWidget::refreshAppList()
         }
         
         appModel->appendRow(item);
+    }
+    
+    filterAppsByCategory(currentCategory);
+}
+
+void AppManagerWidget::loadCategories()
+{
+    QStandardItemModel *model = new QStandardItemModel(this);
+    
+    QStandardItem *allItem = new QStandardItem("全部");
+    allItem->setData("all", Qt::UserRole);
+    allItem->setForeground(QColor("#333333"));
+    model->appendRow(allItem);
+    
+    QStandardItem *typeHeader = new QStandardItem("按类型筛选");
+    typeHeader->setData("header", Qt::UserRole);
+    typeHeader->setForeground(QColor("#1976d2"));
+    typeHeader->setFont(QFont("Microsoft YaHei", 10, QFont::Bold));
+    typeHeader->setEnabled(false);
+    model->appendRow(typeHeader);
+    
+    QStringList typeItems = {"应用程序", "网站", "文件夹", "文档", "远程桌面"};
+    QStringList typeKeys = {"Executable", "Website", "Folder", "Document", "RemoteDesktop"};
+    for (int i = 0; i < typeItems.size(); ++i) {
+        QStandardItem *item = new QStandardItem("  " + typeItems[i]);
+        item->setData("type_" + typeKeys[i], Qt::UserRole);
+        item->setForeground(QColor("#555555"));
+        model->appendRow(item);
+    }
+    
+    QList<Category> categories = db->getAllCategories();
+    if (!categories.isEmpty()) {
+        QStandardItem *catHeader = new QStandardItem("按分类筛选");
+        catHeader->setData("header", Qt::UserRole);
+        catHeader->setForeground(QColor("#1976d2"));
+        catHeader->setFont(QFont("Microsoft YaHei", 10, QFont::Bold));
+        catHeader->setEnabled(false);
+        model->appendRow(catHeader);
+        
+        for (const Category &cat : categories) {
+            QStandardItem *item = new QStandardItem("  " + cat.name);
+            item->setData("category_" + cat.name, Qt::UserRole);
+            item->setForeground(QColor("#555555"));
+            model->appendRow(item);
+        }
+    }
+    
+    ui->categoryComboBox->setModel(model);
+    
+    currentCategory = "";
+    currentType = -1;
+}
+
+void AppManagerWidget::filterAppsByCategory(const QString &category)
+{
+    appModel->clear();
+    
+    for (const AppInfo &app : allApps) {
+        bool matchCategory = category.isEmpty() || category == "全部" || 
+                           app.category == category.trimmed();
+        
+        bool matchType = true;
+        if (currentType >= 0) {
+            matchType = (app.type == currentType);
+        }
+        
+        if (matchCategory && matchType) {
+            QStandardItem *item = new QStandardItem(app.name);
+            item->setData(app.id, Qt::UserRole);
+            item->setData(QVariant::fromValue(app), Qt::UserRole + 1);
+            item->setIcon(getAppIcon(app));
+            
+            if (app.isFavorite) {
+                item->setBackground(QColor(255, 249, 196));
+            }
+            
+            appModel->appendRow(item);
+        }
     }
 }
 

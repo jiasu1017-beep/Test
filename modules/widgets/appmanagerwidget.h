@@ -5,6 +5,7 @@
 #include <QListView>
 #include <QPushButton>
 #include <QLabel>
+#include <QComboBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -18,6 +19,8 @@
 #include <QStyledItemDelegate>
 #include <QPainter>
 #include <QStandardItemModel>
+#include <QStandardItem>
+#include <QFont>
 #include <QPainterPath>
 #include <QtMath>
 #include "modules/core/database.h"
@@ -78,6 +81,8 @@ private slots:
 
 private:
     void setupUI();
+    void loadCategories();
+    void filterAppsByCategory(const QString &category);
     void launchApp(const AppInfo &app);
     QIcon getAppIcon(const AppInfo &app);
     void saveAppOrder();
@@ -96,6 +101,9 @@ private:
     QFileIconProvider iconProvider;
     AppIconDelegate *iconDelegate;
     AppListDelegate *listDelegate;
+    QString currentCategory;
+    int currentType;
+    QList<AppInfo> allApps;
 };
 
 #endif
