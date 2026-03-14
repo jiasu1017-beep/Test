@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PonyWork 管理后台</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-color: #4a90d9;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --info-color: #17a2b8;
+            --dark-color: #343a40;
+            --light-bg: #f8f9fa;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--light-bg);
+        }
+        
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(180deg, var(--dark-color) 0%, #1a1d20 100%);
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.8);
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 4px 8px;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            background-color: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+        
+        .sidebar .nav-link i {
+            margin-right: 10px;
+        }
+        
+        .main-content {
+            padding: 20px;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            transition: transform 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .stat-card {
+            padding: 20px;
+            border-radius: 12px;
+            color: white;
+        }
+        
+        .stat-card.primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .stat-card.success { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        .stat-card.warning { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .stat-card.info { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        
+        .stat-card .stat-icon {
+            font-size: 2.5rem;
+            opacity: 0.9;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+        
+        .table th {
+            border-bottom: 2px solid var(--primary-color);
+            color: var(--dark-color);
+            font-weight: 600;
+        }
+        
+        .table td {
+            vertical-align: middle;
+        }
+        
+        .badge-active { background-color: var(--success-color); }
+        .badge-inactive { background-color: var(--secondary-color); }
+        .badge-admin { background-color: var(--danger-color); }
+        .badge-user { background-color: var(--info-color); }
+        
+        .btn-action {
+            padding: 4px 8px;
+            font-size: 0.875rem;
+        }
+        
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .login-card {
+            width: 400px;
+            padding: 40px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        .login-logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .login-logo i {
+            font-size: 3rem;
+            color: var(--primary-color);
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(74, 144, 217, 0.25);
+        }
+        
+        .pagination-wrapper {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header {
+            background: var(--primary-color);
+            color: white;
+            border-radius: 12px 12px 0 0;
+        }
+        
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px;
+        }
+        
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+        
+        .nav-tabs .nav-link {
+            border: none;
+            color: var(--secondary-color);
+        }
+        
+        .nav-tabs .nav-link.active {
+            border-bottom: 3px solid var(--primary-color);
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+        
+        .search-box {
+            position: relative;
+        }
+        
+        .search-box i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--secondary-color);
+        }
+        
+        .search-box input {
+            padding-left: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div id="loginPage" class="login-container">
+        <div class="login-card">
+            <div class="login-logo">
+                <i class="bi bi-gear-wide-connected"></i>
+                <h3 class="mt-3">PonyWork 管理后台</h3>
+            </div>
+            <form id="loginForm">
+                <div class="mb-3">
+                    <label class="form-label">用户名</label>
+                    <input type="text" class="form-control" id="username" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">密码</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">登录</button>
+            </form>
+            <div class="text-center mt-3">
+                <small class="text-muted">默认账号: admin / admin123</small>
+            </div>
+        </div>
+    </div>
+
+    <div id="adminPanel" style="display: none;">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-md-2 sidebar p-0">
+                    <div class="p-3 text-center text-white border-bottom">
+                        <h5><i class="bi bi-gear-wide-connected"></i> PonyWork</h5>
+                    </div>
+                    <nav class="nav flex-column py-3">
+                        <a class="nav-link active" href="#" data-page="dashboard">
+                            <i class="bi bi-speedometer2"></i> 仪表盘
+                        </a>
+                        <a class="nav-link" href="#" data-page="users">
+                            <i class="bi bi-people"></i> 用户管理
+                        </a>
+                        <a class="nav-link" href="#" data-page="logs">
+                            <i class="bi bi-journal-text"></i> 日志管理
+                        </a>
+                        <a class="nav-link" href="#" data-page="collections">
+                            <i class="bi bi-collection"></i> 应用集合
+                        </a>
+                        <a class="nav-link" href="#" data-page="config">
+                            <i class="bi bi-sliders"></i> 系统配置
+                        </a>
+                        <a class="nav-link" href="#" onclick="logout()">
+                            <i class="bi bi-box-arrow-right"></i> 退出登录
+                        </a>
+                    </nav>
+                </div>
+                
+                <div class="col-md-10 main-content">
+                    <div id="dashboardPage">
+                        <h4 class="mb-4"><i class="bi bi-speedometer2"></i> 仪表盘</h4>
+                        <div class="row mb-4">
+                            <div class="col-md-3">
+                                <div class="stat-card primary">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <div class="stat-value" id="totalUsers">-</div>
+                                            <div>总用户数</div>
+                                        </div>
+                                        <div class="stat-icon"><i class="bi bi-people"></i></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card success">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <div class="stat-value" id="activeUsers">-</div>
+                                            <div>活跃用户</div>
+                                        </div>
+                                        <div class="stat-icon"><i class="bi bi-person-check"></i></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card warning">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <div class="stat-value" id="onlineUsers">-</div>
+                                            <div>在线用户</div>
+                                        </div>
+                                        <div class="stat-icon"><i class="bi bi-person-circle"></i></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card info">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <div class="stat-value" id="totalCollections">-</div>
+                                            <div>应用集合</div>
+                                        </div>
+                                        <div class="stat-icon"><i class="bi bi-collection"></i></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h5 class="card-title"><i class="bi bi-graph-up"></i> 24小时登录统计</h5>
+                                        <div class="text-center py-5 text-muted">
+                                            <i class="bi bi-bar-chart" style="font-size: 3rem;"></i>
+                                            <p class="mt-2">今日登录次数: <strong id="logins24h">-</strong></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h5 class="card-title"><i class="bi bi-info-circle"></i> 系统信息</h5>
+                                        <table class="table table-borderless">
+                                            <tr>
+                                                <td>服务器状态</td>
+                                                <td><span class="badge bg-success">运行中</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td>数据库</td>
+                                                <td><span class="badge bg-success">已连接</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td>API版本</td>
+                                                <td>v1.0.0</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="usersPage" style="display: none;">
+                        <h4 class="mb-4"><i class="bi bi-people"></i> 用户管理</h4>
+                        <div class="table-container">
+                            <div class="d-flex justify-content-between mb-3">
+                                <div class="search-box">
+                                    <i class="bi bi-search"></i>
+                                    <input type="text" class="form-control" id="userSearch" placeholder="搜索用户名或邮箱...">
+                                </div>
+                                <div>
+                                    <select class="form-select" id="userStatusFilter" style="width: 150px;">
+                                        <option value="">全部状态</option>
+                                        <option value="active">活跃</option>
+                                        <option value="inactive">禁用</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>用户名</th>
+                                        <th>邮箱</th>
+                                        <th>角色</th>
+                                        <th>状态</th>
+                                        <th>注册时间</th>
+                                        <th>最后登录</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usersTableBody">
+                                    <tr><td colspan="8" class="text-center">加载中...</td></tr>
+                                </tbody>
+                            </table>
+                            <div class="pagination-wrapper">
+                                <div id="usersPagination"></div>
+                                <div>
+                                    <select class="form-select" id="userPageSize" style="width: 80px;">
+                                        <option value="20">20</option>
+                                        <option value="50">50</option>
+                                        <option value="100">100</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="logsPage" style="display: none;">
+                        <h4 class="mb-4"><i class="bi bi-journal-text"></i> 日志管理</h4>
+                        <div class="table-container">
+                            <ul class="nav nav-tabs mb-3">
+                                <li class="nav-item">
+                                    <a class="nav-link active" href="#" onclick="switchLogType('login')">登录日志</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="switchLogType('operation')">操作日志</a>
+                                </li>
+                            </ul>
+                            <div class="d-flex mb-3">
+                                <input type="date" class="form-control" id="logStartDate" style="width: 150px;">
+                                <span class="mx-2 align-self-center">至</span>
+                                <input type="date" class="form-control" id="logEndDate" style="width: 150px;">
+                                <button class="btn btn-primary ms-3" onclick="loadLogs()">查询</button>
+                            </div>
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>用户名</th>
+                                        <th>操作</th>
+                                        <th>状态</th>
+                                        <th>IP地址</th>
+                                        <th>时间</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logsTableBody">
+                                    <tr><td colspan="6" class="text-center">加载中...</td></tr>
+                                </tbody>
+                            </table>
+                            <div class="pagination-wrapper">
+                                <div id="logsPagination"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="collectionsPage" style="display: none;">
+                        <h4 class="mb-4"><i class="bi bi-collection"></i> 应用集合管理</h4>
+                        <div class="table-container">
+                            <div class="d-flex justify-content-between mb-3">
+                                <div class="search-box">
+                                    <i class="bi bi-search"></i>
+                                    <input type="text" class="form-control" id="collectionSearch" placeholder="搜索集合名称...">
+                                </div>
+                            </div>
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>名称</th>
+                                        <th>描述</th>
+                                        <th>状态</th>
+                                        <th>创建时间</th>
+                                        <th>更新时间</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="collectionsTableBody">
+                                    <tr><td colspan="7" class="text-center">加载中...</td></tr>
+                                </tbody>
+                            </table>
+                            <div class="pagination-wrapper">
+                                <div id="collectionsPagination"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="configPage" style="display: none;">
+                        <h4 class="mb-4"><i class="bi bi-sliders"></i> 系统配置</h4>
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>配置键</th>
+                                        <th>配置值</th>
+                                        <th>更新时间</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="configTableBody">
+                                    <tr><td colspan="4" class="text-center">加载中...</td></tr>
+                                </tbody>
+                            </table>
+                            <button class="btn btn-success" onclick="showAddConfigModal()">
+                                <i class="bi bi-plus-circle"></i> 添加配置
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editUserModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">编辑用户</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editUserId">
+                    <div class="mb-3">
+                        <label class="form-label">邮箱</label>
+                        <input type="email" class="form-control" id="editUserEmail">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">角色</label>
+                        <select class="form-select" id="editUserRole">
+                            <option value="user">普通用户</option>
+                            <option value="admin">管理员</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">状态</label>
+                        <select class="form-select" id="editUserStatus">
+                            <option value="active">活跃</option>
+                            <option value="inactive">禁用</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveUser()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editCollectionModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">编辑应用集合</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editCollectionId">
+                    <div class="mb-3">
+                        <label class="form-label">名称</label>
+                        <input type="text" class="form-control" id="editCollectionName">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea class="form-control" id="editCollectionDesc" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">应用数据 (JSON)</label>
+                        <textarea class="form-control" id="editCollectionApps" rows="5" placeholder='[{"name":"App1","path":"..."}]'></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">状态</label>
+                        <select class="form-select" id="editCollectionStatus">
+                            <option value="active">启用</option>
+                            <option value="inactive">禁用</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveCollection()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editConfigModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">编辑配置</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editConfigKey">
+                    <div class="mb-3">
+                        <label class="form-label">配置值</label>
+                        <input type="text" class="form-control" id="editConfigValue">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveConfig()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let authToken = localStorage.getItem('adminToken');
+        let currentPage = 'dashboard';
+        let currentLogType = 'login';
+        let editUserModal, editCollectionModal, editConfigModal;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            editUserModal = new bootstrap.Modal(document.getElementById('editUserModal'));
+            editCollectionModal = new bootstrap.Modal(document.getElementById('editCollectionModal'));
+            editConfigModal = new bootstrap.Modal(document.getElementById('editConfigModal'));
+            
+            if (authToken) {
+                showAdminPanel();
+                loadDashboard();
+            }
+
+            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+            
+            document.querySelectorAll('.nav-link[data-page]').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const page = this.dataset.page;
+                    navigateTo(page);
+                });
+            });
+
+            document.getElementById('userSearch').addEventListener('input', debounce(() => loadUsers(1), 500));
+            document.getElementById('userStatusFilter').addEventListener('change', () => loadUsers(1));
+            document.getElementById('userPageSize').addEventListener('change', () => loadUsers(1));
+            document.getElementById('collectionSearch').addEventListener('input', debounce(() => loadCollections(1), 500));
+        });
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const res = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    authToken = data.token;
+                    localStorage.setItem('adminToken', authToken);
+                    showAdminPanel();
+                    loadDashboard();
+                } else {
+                    showToast(data.message || '登录失败', 'danger');
+                }
+            } catch (err) {
+                showToast('登录请求失败', 'danger');
+            }
+        }
+
+        function showAdminPanel() {
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('adminPanel').style.display = 'block';
+        }
+
+        function showLoginPage() {
+            document.getElementById('loginPage').style.display = 'flex';
+            document.getElementById('adminPanel').style.display = 'none';
+        }
+
+        function logout() {
+            localStorage.removeItem('adminToken');
+            authToken = null;
+            showLoginPage();
+        }
+
+        function navigateTo(page) {
+            currentPage = page;
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            document.querySelector(`.nav-link[data-page="${page}"]`)?.classList.add('active');
+            
+            document.querySelectorAll('[id$="Page"]').forEach(p => p.style.display = 'none');
+            document.getElementById(page + 'Page').style.display = 'block';
+
+            switch(page) {
+                case 'dashboard': loadDashboard(); break;
+                case 'users': loadUsers(); break;
+                case 'logs': loadLogs(); break;
+                case 'collections': loadCollections(); break;
+                case 'config': loadConfig(); break;
+            }
+        }
+
+        async function loadDashboard() {
+            try {
+                const res = await fetch('/api/admin/stats', {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    document.getElementById('totalUsers').textContent = data.stats.totalUsers;
+                    document.getElementById('activeUsers').textContent = data.stats.activeUsers;
+                    document.getElementById('onlineUsers').textContent = data.stats.onlineUsers;
+                    document.getElementById('totalCollections').textContent = data.stats.totalCollections;
+                    document.getElementById('logins24h').textContent = data.stats.logins24h;
+                }
+            } catch (err) {
+                showToast('加载仪表盘失败', 'danger');
+            }
+        }
+
+        async function loadUsers(page = 1) {
+            const search = document.getElementById('userSearch').value;
+            const status = document.getElementById('userStatusFilter').value;
+            const limit = document.getElementById('userPageSize').value;
+
+            try {
+                const res = await fetch(`/api/admin/users?page=${page}&limit=${limit}&search=${search}&status=${status}`, {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    renderUsersTable(data.users);
+                    renderPagination('usersPagination', data.pagination, (p) => loadUsers(p));
+                }
+            } catch (err) {
+                showToast('加载用户列表失败', 'danger');
+            }
+        }
+
+        function renderUsersTable(users) {
+            const tbody = document.getElementById('usersTableBody');
+            if (!users || users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">暂无数据</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = users.map(u => `
+                <tr>
+                    <td>${u.id}</td>
+                    <td><strong>${u.username}</strong></td>
+                    <td>${u.email}</td>
+                    <td><span class="badge badge-${u.role === 'admin' ? 'admin' : 'user'}">${u.role === 'admin' ? '管理员' : '用户'}</span></td>
+                    <td><span class="badge badge-${u.status === 'active' ? 'active' : 'inactive'}">${u.status === 'active' ? '活跃' : '禁用'}</span></td>
+                    <td>${formatDate(u.created_at)}</td>
+                    <td>${u.last_login ? formatDate(u.last_login) : '-'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary btn-action" onclick="editUser(${u.id}, '${u.email}', '${u.role}', '${u.status}')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger btn-action" onclick="deleteUser(${u.id})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function editUser(id, email, role, status) {
+            document.getElementById('editUserId').value = id;
+            document.getElementById('editUserEmail').value = email;
+            document.getElementById('editUserRole').value = role;
+            document.getElementById('editUserStatus').value = status;
+            editUserModal.show();
+        }
+
+        async function saveUser() {
+            const id = document.getElementById('editUserId').value;
+            const email = document.getElementById('editUserEmail').value;
+            const role = document.getElementById('editUserRole').value;
+            const status = document.getElementById('editUserStatus').value;
+
+            try {
+                const res = await fetch(`/api/admin/users/${id}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({ email, role, status })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('用户更新成功', 'success');
+                    editUserModal.hide();
+                    loadUsers();
+                } else {
+                    showToast(data.message || '更新失败', 'danger');
+                }
+            } catch (err) {
+                showToast('更新失败', 'danger');
+            }
+        }
+
+        async function deleteUser(id) {
+            if (!confirm('确定要删除这个用户吗？')) return;
+
+            try {
+                const res = await fetch(`/api/admin/users/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('用户删除成功', 'success');
+                    loadUsers();
+                } else {
+                    showToast(data.message || '删除失败', 'danger');
+                }
+            } catch (err) {
+                showToast('删除失败', 'danger');
+            }
+        }
+
+        async function loadLogs(page = 1) {
+            const startDate = document.getElementById('logStartDate').value;
+            const endDate = document.getElementById('logEndDate').value;
+
+            try {
+                const res = await fetch(`/api/admin/logs?page=${page}&limit=50&type=${currentLogType}&startDate=${startDate}&endDate=${endDate}`, {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    renderLogsTable(data.logs);
+                    renderPagination('logsPagination', data.pagination, (p) => loadLogs(p));
+                }
+            } catch (err) {
+                showToast('加载日志失败', 'danger');
+            }
+        }
+
+        function switchLogType(type) {
+            currentLogType = type;
+            document.querySelectorAll('.nav-tabs .nav-link').forEach(l => l.classList.remove('active'));
+            event.target.classList.add('active');
+            loadLogs(1);
+        }
+
+        function renderLogsTable(logs) {
+            const tbody = document.getElementById('logsTableBody');
+            if (!logs || logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无数据</td></tr>';
+                return;
+            }
+            
+            const columns = currentLogType === 'login' 
+                ? ['id', 'username', 'action', 'status', 'ip_address', 'created_at']
+                : ['id', 'username', 'action', 'details', 'ip_address', 'created_at'];
+            
+            tbody.innerHTML = logs.map(l => `
+                <tr>
+                    <td>${l.id}</td>
+                    <td>${l.username || '-'}</td>
+                    <td>${l.action || l.details || '-'}</td>
+                    <td><span class="badge bg-${l.status === 'success' ? 'success' : 'danger'}">${l.status || '-'}</span></td>
+                    <td>${l.ip_address || '-'}</td>
+                    <td>${formatDate(l.created_at)}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadCollections(page = 1) {
+            const search = document.getElementById('collectionSearch').value;
+
+            try {
+                const res = await fetch(`/api/admin/collections?page=${page}&limit=20&search=${search}`, {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    renderCollectionsTable(data.collections);
+                    renderPagination('collectionsPagination', data.pagination, (p) => loadCollections(p));
+                }
+            } catch (err) {
+                showToast('加载应用集合失败', 'danger');
+            }
+        }
+
+        function renderCollectionsTable(collections) {
+            const tbody = document.getElementById('collectionsTableBody');
+            if (!collections || collections.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">暂无数据</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = collections.map(c => `
+                <tr>
+                    <td>${c.id}</td>
+                    <td><strong>${c.name}</strong></td>
+                    <td>${c.description || '-'}</td>
+                    <td><span class="badge badge-${c.status === 'active' ? 'active' : 'inactive'}">${c.status === 'active' ? '启用' : '禁用'}</span></td>
+                    <td>${formatDate(c.created_at)}</td>
+                    <td>${formatDate(c.updated_at)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary btn-action" onclick="editCollection(${c.id}, '${c.name}', '${escapeHtml(c.description || '')}', '${escapeHtml(c.apps || '')}', '${c.status}')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger btn-action" onclick="deleteCollection(${c.id})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function editCollection(id, name, desc, apps, status) {
+            document.getElementById('editCollectionId').value = id;
+            document.getElementById('editCollectionName').value = name;
+            document.getElementById('editCollectionDesc').value = desc;
+            document.getElementById('editCollectionApps').value = apps;
+            document.getElementById('editCollectionStatus').value = status;
+            editCollectionModal.show();
+        }
+
+        async function saveCollection() {
+            const id = document.getElementById('editCollectionId').value;
+            const name = document.getElementById('editCollectionName').value;
+            const description = document.getElementById('editCollectionDesc').value;
+            const apps = document.getElementById('editCollectionApps').value;
+            const status = document.getElementById('editCollectionStatus').value;
+
+            try {
+                const res = await fetch(`/api/admin/collections/${id}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({ name, description, apps, status })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('应用集合更新成功', 'success');
+                    editCollectionModal.hide();
+                    loadCollections();
+                } else {
+                    showToast(data.message || '更新失败', 'danger');
+                }
+            } catch (err) {
+                showToast('更新失败', 'danger');
+            }
+        }
+
+        async function deleteCollection(id) {
+            if (!confirm('确定要删除这个应用集合吗？')) return;
+
+            try {
+                const res = await fetch(`/api/admin/collections/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('应用集合删除成功', 'success');
+                    loadCollections();
+                } else {
+                    showToast(data.message || '删除失败', 'danger');
+                }
+            } catch (err) {
+                showToast('删除失败', 'danger');
+            }
+        }
+
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/admin/config', {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    renderConfigTable(data.configs);
+                }
+            } catch (err) {
+                showToast('加载配置失败', 'danger');
+            }
+        }
+
+        function renderConfigTable(configs) {
+            const tbody = document.getElementById('configTableBody');
+            if (!configs || configs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">暂无配置</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = configs.map(c => `
+                <tr>
+                    <td><strong>${c.key}</strong></td>
+                    <td>${c.value || '-'}</td>
+                    <td>${formatDate(c.updated_at)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary btn-action" onclick="editConfig('${c.key}', '${escapeHtml(c.value || '')}')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function showAddConfigModal() {
+            document.getElementById('editConfigKey').value = '';
+            document.getElementById('editConfigValue').value = '';
+            editConfigModal.show();
+        }
+
+        function editConfig(key, value) {
+            document.getElementById('editConfigKey').value = key;
+            document.getElementById('editConfigValue').value = value;
+            editConfigModal.show();
+        }
+
+        async function saveConfig() {
+            const key = document.getElementById('editConfigKey').value;
+            const value = document.getElementById('editConfigValue').value;
+
+            if (!key) {
+                showToast('配置键不能为空', 'danger');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/admin/config/${key}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({ value })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('配置更新成功', 'success');
+                    editConfigModal.hide();
+                    loadConfig();
+                } else {
+                    showToast(data.message || '更新失败', 'danger');
+                }
+            } catch (err) {
+                showToast('更新失败', 'danger');
+            }
+        }
+
+        function renderPagination(elementId, pagination, callback) {
+            const el = document.getElementById(elementId);
+            if (!pagination || pagination.pages <= 1) {
+                el.innerHTML = '';
+                return;
+            }
+            
+            let html = '<nav><ul class="pagination mb-0">';
+            html += `<li class="page-item ${pagination.page === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="event.preventDefault(); if(${pagination.page} > 1) callback(${pagination.page - 1})">上一页</a>
+            </li>`;
+            
+            for (let i = 1; i <= pagination.pages; i++) {
+                if (i === 1 || i === pagination.pages || (i >= pagination.page - 2 && i <= pagination.page + 2)) {
+                    html += `<li class="page-item ${i === pagination.page ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="event.preventDefault(); callback(${i})">${i}</a>
+                    </li>`;
+                } else if (i === pagination.page - 3 || i === pagination.page + 3) {
+                    html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                }
+            }
+            
+            html += `<li class="page-item ${pagination.page === pagination.pages ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="event.preventDefault(); if(${pagination.page} < ${pagination.pages}) callback(${pagination.page + 1})">下一页</a>
+            </li>`;
+            html += '</ul></nav>';
+            
+            el.innerHTML = html;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleString('zh-CN');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast align-items-center text-white bg-${type} border-0`;
+            toast.setAttribute('role', 'alert');
+            toast.setAttribute('aria-live', 'assertive');
+            toast.setAttribute('aria-atomic', 'true');
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">${message}</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>
+            `;
+            document.querySelector('.toast-container').appendChild(toast);
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+            setTimeout(() => toast.remove(), 5000);
+        }
+    </script>
+</body>
+</html>
