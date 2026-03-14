@@ -155,6 +155,49 @@ website/
    nohup node admin-server.js > /var/log/ponywork-admin.log 2>&1 &
    ```
 
+## 🔴 请按顺序执行以下步骤：
+### 步骤 1: SSH 连接到服务器
+在 PowerShell 中执行：
+
+```
+ssh root@8.163.37.74
+```
+当提示输入密码时，输入： JIAsu6258586
+
+### 步骤 2: 在服务器终端中执行（复制粘贴）
+```
+# 创建目录
+mkdir -p /var/www/ponywork-admin
+cd /var/www/ponywork-admin
+mkdir -p admin-panel data
+```
+### 步骤 3: 返回本地 PowerShell（不要关闭 SSH）
+新建一个 PowerShell 窗口 ，执行上传命令：
+
+```
+scp 
+F:\00AI\Test\website\admin-server.
+js root@8.163.37.74:/var/www/
+ponywork-admin/
+scp F:\00AI\Test\website\package.
+json root@8.163.37.74:/var/www/
+ponywork-admin/
+scp -r 
+F:\00AI\Test\website\admin-panel 
+root@8.163.37.74:/var/www/
+ponywork-admin/
+```
+密码： JIAsuXXXXXXXXXXXXXX
+
+### 步骤 4: 回到 SSH 窗口执行
+```
+cd /var/www/ponywork-admin
+npm install
+nohup node admin-server.js > /var/
+log/ponywork-admin.log 2>&1 &
+ps aux | grep node
+```
+
 ### 访问地址
 - **管理后台**: http://8.163.37.74:8080/admin
 - **账号**: admin / admin123
