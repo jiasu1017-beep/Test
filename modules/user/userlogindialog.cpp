@@ -180,7 +180,7 @@ void UserLoginDialog::setupLoginPage() {
     m_loginPasswordEdit->setEchoMode(QLineEdit::Password);
     m_loginPasswordEdit->setFixedHeight(45);
     m_loginPasswordEdit->setClearButtonEnabled(true);
-    connect(m_loginPasswordEdit, &QLineEdit::textChanged, this, &UserLoginDialog::onPasswordTextChanged);
+    connect(m_loginPasswordEdit, &QLineEdit::textChanged, this, &UserLoginDialog::onLoginPasswordTextChanged);
     layout->addWidget(m_loginPasswordEdit);
 
     m_rememberMeCheck = new QCheckBox("✓ 记住我（7 天内自动登录）", this);
@@ -264,7 +264,7 @@ void UserLoginDialog::setupRegisterPage() {
     m_registerPasswordEdit->setEchoMode(QLineEdit::Password);
     m_registerPasswordEdit->setFixedHeight(45);
     m_registerPasswordEdit->setClearButtonEnabled(true);
-    connect(m_registerPasswordEdit, &QLineEdit::textChanged, this, &UserLoginDialog::onPasswordTextChanged);
+    connect(m_registerPasswordEdit, &QLineEdit::textChanged, this, &UserLoginDialog::onRegisterPasswordTextChanged);
     layout->addWidget(m_registerPasswordEdit);
 
     QLabel *confirmLabel = new QLabel("🔒 确认密码", this);
@@ -435,19 +435,27 @@ void UserLoginDialog::onIdentifierTextChanged(const QString& text) {
     }
 }
 
-void UserLoginDialog::onPasswordTextChanged(const QString& text) {
+void UserLoginDialog::onLoginPasswordTextChanged(const QString& text) {
+    if (!m_loginPasswordEdit) {
+        return;
+    }
+    
     if (!text.isEmpty() && text.length() < 6) {
-        if (m_loginPasswordEdit->hasFocus()) {
-            m_loginPasswordEdit->setStyleSheet("border: 2px solid #fdcb6e;");
-        } else if (m_registerPasswordEdit->hasFocus()) {
-            m_registerPasswordEdit->setStyleSheet("border: 2px solid #fdcb6e;");
-        }
+        m_loginPasswordEdit->setStyleSheet("border: 2px solid #fdcb6e;");
     } else {
-        if (m_loginPasswordEdit->hasFocus()) {
-            m_loginPasswordEdit->setStyleSheet("");
-        } else if (m_registerPasswordEdit->hasFocus()) {
-            m_registerPasswordEdit->setStyleSheet("");
-        }
+        m_loginPasswordEdit->setStyleSheet("");
+    }
+}
+
+void UserLoginDialog::onRegisterPasswordTextChanged(const QString& text) {
+    if (!m_registerPasswordEdit) {
+        return;
+    }
+    
+    if (!text.isEmpty() && text.length() < 6) {
+        m_registerPasswordEdit->setStyleSheet("border: 2px solid #fdcb6e;");
+    } else {
+        m_registerPasswordEdit->setStyleSheet("");
     }
 }
 

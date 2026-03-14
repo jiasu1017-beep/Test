@@ -34,7 +34,8 @@ private slots:
             void switchToLogin();
             
             void onIdentifierTextChanged(const QString& text);
-            void onPasswordTextChanged(const QString& text);
+            void onLoginPasswordTextChanged(const QString& text);
+            void onRegisterPasswordTextChanged(const QString& text);
             void onUsernameTextChanged(const QString& text);
             void loadSavedCredentials();
             void saveCredentials();
