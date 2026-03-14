@@ -4,6 +4,8 @@
 #include "modules/dialogs/aisettingsdialog.h"
 #include "modules/dialogs/chattestdialog.h"
 #include "modules/dialogs/aicongeneratordialog.h"
+#include "modules/user/userlogindialog.h"
+#include "modules/user/userapi.h"
 #include "modules/core/aiconfig.h"
 #include <QApplication>
 #include <QStyle>
@@ -2522,6 +2524,36 @@ QWidget *SettingsWidget::createUpdatePage()
     checkLayout->addWidget(checkUpdateButton);
 
     layout->addWidget(checkUpdateGroup);
+
+    QGroupBox *cloudGroup = new QGroupBox("云端同步", page);
+    QVBoxLayout *cloudLayout = new QVBoxLayout(cloudGroup);
+    QHBoxLayout *cloudBtnLayout = new QHBoxLayout();
+    cloudLoginBtn = new QPushButton("☁️ 登录云端", page);
+    cloudSyncBtn = new QPushButton("🔄 同步配置", page);
+    cloudBtnLayout->addWidget(cloudLoginBtn);
+    cloudBtnLayout->addWidget(cloudSyncBtn);
+    cloudStatusLabel = new QLabel("未登录", page);
+    cloudStatusLabel->setStyleSheet("color: #888;");
+    cloudLayout->addLayout(cloudBtnLayout);
+    cloudLayout->addWidget(cloudStatusLabel);
+    layout->addWidget(cloudGroup);
+
+    connect(cloudLoginBtn, &QPushButton::clicked, this, &SettingsWidget::onCloudLoginClicked);
+    connect(cloudSyncBtn, &QPushButton::clicked, this, &SettingsWidget::onCloudSyncClicked);
+    connect(UserManager::instance(), &UserManager::loginSuccess, this, &SettingsWidget::onCloudLoginSuccess);
+    connect(UserManager::instance(), &UserManager::logoutComplete, this, [this]() {
+        cloudStatusLabel->setText("未登录");
+        cloudStatusLabel->setStyleSheet("color: #888;");
+        cloudLoginBtn->setText("☁️ 登录云端");
+    });
+
+    if (UserManager::instance()->isLoggedIn()) {
+        cloudStatusLabel->setText("已登录: " + UserManager::instance()->currentUser().email);
+        cloudStatusLabel->setStyleSheet("color: green;");
+        cloudLoginBtn->setText("退出登录");
+    }
+
+    layout->addStretch();
 
     QGroupBox *updateChannelGroup = new QGroupBox("更新通道", page);
     QVBoxLayout *channelLayout = new QVBoxLayout(updateChannelGroup);

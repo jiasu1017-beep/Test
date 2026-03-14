@@ -529,6 +529,160 @@ app.post('/api/admin/validate-token', (req, res) => {
     });
 });
 
+// ============================================
+// 客户端用户系统 API（新增）
+// ============================================
+
+// 用户注册
+app.post('/api/auth/register', (req, res) => {
+    const { username, email, password } = req.body;
+    
+    console.log(`\n[注册请求] ${new Date().toISOString()}`);
+    console.log(`  - Username: ${username}`);
+    console.log(`  - Email: ${email}`);
+    console.log(`  - IP: ${req.ip}`);
+    
+    if (!username || !email || !password) {
+        console.log(`  - 失败：缺少必要参数`);
+        return res.status(400).json({ success: false, error: '用户名、邮箱和密码必填' });
+    }
+    
+    if (password.length < 6) {
+        console.log(`  - 失败：密码长度不足`);
+        return res.status(400).json({ success: false, error: '密码长度至少 6 位' });
+    }
+    
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    
+    db.run("INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, 'user')",
+        [username, email, hashedPassword], function(err) {
+        if (err) {
+            console.log(`  - 失败：${err.message}`);
+            if (err.message.includes('username')) {
+                return res.status(400).json({ success: false, error: '用户名已存在' });
+            }
+            if (err.message.includes('email')) {
+                return res.status(400).json({ success: false, error: '邮箱已被注册' });
+            }
+            return res.status(500).json({ success: false, error: '注册失败：' + err.message });
+        }
+        
+        const userId = this.lastID;
+        console.log(`  - 成功：用户 ID=${userId}`);
+        
+        db.run("INSERT INTO login_logs (username, action, status, ip_address) VALUES (?, ?, ?, ?)",
+            [username, 'register', 'success', req.ip]);
+        
+        res.json({ success: true, userId: userId, message: '注册成功' });
+    });
+});
+
+// 用户登录
+app.post('/api/auth/login', (req, res) => {
+    const { email, username, password } = req.body;
+    
+    console.log(`\n[登录请求] ${new Date().toISOString()}`);
+    console.log(`  - Email: ${email || 'N/A'}`);
+    console.log(`  - Username: ${username || 'N/A'}`);
+    console.log(`  - IP: ${req.ip}`);
+    
+    if ((!email && !username) || !password) {
+        console.log(`  - 失败：缺少必要参数`);
+        return res.status(400).json({ success: false, error: '邮箱/用户名和密码必填' });
+    }
+    
+    const identifier = email || username;
+    const isEmail = email ? true : false;
+    
+    const query = isEmail ? "SELECT * FROM users WHERE email = ?" : "SELECT * FROM users WHERE username = ?";
+    
+    db.get(query, [identifier], (err, user) => {
+        if (err || !user) {
+            console.log(`  - 失败：用户不存在`);
+            db.run("INSERT INTO login_logs (username, action, status, ip_address) VALUES (?, ?, ?, ?)",
+                [identifier, 'login', 'failed_not_found', req.ip]);
+            return res.status(401).json({ success: false, error: '邮箱/用户名或密码错误' });
+        }
+        
+        const bcrypt = require('bcryptjs');
+        if (!bcrypt.compareSync(password, user.password)) {
+            console.log(`  - 失败：密码错误`);
+            db.run("INSERT INTO login_logs (user_id, username, action, status, ip_address) VALUES (?, ?, ?, ?, ?)",
+                [user.id, user.username, 'login', 'failed_wrong_password', req.ip]);
+            return res.status(401).json({ success: false, error: '邮箱/用户名或密码错误' });
+        }
+        
+        const token = require('crypto').randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        
+        db.run("INSERT INTO user_sessions (user_id, token, ip_address, expires_at) VALUES (?, ?, ?, ?)",
+            [user.id, token, req.ip, expiresAt]);
+        
+        db.run("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", [user.id]);
+        
+        db.run("INSERT INTO login_logs (user_id, username, action, status, ip_address) VALUES (?, ?, ?, ?, ?)",
+            [user.id, user.username, 'login', 'success', req.ip]);
+        
+        console.log(`  - 成功：用户 ID=${user.id}, Token=${token.substring(0, 20)}...`);
+        
+        res.json({
+            success: true,
+            token: token,
+            user: {
+                id: user.id,
+                email: user.email,
+                vipLevel: 0
+            }
+        });
+    });
+});
+
+// 检查邮箱是否存在
+app.get('/api/auth/check-email', (req, res) => {
+    const email = req.query.email;
+    
+    if (!email) {
+        return res.status(400).json({ success: false, error: '邮箱必填' });
+    }
+    
+    db.get("SELECT id FROM users WHERE email = ?", [email], (err, user) => {
+        if (err) {
+            return res.status(500).json({ success: false, error: '查询失败' });
+        }
+        
+        res.json({ exists: !!user });
+    });
+});
+
+// 获取用户资料
+app.get('/api/auth/profile', (req, res) => {
+    const token = req.headers['authorization']?.replace('Bearer ', '');
+    
+    if (!token) {
+        return res.status(401).json({ success: false, error: '未授权访问' });
+    }
+    
+    db.get("SELECT u.* FROM users u JOIN user_sessions s ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > datetime('now')", 
+        [token], (err, user) => {
+        if (err || !user) {
+            return res.status(401).json({ success: false, error: '登录已过期' });
+        }
+        
+        res.json({
+            success: true,
+            user: {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                vip_level: 0,
+                created_at: user.created_at,
+                last_login: user.last_login
+            }
+        });
+    });
+});
+
 app.get('/admin/*', (req, res) => {
     res.sendFile(path.join(__dirname, 'admin-panel', 'index.html'));
 });

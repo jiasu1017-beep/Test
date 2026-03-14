@@ -13,6 +13,8 @@ SOURCES += main.cpp \
            modules/core/aiconfig.cpp \
            modules/core/logger.cpp \
            modules/core/applicationmanager.cpp \
+           modules/user/userapi.cpp \
+           modules/user/userlogindialog.cpp \
            modules/widgets/appmanagerwidget.cpp \
            modules/widgets/shutdownwidget.cpp \
            modules/widgets/settingswidget.cpp \
@@ -20,6 +22,7 @@ SOURCES += main.cpp \
            modules/widgets/remotedesktopwidget.cpp \
            modules/widgets/snapshotmanagerwidget.cpp \
            modules/widgets/appcollectionupdater.cpp \
+           modules/widgets/cloud_login_impl.cpp \
            modules/widgets/worklogwidget.cpp \
            modules/widgets/bottomappbar.cpp \
            modules/update/updatemanager.cpp \
@@ -38,6 +41,8 @@ HEADERS  += mainwindow.h \
             modules/core/aiconfig.h \
             modules/core/logger.h \
             modules/core/applicationmanager.h \
+            modules/user/userapi.h \
+            modules/user/userlogindialog.h \
             modules/widgets/appmanagerwidget.h \
             modules/widgets/shutdownwidget.h \
             modules/widgets/settingswidget.h \

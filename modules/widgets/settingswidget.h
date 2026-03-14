@@ -31,6 +31,7 @@
 #include <QDebug>
 #include "modules/core/database.h"
 #include "modules/update/updatemanager.h"
+#include "modules/user/userapi.h"
 
 class UpdateProgressDialog;
 class MainWindow;
@@ -116,6 +117,9 @@ private:
     QPushButton *editImageKeyBtn;
     QPushButton *deleteImageKeyBtn;
     QPushButton *setDefaultImageKeyBtn;
+    QPushButton *cloudLoginBtn;
+    QPushButton *cloudSyncBtn;
+    QLabel *cloudStatusLabel;
 
 private slots:
     void onAIImageKeyTableSelectionChanged();
@@ -123,6 +127,10 @@ private slots:
     void onEditImageKey();
     void onDeleteImageKey();
     void onSetDefaultImageKey();
+    void onCloudLoginClicked();
+    void onCloudSyncClicked();
+    void onCloudLoginSuccess(const UserInfo& user);
+    void onCloudLogoutClicked();
 };
 
 #endif
