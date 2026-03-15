@@ -495,6 +495,38 @@ Content-Type: application/json
 
 ## 🚀 部署指南
 
+### 📖 极简部署教程（5 步搞定）
+
+#### 1️⃣ 连接服务器
+```bash
+ssh root@8.163.37.74
+# 密码：UxZp28Kv9m3Lq1Wn4Rt6
+```
+
+#### 2️⃣ 进入目录
+```bash
+cd /var/www/ponywork-admin
+```
+
+#### 3️⃣ 启动服务
+```bash
+pm2 start admin-server.js --name ponywork-backend
+```
+
+#### 4️⃣ 重启服务（更新代码后）
+```bash
+pm2 restart ponywork-backend
+```
+
+#### 5️⃣ 查看日志
+```bash
+pm2 logs ponywork-backend --lines 0
+```
+
+**完成！** 🎉 访问 `http://8.163.37.74:8080/admin/` 管理后台
+
+---
+
 ### 环境要求
 
 - **操作系统**: Linux (Ubuntu/CentOS) 或 Windows
@@ -1191,7 +1223,75 @@ pm2 plus
 
 ---
 
-## 📄 许可证
+## � 快速参考卡片
+
+### 常用命令速查
+
+```bash
+# 🔗 连接服务器
+ssh root@8.163.37.74
+
+# 📂 进入目录
+cd /var/www/ponywork-admin
+
+# ▶️ 启动服务
+pm2 start admin-server.js --name ponywork-backend
+
+# 🔄 重启服务
+pm2 restart ponywork-backend
+
+# ⏹️ 停止服务
+pm2 stop ponywork-backend
+
+# 📊 查看状态
+pm2 status
+
+# 📝 查看日志
+pm2 logs ponywork-backend --lines 0
+
+# 🔍 实时监控
+pm2 monit
+
+# 🗑️ 删除服务
+pm2 delete ponywork-backend
+
+# 💾 备份数据库
+cp /var/www/ponywork-admin/data/admin.db /backup/admin.db.$(date +%Y%m%d)
+
+# 🌐 访问地址
+# 管理后台：http://8.163.37.74:8080/admin/
+# API 地址：http://8.163.37.74:8080
+```
+
+### 默认账号
+
+```
+管理员登录：
+- 用户名：admin
+- 密码：admin123
+
+⚠️ 首次部署后请立即修改密码！
+```
+
+### 端口说明
+
+| 端口 | 用途 | 访问方式 |
+|------|------|----------|
+| 8080 | HTTP 服务 | http://8.163.37.74:8080 |
+| 22   | SSH     | ssh root@8.163.37.74 |
+
+### 重要路径
+
+| 路径 | 用途 |
+|------|------|
+| `/var/www/ponywork-admin/` | 项目根目录 |
+| `/var/www/ponywork-admin/admin-server.js` | 主程序 |
+| `/var/www/ponywork-admin/admin-panel/` | 前端页面 |
+| `/var/www/ponywork-admin/data/admin.db` | 数据库 |
+
+---
+
+## �📄 许可证
 
 本项目为内部使用，未公开许可证。
 
