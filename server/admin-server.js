@@ -101,6 +101,17 @@ db.serialize(() => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_login DATETIME
     )`);
+    
+    // 密码重置 token 表
+    db.run(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        expires_at DATETIME NOT NULL,
+        used INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )`);
 
     const stmt = db.prepare("SELECT * FROM admin_users WHERE username = 'admin'");
     stmt.get((err, row) => {
@@ -821,6 +832,138 @@ app.get('/api/auth/check-email', (req, res) => {
         
         res.json({ exists: !!user });
     });
+});
+
+// 检查用户名是否存在
+app.get('/api/auth/check-username', (req, res) => {
+    const username = req.query.username;
+    
+    if (!username) {
+        return res.status(400).json({ success: false, error: '用户名必填' });
+    }
+    
+    db.get("SELECT id FROM users WHERE username = ?", [username], (err, user) => {
+        if (err) {
+            return res.status(500).json({ success: false, error: '查询失败' });
+        }
+        
+        res.json({ exists: !!user });
+    });
+});
+
+// 请求密码重置
+app.post('/api/auth/request-password-reset', (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+        return res.status(400).json({ success: false, error: '邮箱必填' });
+    }
+    
+    // 检查邮箱是否存在
+    db.get("SELECT id, username FROM users WHERE email = ?", [email], (err, user) => {
+        if (err || !user) {
+            // 为了安全，即使邮箱不存在也返回成功
+            return res.json({ success: true, message: '如果邮箱已注册，您将收到重置邮件' });
+        }
+        
+        // 生成重置 token（64 位随机字符串）
+        const crypto = require('crypto');
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 分钟有效
+        
+        // 保存 token 到数据库
+        db.run(`INSERT INTO password_reset_tokens (user_id, token, expires_at, used) 
+                VALUES (?, ?, ?, 0)`, 
+            [user.id, token, expiresAt.toISOString().replace('T', ' ').replace('Z', '')], 
+            function(err) {
+                if (err) {
+                    console.error('[密码重置] 保存 token 失败:', err);
+                    return res.status(500).json({ success: false, error: '系统错误' });
+                }
+                
+                console.log('[密码重置] 为用户', user.username, '生成重置 token');
+                // TODO: 发送邮件（实际部署时实现）
+                // 暂时只返回 token 用于测试
+                res.json({ 
+                    success: true, 
+                    message: '如果邮箱已注册，您将收到重置邮件',
+                    debug_token: token // 生产环境需移除
+                });
+            }
+        );
+    });
+});
+
+// 重置密码
+app.post('/api/auth/reset-password', (req, res) => {
+    const { token, new_password } = req.body;
+    
+    if (!token || !new_password) {
+        return res.status(400).json({ success: false, error: '参数不完整' });
+    }
+    
+    // 验证 token
+    db.get("SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0 AND expires_at > datetime('now')", 
+        [token], (err, resetToken) => {
+            if (err || !resetToken) {
+                return res.status(400).json({ success: false, error: '无效或已过期的重置链接' });
+            }
+            
+            const bcrypt = require('bcryptjs');
+            
+            // 检查密码格式
+            if (new_password.length < 6) {
+                return res.status(400).json({ success: false, error: '密码长度至少 6 位' });
+            }
+            
+            // 检查是否为 SHA-256 格式（客户端已哈希）
+            const isSHA256 = /^[a-f0-9]{64}$/i.test(new_password);
+            let passwordToHash = new_password;
+            
+            if (!isSHA256) {
+                // 如果不是 SHA-256，先进行 SHA-256 哈希
+                const crypto = require('crypto');
+                passwordToHash = crypto.createHash('sha256').update(new_password).digest('hex');
+            }
+            
+            // bcrypt 加密
+            bcrypt.hash(passwordToHash, 10, (err, hash) => {
+                if (err) {
+                    return res.status(500).json({ success: false, error: '密码加密失败' });
+                }
+                
+                // 更新密码
+                db.run("UPDATE users SET password = ? WHERE id = ?", [hash, resetToken.user_id], function(err) {
+                    if (err) {
+                        return res.status(500).json({ success: false, error: '更新密码失败' });
+                    }
+                    
+                    // 标记 token 为已使用
+                    db.run("UPDATE password_reset_tokens SET used = 1 WHERE token = ?", [token], function(err) {
+                        if (err) {
+                            console.error('[密码重置] 标记 token 失败:', err);
+                        }
+                        
+                        // 删除该用户的所有其他 session
+                        db.run("DELETE FROM user_sessions WHERE user_id = ?", [resetToken.user_id], function(err) {
+                            if (err) {
+                                console.error('[密码重置] 清除 session 失败:', err);
+                            }
+                            
+                            console.log('[密码重置] 用户 ID', resetToken.user_id, '密码已重置');
+                            
+                            // 记录操作日志
+                            db.run(`INSERT INTO operation_logs (user_id, action, details, ip_address) 
+                                    VALUES (?, 'password_reset', '用户自助重置密码', '')`, 
+                                [resetToken.user_id]);
+                            
+                            res.json({ success: true, message: '密码重置成功，请使用新密码登录' });
+                        });
+                    });
+                });
+            });
+        }
+    );
 });
 
 // 获取用户资料

@@ -10,6 +10,7 @@
 UserLoginDialog::UserLoginDialog(QWidget *parent)
     : QDialog(parent)
     , m_isValidating(false)
+    , m_isUsernameAvailable(true)
 {
     setupUI();
     setWindowTitle("PonyWork 用户登录");
@@ -175,13 +176,56 @@ void UserLoginDialog::setupLoginPage() {
     passwordLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
     layout->addWidget(passwordLabel);
     
+    // 密码输入框（带可见性切换按钮）
+    QWidget *passwordWidget = new QWidget(this);
+    QHBoxLayout *passwordLayout = new QHBoxLayout(passwordWidget);
+    passwordLayout->setContentsMargins(0, 0, 0, 0);
+    passwordLayout->setSpacing(5);
+    
     m_loginPasswordEdit = new QLineEdit(this);
     m_loginPasswordEdit->setPlaceholderText("请输入密码");
     m_loginPasswordEdit->setEchoMode(QLineEdit::Password);
     m_loginPasswordEdit->setFixedHeight(45);
     m_loginPasswordEdit->setClearButtonEnabled(true);
     connect(m_loginPasswordEdit, &QLineEdit::textChanged, this, &UserLoginDialog::onLoginPasswordTextChanged);
-    layout->addWidget(m_loginPasswordEdit);
+    passwordLayout->addWidget(m_loginPasswordEdit);
+    
+    m_loginPasswordToggleBtn = new QPushButton("👁️", this);
+    m_loginPasswordToggleBtn->setFixedSize(45, 45);
+    m_loginPasswordToggleBtn->setCursor(Qt::PointingHandCursor);
+    m_loginPasswordToggleBtn->setStyleSheet(R"(
+        QPushButton {
+            background-color: transparent;
+            border: none;
+            font-size: 18px;
+        }
+        QPushButton:hover {
+            background-color: #e0e0e0;
+            border-radius: 4px;
+        }
+    )");
+    connect(m_loginPasswordToggleBtn, &QPushButton::clicked, this, &UserLoginDialog::toggleLoginPasswordVisibility);
+    passwordLayout->addWidget(m_loginPasswordToggleBtn);
+    
+    layout->addWidget(passwordWidget);
+
+    // 忘记密码按钮
+    m_forgotPasswordBtn = new QPushButton("🔑 忘记密码？", this);
+    m_forgotPasswordBtn->setCursor(Qt::PointingHandCursor);
+    m_forgotPasswordBtn->setStyleSheet(R"(
+        QPushButton {
+            background-color: transparent;
+            color: #0984e3;
+            font-size: 13px;
+            border: none;
+            text-decoration: underline;
+        }
+        QPushButton:hover {
+            color: #74b9ff;
+        }
+    )");
+    connect(m_forgotPasswordBtn, &QPushButton::clicked, this, &UserLoginDialog::onForgotPasswordClicked);
+    layout->addWidget(m_forgotPasswordBtn);
 
     m_rememberMeCheck = new QCheckBox("✓ 记住我（7 天内自动登录）", this);
     m_rememberMeCheck->setChecked(true);
@@ -231,12 +275,27 @@ void UserLoginDialog::setupRegisterPage() {
     usernameLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
     layout->addWidget(usernameLabel);
     
+    // 用户名输入框（带实时检测）
+    QWidget *usernameWidget = new QWidget(this);
+    QHBoxLayout *usernameLayout = new QHBoxLayout(usernameWidget);
+    usernameLayout->setContentsMargins(0, 0, 0, 0);
+    usernameLayout->setSpacing(5);
+    
     m_registerUsernameEdit = new QLineEdit(this);
     m_registerUsernameEdit->setPlaceholderText("3-20 位字母、数字或下划线");
     m_registerUsernameEdit->setFixedHeight(45);
     m_registerUsernameEdit->setClearButtonEnabled(true);
     connect(m_registerUsernameEdit, &QLineEdit::textChanged, this, &UserLoginDialog::onUsernameTextChanged);
-    layout->addWidget(m_registerUsernameEdit);
+    usernameLayout->addWidget(m_registerUsernameEdit);
+    
+    layout->addWidget(usernameWidget);
+    
+    // 用户名可用性提示
+    m_usernameCheckLabel = new QLabel(this);
+    m_usernameCheckLabel->setAlignment(Qt::AlignLeft);
+    m_usernameCheckLabel->setWordWrap(true);
+    m_usernameCheckLabel->setStyleSheet("color: #636e72; font-size: 12px;");
+    layout->addWidget(m_usernameCheckLabel);
 
     QLabel *emailLabel = new QLabel("📧 邮箱地址", this);
     emailLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
@@ -259,17 +318,55 @@ void UserLoginDialog::setupRegisterPage() {
     passwordLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
     layout->addWidget(passwordLabel);
     
+    // 密码输入框（带可见性切换）
+    QWidget *registerPasswordWidget = new QWidget(this);
+    QHBoxLayout *registerPasswordLayout = new QHBoxLayout(registerPasswordWidget);
+    registerPasswordLayout->setContentsMargins(0, 0, 0, 0);
+    registerPasswordLayout->setSpacing(5);
+    
     m_registerPasswordEdit = new QLineEdit(this);
     m_registerPasswordEdit->setPlaceholderText("6-20 位字符");
     m_registerPasswordEdit->setEchoMode(QLineEdit::Password);
     m_registerPasswordEdit->setFixedHeight(45);
     m_registerPasswordEdit->setClearButtonEnabled(true);
     connect(m_registerPasswordEdit, &QLineEdit::textChanged, this, &UserLoginDialog::onRegisterPasswordTextChanged);
-    layout->addWidget(m_registerPasswordEdit);
+    registerPasswordLayout->addWidget(m_registerPasswordEdit);
+    
+    m_registerPasswordToggleBtn = new QPushButton("👁️", this);
+    m_registerPasswordToggleBtn->setFixedSize(45, 45);
+    m_registerPasswordToggleBtn->setCursor(Qt::PointingHandCursor);
+    m_registerPasswordToggleBtn->setStyleSheet(R"(
+        QPushButton {
+            background-color: transparent;
+            border: none;
+            font-size: 18px;
+        }
+        QPushButton:hover {
+            background-color: #e0e0e0;
+            border-radius: 4px;
+        }
+    )");
+    connect(m_registerPasswordToggleBtn, &QPushButton::clicked, this, &UserLoginDialog::toggleRegisterPasswordVisibility);
+    registerPasswordLayout->addWidget(m_registerPasswordToggleBtn);
+    
+    layout->addWidget(registerPasswordWidget);
+    
+    // 密码强度提示
+    m_passwordStrengthLabel = new QLabel(this);
+    m_passwordStrengthLabel->setAlignment(Qt::AlignLeft);
+    m_passwordStrengthLabel->setWordWrap(true);
+    m_passwordStrengthLabel->setStyleSheet("color: #636e72; font-size: 12px;");
+    layout->addWidget(m_passwordStrengthLabel);
 
     QLabel *confirmLabel = new QLabel("🔒 确认密码", this);
     confirmLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
     layout->addWidget(confirmLabel);
+    
+    // 确认密码输入框（带可见性切换）
+    QWidget *confirmPasswordWidget = new QWidget(this);
+    QHBoxLayout *confirmPasswordLayout = new QHBoxLayout(confirmPasswordWidget);
+    confirmPasswordLayout->setContentsMargins(0, 0, 0, 0);
+    confirmPasswordLayout->setSpacing(5);
     
     m_registerConfirmPasswordEdit = new QLineEdit(this);
     m_registerConfirmPasswordEdit->setPlaceholderText("再次输入密码");
@@ -277,7 +374,26 @@ void UserLoginDialog::setupRegisterPage() {
     m_registerConfirmPasswordEdit->setFixedHeight(45);
     m_registerConfirmPasswordEdit->setClearButtonEnabled(true);
     connect(m_registerConfirmPasswordEdit, &QLineEdit::textChanged, this, &UserLoginDialog::onConfirmPasswordTextChanged);
-    layout->addWidget(m_registerConfirmPasswordEdit);
+    confirmPasswordLayout->addWidget(m_registerConfirmPasswordEdit);
+    
+    m_confirmPasswordToggleBtn = new QPushButton("👁️", this);
+    m_confirmPasswordToggleBtn->setFixedSize(45, 45);
+    m_confirmPasswordToggleBtn->setCursor(Qt::PointingHandCursor);
+    m_confirmPasswordToggleBtn->setStyleSheet(R"(
+        QPushButton {
+            background-color: transparent;
+            border: none;
+            font-size: 18px;
+        }
+        QPushButton:hover {
+            background-color: #e0e0e0;
+            border-radius: 4px;
+        }
+    )");
+    connect(m_confirmPasswordToggleBtn, &QPushButton::clicked, this, &UserLoginDialog::toggleConfirmPasswordVisibility);
+    confirmPasswordLayout->addWidget(m_confirmPasswordToggleBtn);
+    
+    layout->addWidget(confirmPasswordWidget);
 
     m_registerStatusLabel = new QLabel(this);
     m_registerStatusLabel->setProperty("cssClass", "statusLabel");
@@ -347,6 +463,12 @@ void UserLoginDialog::onRegisterClicked() {
 
     if (!validateUsername(username)) {
         showStatusMessage("用户名格式不正确（3-20 位字母、数字或下划线）", true);
+        return;
+    }
+
+    // 检查用户名是否可用
+    if (!m_isUsernameAvailable) {
+        showStatusMessage("用户名已被使用，请更换其他用户名", true);
         return;
     }
 
@@ -473,16 +595,19 @@ void UserLoginDialog::onRegisterPasswordTextChanged(const QString& text) {
     } else {
         m_registerPasswordEdit->setStyleSheet("");
     }
-}
-
-void UserLoginDialog::onUsernameTextChanged(const QString& text) {
-    if (!m_registerUsernameEdit) return;
     
-    QRegularExpression re("^[a-zA-Z0-9_]{3,20}$");
-    if (!text.isEmpty() && !re.match(text).hasMatch()) {
-        m_registerUsernameEdit->setStyleSheet("border: 2px solid #fdcb6e;");
+    // 密码强度提示
+    if (text.isEmpty()) {
+        m_passwordStrengthLabel->setText("");
+    } else if (text.length() < 6) {
+        m_passwordStrengthLabel->setText("❌ 密码长度至少 6 位");
+        m_passwordStrengthLabel->setStyleSheet("color: #d63031; font-size: 12px;");
+    } else if (text.length() >= 6 && text.length() < 10) {
+        m_passwordStrengthLabel->setText("⚠️ 密码强度：中等（建议 10 位以上）");
+        m_passwordStrengthLabel->setStyleSheet("color: #fdcb6e; font-size: 12px;");
     } else {
-        m_registerUsernameEdit->setStyleSheet("");
+        m_passwordStrengthLabel->setText("✅ 密码强度：强");
+        m_passwordStrengthLabel->setStyleSheet("color: #00b894; font-size: 12px;");
     }
 }
 
@@ -590,4 +715,190 @@ void UserLoginDialog::saveCredentials() {
         settings.remove("login_identifier");
         settings.remove("login_password");
     }
+}
+
+// 密码可见性切换
+void UserLoginDialog::toggleLoginPasswordVisibility() {
+    if (!m_loginPasswordEdit) return;
+    
+    if (m_loginPasswordEdit->echoMode() == QLineEdit::Password) {
+        m_loginPasswordEdit->setEchoMode(QLineEdit::Normal);
+        m_loginPasswordToggleBtn->setText("🙈");
+    } else {
+        m_loginPasswordEdit->setEchoMode(QLineEdit::Password);
+        m_loginPasswordToggleBtn->setText("👁️");
+    }
+}
+
+void UserLoginDialog::toggleRegisterPasswordVisibility() {
+    if (!m_registerPasswordEdit) return;
+    
+    if (m_registerPasswordEdit->echoMode() == QLineEdit::Password) {
+        m_registerPasswordEdit->setEchoMode(QLineEdit::Normal);
+        m_registerPasswordToggleBtn->setText("🙈");
+    } else {
+        m_registerPasswordEdit->setEchoMode(QLineEdit::Password);
+        m_registerPasswordToggleBtn->setText("👁️");
+    }
+}
+
+void UserLoginDialog::toggleConfirmPasswordVisibility() {
+    if (!m_registerConfirmPasswordEdit) return;
+    
+    if (m_registerConfirmPasswordEdit->echoMode() == QLineEdit::Password) {
+        m_registerConfirmPasswordEdit->setEchoMode(QLineEdit::Normal);
+        m_confirmPasswordToggleBtn->setText("🙈");
+    } else {
+        m_registerConfirmPasswordEdit->setEchoMode(QLineEdit::Password);
+        m_confirmPasswordToggleBtn->setText("👁️");
+    }
+}
+
+// 用户名实时检测
+void UserLoginDialog::onUsernameTextChanged(const QString& text) {
+    if (!m_registerUsernameEdit) return;
+    
+    QRegularExpression re("^[a-zA-Z0-9_]{3,20}$");
+    if (!text.isEmpty() && !re.match(text).hasMatch()) {
+        m_registerUsernameEdit->setStyleSheet("border: 2px solid #fdcb6e;");
+        m_usernameCheckLabel->setText("");
+        m_isUsernameAvailable = false;
+    } else {
+        m_registerUsernameEdit->setStyleSheet("");
+        
+        // 实时检查用户名是否可用
+        if (text.length() >= 3) {
+            m_usernameCheckLabel->setText("⏳ 正在检查用户名...");
+            m_usernameCheckLabel->setStyleSheet("color: #0984e3; font-size: 12px;");
+            UserManager::instance()->checkUsernameExists(text);
+        } else {
+            m_usernameCheckLabel->setText("");
+        }
+    }
+}
+
+void UserLoginDialog::onUsernameCheckResult(bool exists) {
+    QString username = m_registerUsernameEdit->text().trimmed();
+    
+    if (exists) {
+        m_usernameCheckLabel->setText("❌ 该用户名已被使用");
+        m_usernameCheckLabel->setStyleSheet("color: #d63031; font-size: 12px;");
+        m_isUsernameAvailable = false;
+    } else {
+        m_usernameCheckLabel->setText("✅ 该用户名可用");
+        m_usernameCheckLabel->setStyleSheet("color: #00b894; font-size: 12px;");
+        m_isUsernameAvailable = true;
+    }
+}
+
+// 忘记密码功能
+void UserLoginDialog::onForgotPasswordClicked() {
+    // 创建忘记密码对话框
+    QDialog *forgotDialog = new QDialog(this);
+    forgotDialog->setWindowTitle("忘记密码");
+    forgotDialog->setModal(true);
+    forgotDialog->resize(400, 300);
+    
+    QVBoxLayout *layout = new QVBoxLayout(forgotDialog);
+    layout->setSpacing(15);
+    layout->setContentsMargins(30, 30, 30, 30);
+    
+    QLabel *titleLabel = new QLabel("🔑 重置密码", forgotDialog);
+    titleLabel->setStyleSheet("font-size: 20px; font-weight: bold; color: #2d3436;");
+    titleLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(titleLabel);
+    
+    QLabel *descLabel = new QLabel("请输入您的注册邮箱，我们将发送密码重置链接到您的邮箱。", forgotDialog);
+    descLabel->setWordWrap(true);
+    descLabel->setStyleSheet("color: #636e72; font-size: 13px;");
+    layout->addWidget(descLabel);
+    
+    layout->addSpacing(10);
+    
+    QLabel *emailLabel = new QLabel("📧 邮箱地址", forgotDialog);
+    emailLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
+    layout->addWidget(emailLabel);
+    
+    QLineEdit *emailEdit = new QLineEdit(forgotDialog);
+    emailEdit->setPlaceholderText("请输入注册邮箱");
+    emailEdit->setFixedHeight(45);
+    emailEdit->setClearButtonEnabled(true);
+    layout->addWidget(emailEdit);
+    
+    QLabel *statusLabel = new QLabel(forgotDialog);
+    statusLabel->setWordWrap(true);
+    statusLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(statusLabel);
+    
+    layout->addSpacing(10);
+    
+    QPushButton *submitBtn = new QPushButton("📤 发送重置链接", forgotDialog);
+    submitBtn->setProperty("cssClass", "primaryBtn");
+    submitBtn->setFixedHeight(50);
+    submitBtn->setCursor(Qt::PointingHandCursor);
+    layout->addWidget(submitBtn);
+    
+    QPushButton *cancelBtn = new QPushButton("取消", forgotDialog);
+    cancelBtn->setFixedHeight(45);
+    cancelBtn->setCursor(Qt::PointingHandCursor);
+    cancelBtn->setStyleSheet(R"(
+        QPushButton {
+            background-color: #636e72;
+            color: white;
+            font-size: 14px;
+            border: none;
+            border-radius: 6px;
+        }
+        QPushButton:hover {
+            background-color: #b2bec3;
+        }
+    )");
+    layout->addWidget(cancelBtn);
+    
+    connect(cancelBtn, &QPushButton::clicked, forgotDialog, &QDialog::reject);
+    
+    connect(submitBtn, &QPushButton::clicked, this, [=]() {
+        QString email = emailEdit->text().trimmed();
+        
+        if (email.isEmpty()) {
+            statusLabel->setText("❌ 请输入邮箱地址");
+            statusLabel->setStyleSheet("color: #d63031; font-size: 13px;");
+            return;
+        }
+        
+        if (!validateEmail(email)) {
+            statusLabel->setText("❌ 请输入有效的邮箱地址");
+            statusLabel->setStyleSheet("color: #d63031; font-size: 13px;");
+            return;
+        }
+        
+        submitBtn->setEnabled(false);
+        submitBtn->setText("⏳ 发送中...");
+        statusLabel->setText("");
+        
+        // 请求密码重置
+        UserManager::instance()->requestPasswordReset(email);
+        
+        // 连接信号
+        connect(UserManager::instance(), &UserManager::passwordResetRequestComplete, this, [=]() {
+            statusLabel->setText("✅ 重置链接已发送！请检查您的邮箱。");
+            statusLabel->setStyleSheet("color: #00b894; font-size: 13px;");
+            submitBtn->setText("✅ 已发送");
+            
+            // 显示重置密码输入框（调试用，实际应该通过邮件链接）
+            QMessageBox::information(forgotDialog, "提示", 
+                "密码重置请求已发送！\n\n"
+                "测试模式下，请联系管理员获取重置 token。");
+        });
+        
+        connect(UserManager::instance(), &UserManager::passwordResetRequestFailed, this, [=](const QString& error) {
+            statusLabel->setText("❌ " + error);
+            statusLabel->setStyleSheet("color: #d63031; font-size: 13px;");
+            submitBtn->setEnabled(true);
+            submitBtn->setText("📤 发送重置链接");
+        });
+    });
+    
+    forgotDialog->exec();
+    forgotDialog->deleteLater();
 }

@@ -69,12 +69,15 @@ public:
     void loginAuto(const QString& identifier, const QString& password);
     void registerUser(const QString& username, const QString& email, const QString& password);
     void checkEmailExists(const QString& email);
+    void checkUsernameExists(const QString& username);
     void logout();
     void fetchProfile();
     void autoLogin();
     
     void updateProfile(const QString& username, const QString& avatar);
     void changePassword(const QString& oldPassword, const QString& newPassword);
+    void requestPasswordReset(const QString& email);
+    void resetPassword(const QString& token, const QString& newPassword);
     
 signals:
     void loginSuccess(const UserInfo& user);
@@ -82,20 +85,28 @@ signals:
     void registerSuccess();
     void registerFailed(const QString& error);
     void emailCheckResult(bool exists);
+    void usernameCheckResult(bool exists);
     void profileLoaded(const UserInfo& user);
     void logoutComplete();
     void profileUpdated();
     void passwordChanged();
+    void passwordResetRequestComplete();
+    void passwordResetRequestFailed(const QString& error);
+    void passwordResetComplete();
+    void passwordResetFailed(const QString& error);
     
 private slots:
     void onApiResponse(const QString& endpoint, const QJsonDocument& response);
     void onLoginResponse(const QString& endpoint, const QJsonDocument& response);
     void onRegisterResponse(const QString& endpoint, const QJsonDocument& response);
     void onEmailCheckResponse(const QString& endpoint, const QJsonDocument& response);
+    void onUsernameCheckResponse(const QString& endpoint, const QJsonDocument& response);
     void onProfileResponse(const QString& endpoint, const QJsonDocument& response);
     void onRequestFailed(const QString& endpoint, int errorCode, const QString& error);
     void onUpdateProfileResponse(const QString& endpoint, const QJsonDocument& response);
     void onChangePasswordResponse(const QString& endpoint, const QJsonDocument& response);
+    void onPasswordResetRequestResponse(const QString& endpoint, const QJsonDocument& response);
+    void onPasswordResetResponse(const QString& endpoint, const QJsonDocument& response);
     
 private:
     UserManager();

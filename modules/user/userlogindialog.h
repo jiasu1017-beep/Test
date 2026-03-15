@@ -29,6 +29,7 @@ private slots:
             void onRegisterFailed(const QString& error);
             
             void onEmailCheckResult(bool exists);
+            void onUsernameCheckResult(bool exists);
             
             void switchToRegister();
             void switchToLogin();
@@ -40,6 +41,12 @@ private slots:
             void onUsernameTextChanged(const QString& text);
             void loadSavedCredentials();
             void saveCredentials();
+            
+            void toggleLoginPasswordVisibility();
+            void toggleRegisterPasswordVisibility();
+            void toggleConfirmPasswordVisibility();
+            
+            void onForgotPasswordClicked();
 
 private:
     void setupUI();
@@ -57,21 +64,29 @@ private:
             QWidget *m_loginPage;
             QLineEdit *m_loginIdentifierEdit;
             QLineEdit *m_loginPasswordEdit;
+            QPushButton *m_loginPasswordToggleBtn;
             QCheckBox *m_rememberMeCheck;
             QPushButton *m_loginBtn;
             QLabel *m_loginStatusLabel;
+            QPushButton *m_forgotPasswordBtn;
     
     QWidget *m_registerPage;
     QLineEdit *m_registerUsernameEdit;
+    QLabel *m_usernameCheckLabel;
     QLineEdit *m_registerEmailEdit;
     QLineEdit *m_registerPasswordEdit;
+    QPushButton *m_registerPasswordToggleBtn;
     QLineEdit *m_registerConfirmPasswordEdit;
+    QPushButton *m_confirmPasswordToggleBtn;
+    QLabel *m_passwordStrengthLabel;
     QPushButton *m_registerBtn;
     QLabel *m_registerStatusLabel;
     
     QPushButton *m_cancelBtn;
     
     bool m_isValidating;
+    bool m_isUsernameAvailable;
+    QString m_resetToken;
 };
 
 #endif // USERLOGINDIALOG_H

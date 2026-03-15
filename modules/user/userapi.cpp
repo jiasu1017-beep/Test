@@ -189,6 +189,14 @@ void UserManager::checkEmailExists(const QString& email) {
     ApiClient::instance()->get(url);
 }
 
+void UserManager::checkUsernameExists(const QString& username) {
+    qDebug() << "[检查用户名] 开始检查:" << username;
+    m_pendingRequest = "/api/auth/check-username";
+    QString url = "/api/auth/check-username?username=" + QUrl::toPercentEncoding(username);
+    qDebug() << "[检查用户名] 请求 URL:" << url;
+    ApiClient::instance()->get(url);
+}
+
 void UserManager::logout() {
     m_token.clear();
     m_currentUser = {};
@@ -258,6 +266,25 @@ void UserManager::changePassword(const QString& oldPassword, const QString& newP
     ApiClient::instance()->post("/api/user/change-password", data);
 }
 
+void UserManager::requestPasswordReset(const QString& email) {
+    qDebug() << "[请求密码重置] 邮箱:" << email;
+    m_pendingRequest = "/api/auth/request-password-reset";
+    QJsonObject data;
+    data["email"] = email;
+    
+    ApiClient::instance()->post("/api/auth/request-password-reset", data);
+}
+
+void UserManager::resetPassword(const QString& token, const QString& newPassword) {
+    qDebug() << "[重置密码] 使用 token 重置密码";
+    m_pendingRequest = "/api/auth/reset-password";
+    QJsonObject data;
+    data["token"] = token;
+    data["new_password"] = hashPassword(newPassword);
+    
+    ApiClient::instance()->post("/api/auth/reset-password", data);
+}
+
 void UserManager::onApiResponse(const QString& endpoint, const QJsonDocument& response) {
     qDebug() << "[API 响应]" << endpoint << "状态: 成功";
     
@@ -275,12 +302,18 @@ void UserManager::onApiResponse(const QString& endpoint, const QJsonDocument& re
         onRegisterResponse(endpoint, response);
     } else if (requestEndpoint == "/api/auth/check-email") {
         onEmailCheckResponse(endpoint, response);
+    } else if (requestEndpoint == "/api/auth/check-username") {
+        onUsernameCheckResponse(endpoint, response);
     } else if (requestEndpoint == "/api/auth/profile") {
         onProfileResponse(endpoint, response);
     } else if (requestEndpoint == "/api/user/update-profile") {
         onUpdateProfileResponse(endpoint, response);
     } else if (requestEndpoint == "/api/user/change-password") {
         onChangePasswordResponse(endpoint, response);
+    } else if (requestEndpoint == "/api/auth/request-password-reset") {
+        onPasswordResetRequestResponse(endpoint, response);
+    } else if (requestEndpoint == "/api/auth/reset-password") {
+        onPasswordResetResponse(endpoint, response);
     } else {
         qDebug() << "[警告] 未处理的 API 响应:" << requestEndpoint;
     }
@@ -394,6 +427,43 @@ void UserManager::onChangePasswordResponse(const QString& endpoint, const QJsonD
     }
 }
 
+void UserManager::onUsernameCheckResponse(const QString& endpoint, const QJsonDocument& response) {
+    if (!endpoint.contains("/api/auth/check-username")) return;
+    
+    QJsonObject obj = response.object();
+    bool exists = obj["exists"].toBool();
+    qDebug() << "[用户名检查响应] 用户名是否存在:" << exists;
+    emit usernameCheckResult(exists);
+}
+
+void UserManager::onPasswordResetRequestResponse(const QString& endpoint, const QJsonDocument& response) {
+    if (endpoint != "/api/auth/request-password-reset") return;
+    
+    QJsonObject obj = response.object();
+    if (obj["success"].toBool()) {
+        emit passwordResetRequestComplete();
+        qDebug() << "密码重置请求成功";
+    } else {
+        QString error = obj["error"].toString();
+        emit passwordResetRequestFailed(error);
+        qDebug() << "密码重置请求失败:" << error;
+    }
+}
+
+void UserManager::onPasswordResetResponse(const QString& endpoint, const QJsonDocument& response) {
+    if (endpoint != "/api/auth/reset-password") return;
+    
+    QJsonObject obj = response.object();
+    if (obj["success"].toBool()) {
+        emit passwordResetComplete();
+        qDebug() << "密码重置成功";
+    } else {
+        QString error = obj["error"].toString();
+        emit passwordResetFailed(error);
+        qDebug() << "密码重置失败:" << error;
+    }
+}
+
 void UserManager::onRequestFailed(const QString& endpoint, int errorCode, const QString& error) {
     qDebug() << "[请求失败]" << "endpoint:" << endpoint << "errorCode:" << errorCode << "error:" << error;
     
@@ -402,13 +472,19 @@ void UserManager::onRequestFailed(const QString& endpoint, int errorCode, const 
     } else if (endpoint == "/api/auth/register") {
         emit registerFailed(error);
     } else if (endpoint.contains("/api/auth/check-email")) {
-        // 邮箱检查失败，发送 false 表示邮箱不存在（或者查询失败）
         qDebug() << "[邮箱检查失败] 发送 false";
-        emit emailCheckResult(false);  // 或者可以添加一个错误信号
+        emit emailCheckResult(false);
+    } else if (endpoint.contains("/api/auth/check-username")) {
+        qDebug() << "[用户名检查失败] 发送 false";
+        emit usernameCheckResult(false);
     } else if (endpoint == "/api/user/update-profile") {
         emit loginFailed(error);
     } else if (endpoint == "/api/user/change-password") {
         emit loginFailed(error);
+    } else if (endpoint == "/api/auth/request-password-reset") {
+        emit passwordResetRequestFailed(error);
+    } else if (endpoint == "/api/auth/reset-password") {
+        emit passwordResetFailed(error);
     }
 }
 
