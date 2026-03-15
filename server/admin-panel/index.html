@@ -732,10 +732,13 @@
                     <td>${formatDate(u.created_at)}</td>
                     <td>${u.last_login ? formatDate(u.last_login) : '-'}</td>
                     <td>
-                        <button class="btn btn-sm btn-primary btn-action" onclick="editUser(${u.id}, '${u.email}', '${u.role}', '${u.status}')">
+                        <button class="btn btn-sm btn-primary btn-action" onclick="editUser(${u.id}, '${u.email}', '${u.role}', '${u.status}')" title="编辑用户">
                             <i class="bi bi-pencil"></i>
                         </button>
-                        <button class="btn btn-sm btn-danger btn-action" onclick="deleteUser(${u.id})">
+                        <button class="btn btn-sm btn-warning btn-action" onclick="resetPassword(${u.id}, '${u.username}')" title="重置密码为 666666">
+                            <i class="bi bi-key"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger btn-action" onclick="deleteUser(${u.id})" title="删除用户">
                             <i class="bi bi-trash"></i>
                         </button>
                     </td>
@@ -798,6 +801,27 @@
                 }
             } catch (err) {
                 showToast('删除失败', 'danger');
+            }
+        }
+
+        async function resetPassword(id, username) {
+            if (!confirm(`确定要将用户 "${username}" 的密码重置为 666666 吗？\n\n重置后该用户需要使用新密码重新登录。`)) return;
+
+            try {
+                const res = await fetch(`/api/admin/users/${id}/reset-password`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast(`密码已重置为 666666`, 'success');
+                    loadUsers();
+                } else {
+                    showToast(data.message || '重置失败', 'danger');
+                }
+            } catch (err) {
+                showToast('重置失败', 'danger');
             }
         }
 
@@ -1067,8 +1091,43 @@
 
         function formatDate(dateStr) {
             if (!dateStr) return '-';
-            const date = new Date(dateStr);
-            return date.toLocaleString('zh-CN');
+            // 处理 SQLite 时间格式 (YYYY-MM-DD HH:MM:SS)
+            // 转换为 ISO 格式以便 JavaScript 正确解析
+            let isoDateStr = dateStr;
+            if (dateStr.includes(' ') && !dateStr.includes('T')) {
+                isoDateStr = dateStr.replace(' ', 'T') + 'Z';
+            }
+            const date = new Date(isoDateStr);
+            const now = new Date();
+            const diff = now - date;
+            
+            // 1 分钟内
+            if (diff < 60 * 1000) {
+                return '刚刚';
+            }
+            // 1 小时内
+            if (diff < 60 * 60 * 1000) {
+                const minutes = Math.floor(diff / (60 * 1000));
+                return `${minutes}分钟前`;
+            }
+            // 24 小时内
+            if (diff < 24 * 60 * 60 * 1000) {
+                const hours = Math.floor(diff / (60 * 60 * 1000));
+                return `${hours}小时前`;
+            }
+            // 7 天内
+            if (diff < 7 * 24 * 60 * 60 * 1000) {
+                const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+                return `${days}天前`;
+            }
+            // 超过 7 天显示完整日期
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
         }
 
         function escapeHtml(text) {

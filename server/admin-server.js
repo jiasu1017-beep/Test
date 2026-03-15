@@ -81,6 +81,17 @@ db.serialize(() => {
         value TEXT,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
+    
+    // 用户配置表
+    db.run(`CREATE TABLE IF NOT EXISTS user_configs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, key),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS admin_users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -160,6 +171,23 @@ const authenticateAdmin = (req, res, next) => {
     });
 };
 
+// 验证普通用户 token
+const authenticateToken = (req, res, next) => {
+    const token = req.headers['authorization']?.replace('Bearer ', '');
+    
+    if (!token) {
+        return res.status(401).json({ success: false, message: '未授权访问' });
+    }
+
+    db.get("SELECT user_id FROM user_sessions WHERE token = ? AND expires_at > datetime('now')", [token], (err, session) => {
+        if (err || !session) {
+            return res.status(401).json({ success: false, message: '登录已过期，请重新登录' });
+        }
+        req.userId = session.user_id;
+        next();
+    });
+};
+
 app.get('/api/admin/stats', authenticateAdmin, (req, res) => {
     const stats = {};
     
@@ -172,7 +200,8 @@ app.get('/api/admin/stats', authenticateAdmin, (req, res) => {
             db.get("SELECT COUNT(*) as count FROM login_logs WHERE created_at > datetime('now', '-24 hours')", (err, row) => {
                 stats.logins24h = row?.count || 0;
                 
-                db.get("SELECT COUNT(*) as count FROM user_sessions WHERE expires_at > datetime('now')", (err, row) => {
+                // 修复：统计有效的在线用户（未过期的 session）
+                db.get("SELECT COUNT(DISTINCT user_id) as count FROM user_sessions WHERE expires_at > datetime('now')", (err, row) => {
                     stats.onlineUsers = row?.count || 0;
                     
                     db.get("SELECT COUNT(*) as count FROM app_collections", (err, row) => {
@@ -280,6 +309,48 @@ app.delete('/api/admin/users/:id', authenticateAdmin, (req, res) => {
             [req.adminId, 'delete_user', `删除用户 ID: ${id}`, req.ip]);
         
         res.json({ success: true, message: '用户删除成功' });
+    });
+});
+
+// 重置用户密码
+app.post('/api/admin/users/:id/reset-password', authenticateAdmin, (req, res) => {
+    const { id } = req.params;
+    const newPassword = '666666'; // 默认重置密码
+    
+    console.log(`\n[重置密码] 管理员 ID: ${req.adminId}, 用户 ID: ${id}`);
+    
+    // 使用 SHA-256 哈希密码
+    const crypto = require('crypto');
+    const hashedPassword = crypto.createHash('sha256').update(newPassword).digest('hex');
+    
+    db.run("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, id], function(err) {
+        if (err) {
+            console.log(`  - 失败：${err.message}`);
+            return res.status(500).json({ success: false, message: '重置密码失败：' + err.message });
+        }
+        
+        if (this.changes === 0) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+        
+        // 使所有 session 失效（强制重新登录）
+        db.run("DELETE FROM user_sessions WHERE user_id = ?", [id]);
+        
+        // 记录操作日志
+        db.run("INSERT INTO operation_logs (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
+            [req.adminId, 'reset_password', `重置用户 ID: ${id} 的密码`, req.ip]);
+        
+        // 记录密码重置日志
+        db.run("INSERT INTO login_logs (user_id, action, status, ip_address) VALUES (?, ?, ?, ?)",
+            [parseInt(id), 'password_reset', 'admin_reset', req.ip]);
+        
+        console.log(`  - 成功：用户 ID: ${id} 密码已重置为 ${newPassword}`);
+        
+        res.json({ 
+            success: true, 
+            message: `密码已重置为 ${newPassword}`,
+            newPassword: newPassword
+        });
     });
 });
 
@@ -422,6 +493,53 @@ app.get('/api/admin/config', authenticateAdmin, (req, res) => {
     });
 });
 
+// 用户获取自己的配置
+app.get('/api/config/get', authenticateToken, (req, res) => {
+    db.get("SELECT id FROM users WHERE id = ?", [req.userId], (err, user) => {
+        if (err || !user) {
+            return res.status(401).json({ success: false, error: '用户未授权' });
+        }
+        
+        // 从 user_configs 表获取用户配置
+        db.all("SELECT * FROM user_configs WHERE user_id = ?", [req.userId], (err, configs) => {
+            if (err) {
+                return res.status(500).json({ success: false, error: '获取配置失败' });
+            }
+            
+            // 转换为对象格式
+            const configObj = {};
+            configs.forEach(config => {
+                try {
+                    configObj[config.key] = JSON.parse(config.value);
+                } catch (e) {
+                    configObj[config.key] = config.value;
+                }
+            });
+            
+            res.json({ success: true, configs: configObj });
+        });
+    });
+});
+
+// 用户保存配置
+app.post('/api/config/save', authenticateToken, (req, res) => {
+    const { configs } = req.body;
+    
+    if (!configs) {
+        return res.status(400).json({ success: false, error: '配置数据不能为空' });
+    }
+    
+    db.serialize(() => {
+        for (const [key, value] of Object.entries(configs)) {
+            const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
+            db.run(`INSERT OR REPLACE INTO user_configs (user_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
+                [req.userId, key, valueStr]);
+        }
+        
+        res.json({ success: true, message: '配置保存成功' });
+    });
+});
+
 app.put('/api/admin/config/:key', authenticateAdmin, (req, res) => {
     const { key } = req.params;
     const { value } = req.body;
@@ -552,8 +670,9 @@ app.post('/api/auth/register', (req, res) => {
         return res.status(400).json({ success: false, error: '密码长度至少 6 位' });
     }
     
-    const bcrypt = require('bcryptjs');
-    const hashedPassword = bcrypt.hashSync(password, 10);
+    // 修复：使用 SHA-256 哈希密码（与客户端一致）
+    const crypto = require('crypto');
+    const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
     
     db.run("INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, 'user')",
         [username, email, hashedPassword], function(err) {
@@ -605,13 +724,60 @@ app.post('/api/auth/login', (req, res) => {
             return res.status(401).json({ success: false, error: '邮箱/用户名或密码错误' });
         }
         
-        const bcrypt = require('bcryptjs');
-        if (!bcrypt.compareSync(password, user.password)) {
+        // 修复：支持 SHA-256 和 bcrypt 两种密码格式
+        const crypto = require('crypto');
+        const sha256Hash = crypto.createHash('sha256').update(password).digest('hex');
+        
+        console.log(`  - 密码验证调试:`);
+        console.log(`    收到密码长度：${password.length}`);
+        console.log(`    收到密码前 20 位：${password.substring(0, 20)}...`);
+        console.log(`    数据库密码长度：${user.password.length}`);
+        console.log(`    数据库密码前 20 位：${user.password.substring(0, 20)}...`);
+        console.log(`    SHA256 哈希：${sha256Hash}`);
+        
+        let passwordValid = false;
+        
+        // 检查数据库密码格式并验证
+        if (user.password.length === 64 && /^[a-f0-9]{64}$/i.test(user.password)) {
+            // 数据库密码是 SHA-256 格式，直接比较
+            console.log(`    检测到数据库密码为 SHA-256 格式`);
+            passwordValid = (user.password === sha256Hash);
+            console.log(`    SHA-256 验证结果：${passwordValid ? '成功' : '失败'}`);
+        } else if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
+            // 数据库密码是 bcrypt 格式
+            console.log(`    检测到数据库密码为 bcrypt 格式`);
+            
+            // 尝试 1: 直接用收到的密码（可能是 SHA-256）进行 bcrypt 验证
+            const bcrypt = require('bcryptjs');
+            try {
+                passwordValid = bcrypt.compareSync(password, user.password);
+                if (passwordValid) {
+                    console.log(`    bcrypt 验证（使用收到的密码）结果：成功`);
+                } else {
+                    console.log(`    bcrypt 验证（使用收到的密码）结果：失败`);
+                    // 尝试 2: 如果失败，说明收到的是 SHA-256，需要用明文验证
+                    // 但客户端已经发送哈希，所以这种情况无法处理
+                    console.log(`    提示：客户端发送的是 SHA-256 哈希，但数据库需要 bcrypt 验证`);
+                    console.log(`    建议：重新注册该用户或使用明文密码登录`);
+                }
+            } catch (e) {
+                console.log(`    bcrypt 验证异常：${e.message}`);
+                passwordValid = false;
+            }
+        } else {
+            console.log(`    未知密码格式，尝试验证`);
+            // 其他格式，直接比较
+            passwordValid = (user.password === password || user.password === sha256Hash);
+        }
+        
+        if (!passwordValid) {
             console.log(`  - 失败：密码错误`);
             db.run("INSERT INTO login_logs (user_id, username, action, status, ip_address) VALUES (?, ?, ?, ?, ?)",
                 [user.id, user.username, 'login', 'failed_wrong_password', req.ip]);
             return res.status(401).json({ success: false, error: '邮箱/用户名或密码错误' });
         }
+        
+        console.log(`  - 密码验证通过`);
         
         const token = require('crypto').randomBytes(32).toString('hex');
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -619,7 +785,9 @@ app.post('/api/auth/login', (req, res) => {
         db.run("INSERT INTO user_sessions (user_id, token, ip_address, expires_at) VALUES (?, ?, ?, ?)",
             [user.id, token, req.ip, expiresAt]);
         
-        db.run("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", [user.id]);
+        // 修复：使用 ISO 格式记录登录时间
+        const loginTime = new Date().toISOString();
+        db.run("UPDATE users SET last_login = ? WHERE id = ?", [loginTime, user.id]);
         
         db.run("INSERT INTO login_logs (user_id, username, action, status, ip_address) VALUES (?, ?, ?, ?, ?)",
             [user.id, user.username, 'login', 'success', req.ip]);

@@ -5,6 +5,12 @@
 #include <QUrlQuery>
 #include <QSettings>
 
+QString hashPassword(const QString& password) {
+    QByteArray data = password.toUtf8();
+    QByteArray hash = QCryptographicHash::hash(data, QCryptographicHash::Sha256);
+    return hash.toHex();
+}
+
 ApiClient* ApiClient::instance() {
     static ApiClient client;
     return &client;
@@ -71,18 +77,32 @@ void ApiClient::post(const QString& endpoint, const QString& jsonStr) {
 
 void ApiClient::onReplyFinished() {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
-    if (!reply) return;
+    if (!reply) {
+        qDebug() << "[API 响应] reply 为空";
+        return;
+    }
 
     QString endpoint = reply->property("endpoint").toString();
     int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    qDebug() << "API Response:" << endpoint << "status:" << statusCode;
+    qDebug() << "[API 响应]" << "endpoint:" << endpoint << "status:" << statusCode;
+    
     QByteArray data = reply->readAll();
+    qDebug() << "[API 响应] 响应数据:" << QString::fromUtf8(data);
+    
+    if (reply->error() != QNetworkReply::NoError) {
+        qDebug() << "[API 响应] 网络错误:" << reply->errorString();
+        emit requestFailed(endpoint, statusCode, reply->errorString());
+        reply->deleteLater();
+        return;
+    }
     
     if (statusCode >= 200 && statusCode < 300) {
         QJsonDocument doc = QJsonDocument::fromJson(data);
         if (!doc.isNull()) {
+            qDebug() << "[API 响应] JSON 解析成功，发送 requestSuccess";
             emit requestSuccess(endpoint, doc);
         } else {
+            qDebug() << "[API 响应] JSON 解析失败";
             emit requestFailed(endpoint, statusCode, "Invalid JSON response");
         }
     } else {
@@ -90,6 +110,7 @@ void ApiClient::onReplyFinished() {
         if (error.isEmpty()) {
             error = "HTTP " + QString::number(statusCode);
         }
+        qDebug() << "[API 响应] HTTP 错误:" << error;
         emit requestFailed(endpoint, statusCode, error);
     }
     
@@ -101,14 +122,9 @@ UserManager* UserManager::instance() {
     return &manager;
 }
 
-UserManager::UserManager() : QObject(), m_isLoggedIn(false) {
+UserManager::UserManager() : QObject(), m_pendingRequest(""), m_isLoggedIn(false) {
     ApiClient* client = ApiClient::instance();
-    connect(client, &ApiClient::requestSuccess, this, &UserManager::onLoginResponse);
-    connect(client, &ApiClient::requestSuccess, this, &UserManager::onRegisterResponse);
-    connect(client, &ApiClient::requestSuccess, this, &UserManager::onProfileResponse);
-    connect(client, &ApiClient::requestSuccess, this, &UserManager::onEmailCheckResponse);
-    connect(client, &ApiClient::requestSuccess, this, &UserManager::onUpdateProfileResponse);
-    connect(client, &ApiClient::requestSuccess, this, &UserManager::onChangePasswordResponse);
+    connect(client, &ApiClient::requestSuccess, this, &UserManager::onApiResponse);
     connect(client, &ApiClient::requestFailed, this, &UserManager::onRequestFailed);
 }
 
@@ -118,8 +134,9 @@ void UserManager::login(const QString& email, const QString& password) {
     
     QJsonObject data;
     data["email"] = email;
-    data["password"] = password;
+    data["password"] = hashPassword(password);
     
+    m_pendingRequest = "/api/auth/login";
     ApiClient::instance()->post("/api/auth/login", data);
 }
 
@@ -129,8 +146,9 @@ void UserManager::loginByUsername(const QString& username, const QString& passwo
     
     QJsonObject data;
     data["username"] = username;
-    data["password"] = password;
+    data["password"] = hashPassword(password);
     
+    m_pendingRequest = "/api/auth/login";
     ApiClient::instance()->post("/api/auth/login", data);
 }
 
@@ -156,20 +174,26 @@ void UserManager::registerUser(const QString& username, const QString& email, co
     QJsonObject data;
     data["username"] = username;
     data["email"] = email;
-    data["password"] = password;
+    data["password"] = hashPassword(password);
     
+    m_pendingRequest = "/api/auth/register";
     ApiClient::instance()->post("/api/auth/register", data);
 }
 
 void UserManager::checkEmailExists(const QString& email) {
-    qDebug() << "Checking email:" << email;
-    ApiClient::instance()->get("/api/auth/check-email?email=" + QUrl::toPercentEncoding(email));
+    qDebug() << "[检查邮箱] 开始检查:" << email;
+    qDebug() << "[检查邮箱] 当前 pendingRequest:" << m_pendingRequest;
+    m_pendingRequest = "/api/auth/check-email";
+    QString url = "/api/auth/check-email?email=" + QUrl::toPercentEncoding(email);
+    qDebug() << "[检查邮箱] 请求 URL:" << url;
+    ApiClient::instance()->get(url);
 }
 
 void UserManager::logout() {
     m_token.clear();
     m_currentUser = {};
     m_isLoggedIn = false;
+    m_pendingRequest = "";
     ApiClient::instance()->setAuthToken("");
     
     QSettings settings;
@@ -185,6 +209,7 @@ void UserManager::fetchProfile() {
         return;
     }
     
+    m_pendingRequest = "/api/auth/profile";
     ApiClient::instance()->get("/api/auth/profile");
 }
 
@@ -196,7 +221,8 @@ void UserManager::autoLogin() {
     if (!token.isEmpty() && !email.isEmpty()) {
         m_token = token;
         ApiClient::instance()->setAuthToken(token);
-        fetchProfile();
+        m_pendingRequest = "/api/auth/profile";
+        ApiClient::instance()->get("/api/auth/profile");
     }
 }
 
@@ -206,6 +232,7 @@ void UserManager::updateProfile(const QString& username, const QString& avatar) 
         return;
     }
     
+    m_pendingRequest = "/api/user/update-profile";
     QJsonObject data;
     if (!username.isEmpty()) {
         data["username"] = username;
@@ -223,11 +250,42 @@ void UserManager::changePassword(const QString& oldPassword, const QString& newP
         return;
     }
     
+    m_pendingRequest = "/api/user/change-password";
     QJsonObject data;
-    data["old_password"] = oldPassword;
-    data["new_password"] = newPassword;
+    data["old_password"] = hashPassword(oldPassword);
+    data["new_password"] = hashPassword(newPassword);
     
     ApiClient::instance()->post("/api/user/change-password", data);
+}
+
+void UserManager::onApiResponse(const QString& endpoint, const QJsonDocument& response) {
+    qDebug() << "[API 响应]" << endpoint << "状态: 成功";
+    
+    QString requestEndpoint = endpoint.isEmpty() ? m_pendingRequest : endpoint;
+    
+    // 修复：移除查询参数，只保留路径部分
+    if (requestEndpoint.contains("?")) {
+        requestEndpoint = requestEndpoint.split("?").first();
+        qDebug() << "[API 响应] 清理后的 endpoint:" << requestEndpoint;
+    }
+    
+    if (requestEndpoint == "/api/auth/login") {
+        onLoginResponse(endpoint, response);
+    } else if (requestEndpoint == "/api/auth/register") {
+        onRegisterResponse(endpoint, response);
+    } else if (requestEndpoint == "/api/auth/check-email") {
+        onEmailCheckResponse(endpoint, response);
+    } else if (requestEndpoint == "/api/auth/profile") {
+        onProfileResponse(endpoint, response);
+    } else if (requestEndpoint == "/api/user/update-profile") {
+        onUpdateProfileResponse(endpoint, response);
+    } else if (requestEndpoint == "/api/user/change-password") {
+        onChangePasswordResponse(endpoint, response);
+    } else {
+        qDebug() << "[警告] 未处理的 API 响应:" << requestEndpoint;
+    }
+    
+    m_pendingRequest = "";
 }
 
 void UserManager::onLoginResponse(const QString& endpoint, const QJsonDocument& response) {
@@ -273,9 +331,17 @@ void UserManager::onRegisterResponse(const QString& endpoint, const QJsonDocumen
 }
 
 void UserManager::onEmailCheckResponse(const QString& endpoint, const QJsonDocument& response) {
-    if (!endpoint.contains("/api/auth/check-email")) return;
+    qDebug() << "[邮箱检查响应] endpoint:" << endpoint;
+    qDebug() << "[邮箱检查响应] pendingRequest:" << m_pendingRequest;
+    
+    if (!endpoint.contains("/api/auth/check-email")) {
+        qDebug() << "[邮箱检查响应] endpoint 不匹配，返回";
+        return;
+    }
     
     QJsonObject obj = response.object();
+    qDebug() << "[邮箱检查响应] 完整响应:" << QJsonDocument(obj).toJson();
+    
     bool exists = obj["exists"].toBool();
     qDebug() << "Email exists:" << exists;
     emit emailCheckResult(exists);
@@ -329,12 +395,16 @@ void UserManager::onChangePasswordResponse(const QString& endpoint, const QJsonD
 }
 
 void UserManager::onRequestFailed(const QString& endpoint, int errorCode, const QString& error) {
-    qDebug() << "Request failed:" << endpoint << "error:" << errorCode << error;
+    qDebug() << "[请求失败]" << "endpoint:" << endpoint << "errorCode:" << errorCode << "error:" << error;
     
     if (endpoint == "/api/auth/login") {
         emit loginFailed(error);
     } else if (endpoint == "/api/auth/register") {
         emit registerFailed(error);
+    } else if (endpoint.contains("/api/auth/check-email")) {
+        // 邮箱检查失败，发送 false 表示邮箱不存在（或者查询失败）
+        qDebug() << "[邮箱检查失败] 发送 false";
+        emit emailCheckResult(false);  // 或者可以添加一个错误信号
     } else if (endpoint == "/api/user/update-profile") {
         emit loginFailed(error);
     } else if (endpoint == "/api/user/change-password") {

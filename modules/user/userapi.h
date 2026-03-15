@@ -20,6 +20,8 @@ struct UserInfo {
     int vipLevel;
     QString createdAt;
     QString lastLogin;
+    
+    UserInfo() : id(0), vipLevel(0) {}
 };
 
 class ApiClient : public QObject {
@@ -86,6 +88,7 @@ signals:
     void passwordChanged();
     
 private slots:
+    void onApiResponse(const QString& endpoint, const QJsonDocument& response);
     void onLoginResponse(const QString& endpoint, const QJsonDocument& response);
     void onRegisterResponse(const QString& endpoint, const QJsonDocument& response);
     void onEmailCheckResponse(const QString& endpoint, const QJsonDocument& response);
@@ -98,6 +101,7 @@ private:
     UserManager();
     
     QString m_token;
+    QString m_pendingRequest;
     UserInfo m_currentUser;
     bool m_isLoggedIn;
 };

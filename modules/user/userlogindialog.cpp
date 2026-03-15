@@ -276,6 +276,7 @@ void UserLoginDialog::setupRegisterPage() {
     m_registerConfirmPasswordEdit->setEchoMode(QLineEdit::Password);
     m_registerConfirmPasswordEdit->setFixedHeight(45);
     m_registerConfirmPasswordEdit->setClearButtonEnabled(true);
+    connect(m_registerConfirmPasswordEdit, &QLineEdit::textChanged, this, &UserLoginDialog::onConfirmPasswordTextChanged);
     layout->addWidget(m_registerConfirmPasswordEdit);
 
     m_registerStatusLabel = new QLabel(this);
@@ -312,7 +313,9 @@ void UserLoginDialog::setupRegisterPage() {
 
 void UserLoginDialog::onLoginClicked() {
     QString identifier = m_loginIdentifierEdit->text().trimmed();
-    QString password = m_loginPasswordEdit->text();
+    QString password = m_loginPasswordEdit->text().trimmed();  // 修复：去除密码首尾空格
+    
+    qDebug() << "[登录调试] 标识符:" << identifier << "密码长度:" << password.length() << "密码内容:" << password;
     
     if (identifier.isEmpty()) {
         showStatusMessage("请输入邮箱或用户名", true);
@@ -428,10 +431,23 @@ void UserLoginDialog::switchToLogin() {
 }
 
 void UserLoginDialog::onIdentifierTextChanged(const QString& text) {
-    if (!text.isEmpty() && !text.contains("@") && !text.contains("_")) {
-        m_loginIdentifierEdit->setStyleSheet("border: 2px solid #fdcb6e;");
-    } else {
+    if (!m_loginIdentifierEdit) return;
+    
+    if (text.isEmpty()) {
         m_loginIdentifierEdit->setStyleSheet("");
+        return;
+    }
+    
+    QRegularExpression emailRe("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}$");
+    QRegularExpression usernameRe("^[a-zA-Z0-9_]{3,20}$");
+    
+    bool isValidEmail = emailRe.match(text).hasMatch();
+    bool isValidUsername = usernameRe.match(text).hasMatch();
+    
+    if (isValidEmail || isValidUsername) {
+        m_loginIdentifierEdit->setStyleSheet("");
+    } else {
+        m_loginIdentifierEdit->setStyleSheet("border: 2px solid #fdcb6e;");
     }
 }
 
@@ -460,6 +476,8 @@ void UserLoginDialog::onRegisterPasswordTextChanged(const QString& text) {
 }
 
 void UserLoginDialog::onUsernameTextChanged(const QString& text) {
+    if (!m_registerUsernameEdit) return;
+    
     QRegularExpression re("^[a-zA-Z0-9_]{3,20}$");
     if (!text.isEmpty() && !re.match(text).hasMatch()) {
         m_registerUsernameEdit->setStyleSheet("border: 2px solid #fdcb6e;");
@@ -468,18 +486,35 @@ void UserLoginDialog::onUsernameTextChanged(const QString& text) {
     }
 }
 
+void UserLoginDialog::onConfirmPasswordTextChanged(const QString& text) {
+    if (!m_registerConfirmPasswordEdit || !m_registerPasswordEdit) return;
+    
+    QString password = m_registerPasswordEdit->text();
+    
+    if (text.isEmpty()) {
+        m_registerConfirmPasswordEdit->setStyleSheet("");
+        return;
+    }
+    
+    if (text != password && !password.isEmpty()) {
+        m_registerConfirmPasswordEdit->setStyleSheet("border: 2px solid #fdcb6e;");
+    } else {
+        m_registerConfirmPasswordEdit->setStyleSheet("");
+    }
+}
+
 void UserLoginDialog::setUIEnabled(bool enabled) {
-    m_loginIdentifierEdit->setEnabled(enabled);
-    m_loginPasswordEdit->setEnabled(enabled);
-    m_loginBtn->setEnabled(enabled);
+    if (m_loginIdentifierEdit) m_loginIdentifierEdit->setEnabled(enabled);
+    if (m_loginPasswordEdit) m_loginPasswordEdit->setEnabled(enabled);
+    if (m_loginBtn) m_loginBtn->setEnabled(enabled);
     
-    m_registerUsernameEdit->setEnabled(enabled);
-    m_registerEmailEdit->setEnabled(enabled);
-    m_registerPasswordEdit->setEnabled(enabled);
-    m_registerConfirmPasswordEdit->setEnabled(enabled);
-    m_registerBtn->setEnabled(enabled);
+    if (m_registerUsernameEdit) m_registerUsernameEdit->setEnabled(enabled);
+    if (m_registerEmailEdit) m_registerEmailEdit->setEnabled(enabled);
+    if (m_registerPasswordEdit) m_registerPasswordEdit->setEnabled(enabled);
+    if (m_registerConfirmPasswordEdit) m_registerConfirmPasswordEdit->setEnabled(enabled);
+    if (m_registerBtn) m_registerBtn->setEnabled(enabled);
     
-    m_cancelBtn->setEnabled(enabled);
+    if (m_cancelBtn) m_cancelBtn->setEnabled(enabled);
 }
 
 bool UserLoginDialog::validateEmail(const QString& email) {
