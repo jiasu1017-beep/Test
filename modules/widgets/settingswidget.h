@@ -32,6 +32,7 @@
 #include "modules/core/database.h"
 #include "modules/update/updatemanager.h"
 #include "modules/user/userapi.h"
+#include "modules/user/changepassworddialog.h"
 
 class UpdateProgressDialog;
 class MainWindow;
@@ -121,6 +122,7 @@ private:
     QPushButton *setDefaultImageKeyBtn;
     QPushButton *cloudLoginBtn;
     QPushButton *cloudSyncBtn;
+    QPushButton *cloudChangePasswordBtn;
     QLabel *cloudStatusLabel;
 
 private slots:
@@ -131,6 +133,7 @@ private slots:
     void onSetDefaultImageKey();
     void onCloudLoginClicked();
     void onCloudSyncClicked();
+    void onCloudChangePasswordClicked();
     void onCloudLoginSuccess(const UserInfo& user);
     void onCloudLogoutClicked();
 };

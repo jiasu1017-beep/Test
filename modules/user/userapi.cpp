@@ -257,12 +257,12 @@ void UserManager::changePassword(const QString& oldPassword, const QString& newP
         return;
     }
     
-    m_pendingRequest = "/api/user/change-password";
+    m_pendingRequest = "/api/auth/change-password";
     QJsonObject data;
     data["old_password"] = hashPassword(oldPassword);
     data["new_password"] = hashPassword(newPassword);
     
-    ApiClient::instance()->post("/api/user/change-password", data);
+    ApiClient::instance()->post("/api/auth/change-password", data);
 }
 
 void UserManager::requestPasswordReset(const QString& email) {
@@ -307,7 +307,7 @@ void UserManager::onApiResponse(const QString& endpoint, const QJsonDocument& re
         onProfileResponse(endpoint, response);
     } else if (requestEndpoint == "/api/user/update-profile") {
         onUpdateProfileResponse(endpoint, response);
-    } else if (requestEndpoint == "/api/user/change-password") {
+    } else if (requestEndpoint == "/api/auth/change-password") {
         onChangePasswordResponse(endpoint, response);
     } else if (requestEndpoint == "/api/auth/request-password-reset") {
         onPasswordResetRequestResponse(endpoint, response);
@@ -418,7 +418,7 @@ void UserManager::onUpdateProfileResponse(const QString& endpoint, const QJsonDo
 }
 
 void UserManager::onChangePasswordResponse(const QString& endpoint, const QJsonDocument& response) {
-    if (endpoint != "/api/user/change-password") return;
+    if (endpoint != "/api/auth/change-password") return;
     
     QJsonObject obj = response.object();
     if (obj["success"].toBool()) {

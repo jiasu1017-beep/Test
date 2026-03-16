@@ -2534,8 +2534,10 @@ QWidget *SettingsWidget::createUpdatePage()
     QHBoxLayout *cloudBtnLayout = new QHBoxLayout();
     cloudLoginBtn = new QPushButton("☁️ 登录云端", page);
     cloudSyncBtn = new QPushButton("🔄 同步配置", page);
+    cloudChangePasswordBtn = new QPushButton("🔐 修改密码", page);
     cloudBtnLayout->addWidget(cloudLoginBtn);
     cloudBtnLayout->addWidget(cloudSyncBtn);
+    cloudBtnLayout->addWidget(cloudChangePasswordBtn);
     cloudStatusLabel = new QLabel("未登录", page);
     cloudStatusLabel->setStyleSheet("color: #888;");
     cloudLayout->addLayout(cloudBtnLayout);
@@ -2544,6 +2546,7 @@ QWidget *SettingsWidget::createUpdatePage()
 
     connect(cloudLoginBtn, &QPushButton::clicked, this, &SettingsWidget::onCloudLoginClicked);
     connect(cloudSyncBtn, &QPushButton::clicked, this, &SettingsWidget::onCloudSyncClicked);
+    connect(cloudChangePasswordBtn, &QPushButton::clicked, this, &SettingsWidget::onCloudChangePasswordClicked);
     connect(UserManager::instance(), &UserManager::loginSuccess, this, &SettingsWidget::onCloudLoginSuccess);
     connect(UserManager::instance(), &UserManager::logoutComplete, this, [this]() {
         cloudStatusLabel->setText("未登录");

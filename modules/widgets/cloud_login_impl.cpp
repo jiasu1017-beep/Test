@@ -44,3 +44,14 @@ void SettingsWidget::onCloudLogoutClicked()
 {
     UserManager::instance()->logout();
 }
+
+void SettingsWidget::onCloudChangePasswordClicked()
+{
+    if (!UserManager::instance()->isLoggedIn()) {
+        QMessageBox::warning(this, "提示", "请先登录后再修改密码");
+        return;
+    }
+    
+    ChangePasswordDialog *changePwdDialog = new ChangePasswordDialog(this);
+    changePwdDialog->exec();
+}

@@ -17,6 +17,7 @@ SOURCES += main.cpp \
            modules/core/applicationmanager.cpp \
            modules/user/userapi.cpp \
            modules/user/userlogindialog.cpp \
+           modules/user/changepassworddialog.cpp \
            modules/widgets/appmanagerwidget.cpp \
            modules/widgets/shutdownwidget.cpp \
            modules/widgets/settingswidget.cpp \
@@ -45,6 +46,7 @@ HEADERS  += mainwindow.h \
             modules/core/applicationmanager.h \
             modules/user/userapi.h \
             modules/user/userlogindialog.h \
+            modules/user/changepassworddialog.h \
             modules/widgets/appmanagerwidget.h \
             modules/widgets/shutdownwidget.h \
             modules/widgets/settingswidget.h \

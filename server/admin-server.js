@@ -1042,6 +1042,83 @@ app.post('/api/auth/logout', (req, res) => {
     });
 });
 
+// 修改密码
+app.post('/api/auth/change-password', authenticateToken, (req, res) => {
+    const { old_password, new_password } = req.body;
+    const userId = req.userId;
+    
+    console.log(`\n[修改密码] 用户 ID: ${userId}`);
+    
+    if (!old_password || !new_password) {
+        console.log(`  - 失败：缺少参数`);
+        return res.status(400).json({ success: false, error: '请提供旧密码和新密码' });
+    }
+    
+    if (new_password.length < 6) {
+        console.log(`  - 失败：新密码长度不足`);
+        return res.status(400).json({ success: false, error: '新密码长度不能少于6位' });
+    }
+    
+    // 获取用户当前密码
+    db.get("SELECT password FROM users WHERE id = ?", [userId], (err, user) => {
+        if (err || !user) {
+            console.log(`  - 失败：用户不存在`);
+            return res.status(404).json({ success: false, error: '用户不存在' });
+        }
+        
+        const crypto = require('crypto');
+        
+        // 检查旧密码
+        const isOldPasswordHash = /^[a-f0-9]{64}$/i.test(old_password);
+        
+        let passwordValid = false;
+        
+        if (user.password.length === 64 && /^[a-f0-9]{64}$/i.test(user.password)) {
+            // 数据库密码是 SHA-256 格式
+            if (isOldPasswordHash) {
+                passwordValid = (user.password === old_password);
+            } else {
+                const oldHash = crypto.createHash('sha256').update(old_password).digest('hex');
+                passwordValid = (user.password === oldHash);
+            }
+        } else if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
+            const bcrypt = require('bcryptjs');
+            passwordValid = bcrypt.compareSync(old_password, user.password);
+        } else {
+            passwordValid = (user.password === old_password || user.password === old_password);
+        }
+        
+        console.log(`  - 旧密码验证结果: ${passwordValid ? '成功' : '失败'}`);
+        
+        if (!passwordValid) {
+            console.log(`  - 失败：旧密码错误`);
+            return res.status(401).json({ success: false, error: '旧密码错误' });
+        }
+        
+        // 客户端已经发送了 SHA256 哈希值，直接使用
+        const newHash = new_password;
+        
+        // 更新密码
+        db.run("UPDATE users SET password = ? WHERE id = ?", [newHash, userId], function(err) {
+            if (err) {
+                console.log(`  - 失败：${err.message}`);
+                return res.status(500).json({ success: false, error: '修改密码失败' });
+            }
+            
+            console.log(`  - 成功：新密码已更新`);
+            
+            // 使所有现有会话失效（强制重新登录）
+            db.run("DELETE FROM user_sessions WHERE user_id = ?", [userId]);
+            
+            // 记录操作日志
+            db.run("INSERT INTO operation_logs (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
+                [userId, 'change_password', '用户修改密码', req.ip]);
+            
+            res.json({ success: true, message: '密码修改成功，请重新登录' });
+        });
+    });
+});
+
 app.get('/admin/*', (req, res) => {
     res.sendFile(path.join(__dirname, 'admin-panel', 'index.html'));
 });
