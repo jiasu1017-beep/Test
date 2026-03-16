@@ -57,6 +57,10 @@ SettingsWidget::SettingsWidget(Database *db, QWidget *parent)
     setupUI();
 }
 
+SettingsWidget::~SettingsWidget()
+{
+}
+
 void SettingsWidget::setUpdateManager(UpdateManager *manager)
 {
     updateManager = manager;
@@ -2806,4 +2810,11 @@ bool SettingsWidget::isShortcutConflict(const QString &shortcut)
     }
     
     return false;
+}
+
+void SettingsWidget::updateCloudLoginStatus(const UserInfo& user) {
+    qDebug() << "[SettingsWidget] 更新云端登录状态:" << user.email;
+    cloudStatusLabel->setText("已登录：" + user.email);
+    cloudStatusLabel->setStyleSheet("color: green;");
+    cloudLoginBtn->setText("退出登录");
 }

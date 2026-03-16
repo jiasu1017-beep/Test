@@ -89,22 +89,20 @@ void ApiClient::onReplyFinished() {
     QByteArray data = reply->readAll();
     qDebug() << "[API 响应] 响应数据:" << QString::fromUtf8(data);
     
-    if (reply->error() != QNetworkReply::NoError) {
-        qDebug() << "[API 响应] 网络错误:" << reply->errorString();
-        emit requestFailed(endpoint, statusCode, reply->errorString());
+    // 优先尝试解析 JSON 响应体，即使有错误也要处理后端返回的数据
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isNull() && doc.isObject()) {
+        // 有有效的 JSON 响应，发送成功信号让上层处理
+        qDebug() << "[API 响应] JSON 解析成功，发送 requestSuccess";
+        emit requestSuccess(endpoint, doc);
         reply->deleteLater();
         return;
     }
     
-    if (statusCode >= 200 && statusCode < 300) {
-        QJsonDocument doc = QJsonDocument::fromJson(data);
-        if (!doc.isNull()) {
-            qDebug() << "[API 响应] JSON 解析成功，发送 requestSuccess";
-            emit requestSuccess(endpoint, doc);
-        } else {
-            qDebug() << "[API 响应] JSON 解析失败";
-            emit requestFailed(endpoint, statusCode, "Invalid JSON response");
-        }
+    // 无法解析 JSON，处理错误
+    if (reply->error() != QNetworkReply::NoError) {
+        qDebug() << "[API 响应] 网络错误:" << reply->errorString();
+        emit requestFailed(endpoint, statusCode, reply->errorString());
     } else {
         QString error = data;
         if (error.isEmpty()) {
@@ -198,17 +196,13 @@ void UserManager::checkUsernameExists(const QString& username) {
 }
 
 void UserManager::logout() {
-    m_token.clear();
-    m_currentUser = {};
-    m_isLoggedIn = false;
-    m_pendingRequest = "";
-    ApiClient::instance()->setAuthToken("");
+    qDebug() << "[登出] 用户:" << m_currentUser.username << "开始登出";
     
-    QSettings settings;
-    settings.remove("cloud_user_token");
-    settings.remove("cloud_user_email");
+    // 调用后端 API 记录登出日志（先发送请求，收到响应后再清除本地数据）
+    m_pendingRequest = "/api/auth/logout";
+    ApiClient::instance()->post("/api/auth/logout", QJsonObject());
     
-    emit logoutComplete();
+    qDebug() << "[登出] 已发送登出请求，等待响应";
 }
 
 void UserManager::fetchProfile() {
@@ -222,15 +216,20 @@ void UserManager::fetchProfile() {
 }
 
 void UserManager::autoLogin() {
+    qDebug() << "[自动登录] 开始检查保存的用户信息";
+    
     QSettings settings;
     QString token = settings.value("cloud_user_token").toString();
     QString email = settings.value("cloud_user_email").toString();
     
     if (!token.isEmpty() && !email.isEmpty()) {
+        qDebug() << "[自动登录] 找到保存的用户信息:" << email;
         m_token = token;
         ApiClient::instance()->setAuthToken(token);
         m_pendingRequest = "/api/auth/profile";
         ApiClient::instance()->get("/api/auth/profile");
+    } else {
+        qDebug() << "[自动登录] 未找到保存的用户信息，跳过自动登录";
     }
 }
 
@@ -314,6 +313,8 @@ void UserManager::onApiResponse(const QString& endpoint, const QJsonDocument& re
         onPasswordResetRequestResponse(endpoint, response);
     } else if (requestEndpoint == "/api/auth/reset-password") {
         onPasswordResetResponse(endpoint, response);
+    } else if (requestEndpoint == "/api/auth/logout") {
+        onLogoutResponse(endpoint, response);
     } else {
         qDebug() << "[警告] 未处理的 API 响应:" << requestEndpoint;
     }
@@ -341,11 +342,14 @@ void UserManager::onLoginResponse(const QString& endpoint, const QJsonDocument& 
         settings.setValue("cloud_user_email", m_currentUser.email);
         
         emit loginSuccess(m_currentUser);
-        qDebug() << "Login successful:" << m_currentUser.email;
+        qDebug() << "[登录] 成功:" << m_currentUser.email;
     } else {
         QString error = obj["error"].toString();
+        if (error.isEmpty()) {
+            error = "登录失败";
+        }
+        qDebug() << "[登录] 失败:" << error;
         emit loginFailed(error);
-        qDebug() << "Login failed:" << error;
     }
 }
 
@@ -464,6 +468,27 @@ void UserManager::onPasswordResetResponse(const QString& endpoint, const QJsonDo
     }
 }
 
+void UserManager::onLogoutResponse(const QString& endpoint, const QJsonDocument& response) {
+    if (endpoint != "/api/auth/logout") return;
+    
+    QJsonObject obj = response.object();
+    if (!obj["success"].toBool()) {
+        qDebug() << "[登出响应] 后端 API 调用失败:" << obj["error"].toString();
+    }
+    
+    // 清除本地数据
+    m_token.clear();
+    m_currentUser = {};
+    m_isLoggedIn = false;
+    ApiClient::instance()->setAuthToken("");
+    
+    QSettings settings;
+    settings.remove("cloud_user_token");
+    settings.remove("cloud_user_email");
+    
+    emit logoutComplete();
+}
+
 void UserManager::onRequestFailed(const QString& endpoint, int errorCode, const QString& error) {
     qDebug() << "[请求失败]" << "endpoint:" << endpoint << "errorCode:" << errorCode << "error:" << error;
     
@@ -485,6 +510,17 @@ void UserManager::onRequestFailed(const QString& endpoint, int errorCode, const 
         emit passwordResetRequestFailed(error);
     } else if (endpoint == "/api/auth/reset-password") {
         emit passwordResetFailed(error);
+    } else if (endpoint == "/api/auth/logout") {
+        // 登出失败也要清除本地数据
+        qDebug() << "[登出请求失败] 强制清除本地数据";
+        m_token.clear();
+        m_currentUser = {};
+        m_isLoggedIn = false;
+        ApiClient::instance()->setAuthToken("");
+        QSettings settings;
+        settings.remove("cloud_user_token");
+        settings.remove("cloud_user_email");
+        emit logoutComplete();
     }
 }
 

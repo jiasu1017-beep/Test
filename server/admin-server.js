@@ -326,13 +326,13 @@ app.delete('/api/admin/users/:id', authenticateAdmin, (req, res) => {
 // 重置用户密码
 app.post('/api/admin/users/:id/reset-password', authenticateAdmin, (req, res) => {
     const { id } = req.params;
-    const newPassword = '666666'; // 默认重置密码
+    const newPassword = '666666';
     
     console.log(`\n[重置密码] 管理员 ID: ${req.adminId}, 用户 ID: ${id}`);
     
-    // 使用 SHA-256 哈希密码
     const crypto = require('crypto');
     const hashedPassword = crypto.createHash('sha256').update(newPassword).digest('hex');
+    console.log(`  - 新密码哈希: ${hashedPassword}`);
     
     db.run("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, id], function(err) {
         if (err) {
@@ -744,15 +744,26 @@ app.post('/api/auth/login', (req, res) => {
         console.log(`    收到密码前 20 位：${password.substring(0, 20)}...`);
         console.log(`    数据库密码长度：${user.password.length}`);
         console.log(`    数据库密码前 20 位：${user.password.substring(0, 20)}...`);
-        console.log(`    SHA256 哈希：${sha256Hash}`);
+        
+        // 检查客户端是否已经发送了 SHA256 哈希值（64位十六进制）
+        const isClientHash = /^[a-f0-9]{64}$/i.test(password);
         
         let passwordValid = false;
         
         // 检查数据库密码格式并验证
         if (user.password.length === 64 && /^[a-f0-9]{64}$/i.test(user.password)) {
-            // 数据库密码是 SHA-256 格式，直接比较
+            // 数据库密码是 SHA-256 格式
             console.log(`    检测到数据库密码为 SHA-256 格式`);
-            passwordValid = (user.password === sha256Hash);
+            
+            if (isClientHash) {
+                // 客户端已经发送了哈希值，直接比较
+                console.log(`    客户端发送的是哈希值，直接比较`);
+                passwordValid = (user.password === password);
+            } else {
+                // 客户端发送的是明文，计算哈希后比较
+                console.log(`    客户端发送的是明文，计算哈希后比较`);
+                passwordValid = (user.password === sha256Hash);
+            }
             console.log(`    SHA-256 验证结果：${passwordValid ? '成功' : '失败'}`);
         } else if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
             // 数据库密码是 bcrypt 格式
@@ -990,6 +1001,43 @@ app.get('/api/auth/profile', (req, res) => {
                 created_at: user.created_at,
                 last_login: user.last_login
             }
+        });
+    });
+});
+
+// 用户登出
+app.post('/api/auth/logout', (req, res) => {
+    const token = req.headers['authorization']?.replace('Bearer ', '');
+    
+    if (!token) {
+        return res.status(401).json({ success: false, error: '未授权访问' });
+    }
+    
+    // 获取用户信息
+    db.get("SELECT user_id, username FROM user_sessions WHERE token = ? AND expires_at > datetime('now')", 
+        [token], (err, session) => {
+        if (err || !session) {
+            return res.status(401).json({ success: false, error: '无效的会话' });
+        }
+        
+        // 删除会话
+        db.run("DELETE FROM user_sessions WHERE token = ?", [token], function(err) {
+            if (err) {
+                console.error('[用户登出] 删除会话失败:', err);
+                return res.status(500).json({ success: false, error: '登出失败' });
+            }
+            
+            // 记录登出日志
+            db.run("INSERT INTO login_logs (user_id, username, action, status, ip_address) VALUES (?, ?, ?, ?, ?)",
+                [session.user_id, session.username, 'logout', 'success', req.ip], (err) => {
+                if (err) {
+                    console.error('[用户登出] 记录日志失败:', err);
+                }
+                
+                console.log('[用户登出] 用户:', session.username, '已登出');
+                
+                res.json({ success: true, message: '登出成功' });
+            });
         });
     });
 });

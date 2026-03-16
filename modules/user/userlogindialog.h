@@ -47,6 +47,7 @@ private slots:
             void toggleConfirmPasswordVisibility();
             
             void onForgotPasswordClicked();
+            void onProfileLoaded(const UserInfo& user);
 
 private:
     void setupUI();

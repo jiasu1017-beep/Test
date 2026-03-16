@@ -17,6 +17,7 @@
 #include <QPropertyAnimation>
 #include "modules/core/database.h"
 #include "modules/update/updatemanager.h"
+#include "modules/user/userapi.h"
 
 // Forward declarations
 struct ShortcutStat;
@@ -71,6 +72,8 @@ private slots:
     void onInstallFinished();
     void onInstallFailed(const QString &error);
     void onLogMessage(const QString &message);
+    void onAutoLoginSuccess(const UserInfo& user);
+    void onAutoLoginFailed();
     
 protected:
     void closeEvent(QCloseEvent *event) override;

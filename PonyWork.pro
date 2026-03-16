@@ -7,6 +7,8 @@ win32: LIBS += -lpsapi -lshell32 -lole32 -loleaut32 -lshlwapi -luuid -luser32
 TARGET = PonyWork
 TEMPLATE = app
 
+INCLUDEPATH += $$PWD/modules/user
+
 SOURCES += main.cpp \
            mainwindow.cpp \
            modules/core/database.cpp \

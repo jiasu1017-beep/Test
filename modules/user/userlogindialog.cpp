@@ -118,6 +118,7 @@ UserLoginDialog::UserLoginDialog(QWidget *parent)
     connect(UserManager::instance(), &UserManager::registerSuccess, this, &UserLoginDialog::onRegisterSuccess);
     connect(UserManager::instance(), &UserManager::registerFailed, this, &UserLoginDialog::onRegisterFailed);
     connect(UserManager::instance(), &UserManager::emailCheckResult, this, &UserLoginDialog::onEmailCheckResult);
+    connect(UserManager::instance(), &UserManager::profileLoaded, this, &UserLoginDialog::onProfileLoaded);
 }
 
 UserLoginDialog::~UserLoginDialog() {
@@ -513,15 +514,13 @@ void UserLoginDialog::onEmailCheckResult(bool exists) {
 void UserLoginDialog::onLoginSuccess(const UserInfo& user) {
     setUIEnabled(true);
     showStatusMessage("登录成功！", false);
-    
     saveCredentials();
-    
-    QMessageBox::information(this, "登录成功",
-        QString("欢迎回来，%1！\n\n用户 ID: %2\nVIP 等级：%3")
-        .arg(user.username.isEmpty() ? user.email : user.username)
-        .arg(user.id)
-        .arg(user.vipLevel));
+    accept();
+}
 
+void UserLoginDialog::onProfileLoaded(const UserInfo& user) {
+    qDebug() << "[自动登录] 配置文件加载成功:" << user.email;
+    saveCredentials();
     accept();
 }
 

@@ -1,6 +1,7 @@
 #include "settingswidget.h"
 #include "modules/user/userlogindialog.h"
 #include "modules/user/userapi.h"
+#include <QMessageBox>
 
 void SettingsWidget::onCloudLoginClicked()
 {
@@ -29,6 +30,12 @@ void SettingsWidget::onCloudLoginSuccess(const UserInfo& user)
     cloudStatusLabel->setText("已登录: " + user.email);
     cloudStatusLabel->setStyleSheet("color: green;");
     cloudLoginBtn->setText("退出登录");
+
+    QMessageBox::information(this, "登录成功",
+        QString("欢迎回来，%1！\n\n用户 ID: %2\nVIP 等级：%3")
+        .arg(user.username.isEmpty() ? user.email : user.username)
+        .arg(user.id)
+        .arg(user.vipLevel));
 
     ConfigSync::instance()->fetchConfig();
 }

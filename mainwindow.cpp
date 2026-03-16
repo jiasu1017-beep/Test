@@ -60,6 +60,11 @@ MainWindow::MainWindow(QWidget *parent)
     
     setupUI();
     setupTrayIcon();
+
+    qDebug() << "[MainWindow] 启动自动登录流程";
+    connect(UserManager::instance(), &UserManager::profileLoaded, this, &MainWindow::onAutoLoginSuccess);
+    connect(UserManager::instance(), &UserManager::loginFailed, this, &MainWindow::onAutoLoginFailed);
+    UserManager::instance()->autoLogin();
     
     if (db->getAutoCheckUpdate()) {
         updateManager->startPeriodicChecks();
@@ -88,6 +93,17 @@ MainWindow::~MainWindow()
     if (bottomAppBar) {
         bottomAppBar->deleteLater();
     }
+}
+
+void MainWindow::onAutoLoginSuccess(const UserInfo& user) {
+    qDebug() << "[MainWindow] 自动登录成功:" << user.email;
+    if (settingsWidget) {
+        settingsWidget->updateCloudLoginStatus(user);
+    }
+}
+
+void MainWindow::onAutoLoginFailed() {
+    qDebug() << "[MainWindow] 自动登录失败或未保存用户信息";
 }
 
 void MainWindow::setupUI()

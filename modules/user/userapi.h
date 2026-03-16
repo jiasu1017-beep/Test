@@ -107,6 +107,7 @@ private slots:
     void onChangePasswordResponse(const QString& endpoint, const QJsonDocument& response);
     void onPasswordResetRequestResponse(const QString& endpoint, const QJsonDocument& response);
     void onPasswordResetResponse(const QString& endpoint, const QJsonDocument& response);
+    void onLogoutResponse(const QString& endpoint, const QJsonDocument& response);
     
 private:
     UserManager();

@@ -42,10 +42,12 @@ class SettingsWidget : public QWidget
     Q_OBJECT
 public:
     explicit SettingsWidget(Database *db, QWidget *parent = nullptr);
+    ~SettingsWidget();
     
     void setUpdateManager(UpdateManager *manager);
     void setMainWindow(MainWindow *mainWindow);
-
+    void updateCloudLoginStatus(const UserInfo& user);
+    
 private slots:
     void onAutoStartToggled(int state);
     void onMinimizeToTrayToggled(int state);
