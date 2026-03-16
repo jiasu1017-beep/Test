@@ -238,8 +238,26 @@ void UserWidget::setLoggedInState(bool loggedIn)
         m_statusLabel->setText("已登录");
         m_statusLabel->setStyleSheet("font-size: 14px; color: #28a745; font-weight: bold;");
 
+        if (!user.lastLogin.isEmpty()) {
+            // 格式化 ISO 日期为本地可读格式
+            QString formatted = user.lastLogin;
+            formatted.replace("T", " ");
+            formatted.replace("Z", "");
+            if (formatted.contains(".")) {
+                formatted = formatted.section(".", 0, 0);
+            }
+            m_lastLoginLabel->setText(formatted);
+        }
+
         if (!user.createdAt.isEmpty()) {
-            m_memberSinceLabel->setText(user.createdAt);
+            // 格式化 ISO 日期为本地可读格式
+            QString formatted = user.createdAt;
+            formatted.replace("T", " ");
+            formatted.replace("Z", "");
+            if (formatted.contains(".")) {
+                formatted = formatted.section(".", 0, 0);
+            }
+            m_memberSinceLabel->setText(formatted);
         }
     } else {
         m_loginBtn->setVisible(true);
@@ -309,6 +327,10 @@ void UserWidget::onLoginSuccess(const UserInfo &user)
 {
     m_currentUser = user;
     setLoggedInState(true);
+
+    // 更新云端同步状态
+    m_syncStatusLabel->setText("已登录");
+    m_syncStatusLabel->setStyleSheet("color: #28a745;");
 
     QString msg = QString("登录成功！欢迎 %1").arg(user.username.isEmpty() ? user.email : user.username);
     showMessage(msg, false);

@@ -1269,14 +1269,17 @@ app.post('/api/auth/login', (req, res) => {
             [user.id, user.username, 'login', 'success', req.ip]);
         
         console.log(`  - 成功：用户 ID=${user.id}, Token=${token.substring(0, 20)}...`);
-        
+
         res.json({
             success: true,
             token: token,
             user: {
                 id: user.id,
+                username: user.username,
                 email: user.email,
-                vipLevel: 0
+                vipLevel: 0,
+                lastLogin: user.last_login,
+                createdAt: user.created_at
             }
         });
     });

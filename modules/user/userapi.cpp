@@ -329,12 +329,14 @@ void UserManager::onLoginResponse(const QString& endpoint, const QJsonDocument& 
     if (obj["success"].toBool()) {
         m_token = obj["token"].toString();
         ApiClient::instance()->setAuthToken(m_token);
-        
+
         QJsonObject userObj = obj["user"].toObject();
         m_currentUser.id = userObj["id"].toInt();
         m_currentUser.email = userObj["email"].toString();
         m_currentUser.username = userObj["username"].toString();
         m_currentUser.vipLevel = userObj["vipLevel"].toInt();
+        m_currentUser.lastLogin = userObj["lastLogin"].toString();
+        m_currentUser.createdAt = userObj["createdAt"].toString();
         m_isLoggedIn = true;
         
         QSettings settings;
