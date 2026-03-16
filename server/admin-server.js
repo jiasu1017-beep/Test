@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const userDb = require('./user-db');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -82,7 +83,7 @@ db.serialize(() => {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
     
-    // 用户配置表
+    // 用户配置表（当前生效的配置）
     db.run(`CREATE TABLE IF NOT EXISTS user_configs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -92,6 +93,21 @@ db.serialize(() => {
         UNIQUE(user_id, key),
         FOREIGN KEY (user_id) REFERENCES users(id)
     )`);
+
+    // 用户配置表（支持多个配置，如不同设备的配置）
+    db.run(`CREATE TABLE IF NOT EXISTS user_config_profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        config_name TEXT NOT NULL,
+        configs TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        UNIQUE(user_id, config_name)
+    )`);
+
+    // 创建索引
+    db.run(`CREATE INDEX IF NOT EXISTS idx_user_config_profiles_user ON user_config_profiles(user_id)`);
 
     db.run(`CREATE TABLE IF NOT EXISTS admin_users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -356,6 +372,134 @@ app.get('/api/admin/users/:id/logs', authenticateAdmin, (req, res) => {
                     });
                 });
             });
+        }
+    });
+});
+
+// 获取单个用户的同步配置列表（管理后台）
+app.get('/api/admin/users/:id/configs', authenticateAdmin, (req, res) => {
+    const { id } = req.params;
+    const userId = parseInt(id);
+
+    // 首先检查用户是否存在
+    db.get("SELECT id, username, email FROM users WHERE id = ?", [id], (err, user) => {
+        if (err || !user) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+
+        // 使用用户独立数据库
+        const userDbConn = userDb.getUserDb(userId);
+        userDbConn.all("SELECT key, value, updated_at FROM user_configs ORDER BY updated_at DESC", [], (err, configs) => {
+            if (err) {
+                return res.status(500).json({ success: false, message: '获取配置失败' });
+            }
+
+            // 解析每个配置的值
+            const parsedConfigs = configs.map(config => {
+                let parsedValue = config.value;
+                try {
+                    parsedValue = JSON.parse(config.value);
+                } catch (e) {
+                    // 保持原值
+                }
+
+                // 计算值的大小
+                const valueStr = typeof config.value === 'string' ? config.value : JSON.stringify(config.value);
+                const sizeKB = (valueStr.length / 1024).toFixed(2);
+
+                return {
+                    key: config.key,
+                    value: parsedValue,
+                    valueSize: sizeKB + ' KB',
+                    updated_at: config.updated_at
+                };
+            });
+
+            res.json({
+                success: true,
+                user: user,
+                configs: parsedConfigs,
+                totalCount: parsedConfigs.length
+            });
+        });
+    });
+});
+
+// 获取单个用户的同步配置详情（管理后台）
+app.get('/api/admin/users/:id/configs/:key', authenticateAdmin, (req, res) => {
+    const { id, key } = req.params;
+    const userId = parseInt(id);
+
+    // 使用用户独立数据库
+    const userDbConn = userDb.getUserDb(userId);
+    userDbConn.get("SELECT key, value, updated_at FROM user_configs WHERE key = ?", [key], (err, config) => {
+        if (err || !config) {
+            return res.status(404).json({ success: false, message: '配置不存在' });
+        }
+
+        let parsedValue = config.value;
+        try {
+            parsedValue = JSON.parse(config.value);
+        } catch (e) {
+            // 保持原值
+        }
+
+        res.json({
+            success: true,
+            config: {
+                key: config.key,
+                value: parsedValue,
+                updated_at: config.updated_at
+            }
+        });
+    });
+});
+
+// 获取用户的所有配置列表（管理后台）
+app.get('/api/admin/users/:id/config-profiles', authenticateAdmin, (req, res) => {
+    const { id } = req.params;
+    const userId = parseInt(id);
+
+    // 使用用户独立数据库
+    const userDbConn = userDb.getUserDb(userId);
+    userDbConn.all("SELECT config_name, created_at, updated_at FROM user_config_profiles ORDER BY updated_at DESC", [], (err, profiles) => {
+        if (err) {
+            return res.status(500).json({ success: false, message: '获取配置列表失败' });
+        }
+
+        res.json({
+            success: true,
+            profiles: profiles
+        });
+    });
+});
+
+// 获取指定配置的详细内容（管理后台）
+app.get('/api/admin/users/:id/config-profiles/:config_name', authenticateAdmin, (req, res) => {
+    const { id, config_name } = req.params;
+    const userId = parseInt(id);
+    const decodedName = decodeURIComponent(config_name);
+
+    // 使用用户独立数据库
+    const userDbConn = userDb.getUserDb(userId);
+    userDbConn.get("SELECT config_name, configs, created_at, updated_at FROM user_config_profiles WHERE config_name = ?", [decodedName], (err, profile) => {
+        if (err || !profile) {
+            return res.status(404).json({ success: false, message: '配置不存在' });
+        }
+
+        try {
+            const configs = JSON.parse(profile.configs);
+            res.json({
+                success: true,
+                profile: {
+                    config_name: profile.config_name,
+                    configs: configs,
+                    created_at: profile.created_at,
+                    updated_at: profile.updated_at
+                }
+            });
+        } catch (e) {
+            res.status(500).json({ success: false, message: '解析配置失败' });
         }
     });
 });
@@ -641,48 +785,215 @@ app.get('/api/admin/config', authenticateAdmin, (req, res) => {
 
 // 用户获取自己的配置
 app.get('/api/config/get', authenticateToken, (req, res) => {
-    db.get("SELECT id FROM users WHERE id = ?", [req.userId], (err, user) => {
-        if (err || !user) {
-            return res.status(401).json({ success: false, error: '用户未授权' });
+    // 使用用户独立数据库
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    userDbConn.all("SELECT * FROM user_configs", [], (err, configs) => {
+        if (err) {
+            return res.status(500).json({ success: false, error: '获取配置失败' });
         }
-        
-        // 从 user_configs 表获取用户配置
-        db.all("SELECT * FROM user_configs WHERE user_id = ?", [req.userId], (err, configs) => {
-            if (err) {
-                return res.status(500).json({ success: false, error: '获取配置失败' });
+
+        // 转换为对象格式
+        const configObj = {};
+        configs.forEach(config => {
+            try {
+                configObj[config.key] = JSON.parse(config.value);
+            } catch (e) {
+                configObj[config.key] = config.value;
             }
-            
-            // 转换为对象格式
-            const configObj = {};
-            configs.forEach(config => {
-                try {
-                    configObj[config.key] = JSON.parse(config.value);
-                } catch (e) {
-                    configObj[config.key] = config.value;
-                }
-            });
-            
-            res.json({ success: true, configs: configObj });
         });
+
+        res.json({ success: true, configs: configObj });
     });
 });
 
-// 用户保存配置
+// 用户保存配置到默认配置（保持向后兼容）
 app.post('/api/config/save', authenticateToken, (req, res) => {
     const { configs } = req.body;
-    
+
     if (!configs) {
         return res.status(400).json({ success: false, error: '配置数据不能为空' });
     }
-    
-    db.serialize(() => {
+
+    // 使用用户独立数据库
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    userDbConn.serialize(() => {
         for (const [key, value] of Object.entries(configs)) {
             const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
-            db.run(`INSERT OR REPLACE INTO user_configs (user_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
-                [req.userId, key, valueStr]);
+            userDbConn.run(`INSERT OR REPLACE INTO user_configs (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`,
+                [key, valueStr]);
         }
-        
+
         res.json({ success: true, message: '配置保存成功' });
+    });
+});
+
+// 用户获取配置列表（不含详细数据，用于列表展示）
+app.get('/api/config/list', authenticateToken, (req, res) => {
+    // 使用用户独立数据库
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    userDbConn.all("SELECT key, updated_at, LENGTH(value) as value_length FROM user_configs ORDER BY updated_at DESC", [], (err, configs) => {
+        if (err) {
+            return res.status(500).json({ success: false, error: '获取配置列表失败' });
+        }
+
+        res.json({ success: true, configs: configs });
+    });
+});
+
+// ===== 多个配置管理 API =====
+
+// 获取用户所有配置列表
+app.get('/api/config/profiles', authenticateToken, (req, res) => {
+    // 使用用户独立数据库
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    userDbConn.all("SELECT config_name, created_at, updated_at FROM user_config_profiles ORDER BY updated_at DESC", [], (err, profiles) => {
+        if (err) {
+            return res.status(500).json({ success: false, error: '获取配置列表失败' });
+        }
+
+        res.json({ success: true, profiles: profiles });
+    });
+});
+
+// 创建新配置
+app.post('/api/config/profiles', authenticateToken, (req, res) => {
+    const { config_name, configs } = req.body;
+
+    if (!config_name) {
+        return res.status(400).json({ success: false, error: '请指定配置名称（如：台式机、笔记本）' });
+    }
+
+    if (!configs) {
+        return res.status(400).json({ success: false, error: '配置数据不能为空' });
+    }
+
+    const configsStr = JSON.stringify(configs);
+
+    // 使用用户独立数据库
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    userDbConn.run(`INSERT OR REPLACE INTO user_config_profiles (config_name, configs, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [config_name, configsStr],
+        function(err) {
+            if (err) {
+                return res.status(500).json({ success: false, error: '创建配置失败: ' + err.message });
+            }
+
+            res.json({ success: true, message: '配置创建成功', config_name: config_name });
+        });
+});
+
+// 获取指定配置
+app.get('/api/config/profiles/:config_name', authenticateToken, (req, res) => {
+    const { config_name } = req.params;
+    const decodedName = decodeURIComponent(config_name);
+
+    // 使用用户独立数据库
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    userDbConn.get("SELECT config_name, configs, created_at, updated_at FROM user_config_profiles WHERE config_name = ?", [decodedName], (err, profile) => {
+        if (err || !profile) {
+            return res.status(404).json({ success: false, error: '配置不存在' });
+        }
+
+        try {
+            const configs = JSON.parse(profile.configs);
+            res.json({ success: true, configs: configs, config_name: profile.config_name, created_at: profile.created_at, updated_at: profile.updated_at });
+        } catch (e) {
+            res.status(500).json({ success: false, error: '解析配置失败' });
+        }
+    });
+});
+
+// 更新指定配置
+app.put('/api/config/profiles/:config_name', authenticateToken, (req, res) => {
+    const { config_name } = req.params;
+    const decodedName = decodeURIComponent(config_name);
+    const { configs } = req.body;
+
+    if (!configs) {
+        return res.status(400).json({ success: false, error: '配置数据不能为空' });
+    }
+
+    const configsStr = JSON.stringify(configs);
+
+    // 使用用户独立数据库
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    userDbConn.run(`UPDATE user_config_profiles SET configs = ?, updated_at = CURRENT_TIMESTAMP WHERE config_name = ?`,
+        [configsStr, decodedName],
+        function(err) {
+            if (err) {
+                return res.status(500).json({ success: false, error: '更新配置失败' });
+            }
+
+            res.json({ success: true, message: '配置更新成功', config_name: decodedName });
+        });
+});
+
+// 删除指定配置
+app.delete('/api/config/profiles/:config_name', authenticateToken, (req, res) => {
+    const { config_name } = req.params;
+    const decodedName = decodeURIComponent(config_name);
+
+    // 使用用户独立数据库
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    userDbConn.run("DELETE FROM user_config_profiles WHERE config_name = ?", [decodedName], function(err) {
+        if (err) {
+            return res.status(500).json({ success: false, error: '删除配置失败' });
+        }
+
+        res.json({ success: true, message: '配置删除成功', config_name: decodedName });
+    });
+});
+
+// 上传配置（兼容旧接口）
+app.post('/api/config/upload', authenticateToken, (req, res) => {
+    const { configs, config_name } = req.body;
+
+    if (!configs) {
+        return res.status(400).json({ success: false, error: '配置数据不能为空' });
+    }
+
+    // 如果没有指定配置名称，提示用户必须提供
+    if (!config_name) {
+        return res.status(400).json({ success: false, error: '请指定配置名称（如：台式机、笔记本）' });
+    }
+
+    const configsStr = JSON.stringify(configs);
+
+    // 使用用户独立数据库
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    userDbConn.run(`INSERT OR REPLACE INTO user_config_profiles (config_name, configs, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [config_name, configsStr],
+        function(err) {
+            if (err) {
+                return res.status(500).json({ success: false, error: '上传配置失败: ' + err.message });
+            }
+
+            res.json({ success: true, message: '配置上传成功', config_name: config_name });
+        });
+});
+
+// 删除用户配置项
+app.delete('/api/config/:key', authenticateToken, (req, res) => {
+    const { key } = req.params;
+
+    // 使用用户独立数据库
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    userDbConn.run("DELETE FROM user_configs WHERE key = ?", [key], function(err) {
+        if (err) {
+            return res.status(500).json({ success: false, error: '删除配置失败' });
+        }
+
+        res.json({ success: true, message: '配置删除成功' });
     });
 });
 
@@ -816,10 +1127,18 @@ app.post('/api/auth/register', (req, res) => {
         return res.status(400).json({ success: false, error: '密码长度至少 6 位' });
     }
     
-    // 修复：使用 SHA-256 哈希密码（与客户端一致）
+    // 检查客户端是否已经发送了 SHA256 哈希值（64位十六进制）
     const crypto = require('crypto');
-    const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
-    
+    let hashedPassword;
+
+    if (/^[a-f0-9]{64}$/i.test(password)) {
+        // 客户端已经发送了哈希值，直接使用
+        hashedPassword = password;
+    } else {
+        // 客户端发送的是明文，进行 SHA-256 哈希
+        hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+    }
+
     db.run("INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, 'user')",
         [username, email, hashedPassword], function(err) {
         if (err) {
@@ -1258,11 +1577,34 @@ app.get('/admin/*', (req, res) => {
     res.sendFile(path.join(__dirname, 'admin-panel', 'index.html'));
 });
 
+// 初始化用户数据库模块（迁移现有数据）
+userDb.initUserDb(db);
+
+// 优雅关闭 - 关闭所有数据库连接
+process.on('SIGINT', () => {
+    console.log('\n正在关闭服务器...');
+    userDb.closeAllUserDbs();
+    db.close(() => {
+        console.log('数据库连接已关闭');
+        process.exit(0);
+    });
+});
+
+process.on('SIGTERM', () => {
+    console.log('\n正在关闭服务器...');
+    userDb.closeAllUserDbs();
+    db.close(() => {
+        console.log('数据库连接已关闭');
+        process.exit(0);
+    });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`====================================`);
     console.log(`   Admin Server Running`);
     console.log(`   Port: ${PORT}`);
     console.log(`   Admin Panel: http://localhost:${PORT}/admin`);
     console.log(`   Default Login: admin / admin123`);
+    console.log(`   用户数据库目录: ${userDb.USER_DB_DIR}`);
     console.log(`====================================`);
 });

@@ -18,6 +18,7 @@ class UserLoginDialog : public QDialog {
 public:
     explicit UserLoginDialog(QWidget *parent = nullptr);
     ~UserLoginDialog();
+    void switchToRegister();
 
 private slots:
             void onLoginClicked();
@@ -31,7 +32,6 @@ private slots:
             void onEmailCheckResult(bool exists);
             void onUsernameCheckResult(bool exists);
             
-            void switchToRegister();
             void switchToLogin();
             
             void onIdentifierTextChanged(const QString& text);

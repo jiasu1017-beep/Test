@@ -536,6 +536,18 @@ ConfigSync::ConfigSync() : QObject(), m_isSyncing(false) {
     connect(client, &ApiClient::requestFailed, this, &ConfigSync::onRequestFailed);
 }
 
+void ConfigSync::loadSettings() {
+    if (!UserManager::instance()->isLoggedIn()) {
+        emit syncFailed("Not logged in");
+        return;
+    }
+
+    if (m_isSyncing) return;
+    m_isSyncing = true;
+
+    ApiClient::instance()->get("/api/config/get");
+}
+
 void ConfigSync::fetchConfig() {
     if (!UserManager::instance()->isLoggedIn()) {
         emit syncFailed("Not logged in");

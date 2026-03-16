@@ -50,6 +50,7 @@ public:
     explicit RemoteDesktopWidget(Database *db, QWidget *parent = nullptr);
 
     static void launchRemoteDesktop(const RemoteDesktopConnection &conn, Database *db);
+    void refreshConnectionList();
 
 signals:
     void collectionNeedsRefresh();
@@ -57,7 +58,6 @@ signals:
     void statusMessageRequested(const QString &message);
 
 private slots:
-    void refreshConnectionList();
     void onSearchTextChanged(const QString &text);
     void onAddConnection();
     void onEditConnection();

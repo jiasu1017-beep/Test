@@ -8,5 +8,6 @@
 #include "remotedesktopwidget.h"
 #include "snapshotmanagerwidget.h"
 #include "appcollectionupdater.h"
+#include "userwidget.h"
 
 #endif

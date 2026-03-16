@@ -28,6 +28,7 @@ SOURCES += main.cpp \
            modules/widgets/cloud_login_impl.cpp \
            modules/widgets/worklogwidget.cpp \
            modules/widgets/bottomappbar.cpp \
+           modules/widgets/userwidget.cpp \
            modules/update/updatemanager.cpp \
            modules/update/updatedialog.cpp \
            modules/update/updateprogressdialog.cpp \
@@ -56,6 +57,7 @@ HEADERS  += mainwindow.h \
             modules/widgets/appcollectionupdater.h \
             modules/widgets/worklogwidget.h \
             modules/widgets/bottomappbar.h \
+            modules/widgets/userwidget.h \
             modules/core/appcollectiontypes.h \
             modules/update/updatemanager.h \
             modules/update/updatedialog.h \

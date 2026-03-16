@@ -18,6 +18,7 @@
 #include "modules/core/database.h"
 #include "modules/update/updatemanager.h"
 #include "modules/user/userapi.h"
+#include "modules/widgets/widgets_module.h"
 
 // Forward declarations
 struct ShortcutStat;
@@ -49,6 +50,9 @@ public slots:
     void refreshGlobalShortcut();
     void setBottomAppBarVisible(bool visible);
     void refreshBottomAppBarVisibility();
+    void showLoginDialog();
+    void showRegisterDialog();
+    void refreshAllWidgets();
     
 private slots:
     void onTabChanged(int index);
@@ -96,6 +100,7 @@ private:
     AppManagerWidget *appManagerWidget;
     ShutdownWidget *shutdownWidget;
     SettingsWidget *settingsWidget;
+    UserWidget *userWidget;
     CollectionManagerWidget *collectionManagerWidget;
     QSystemTrayIcon *trayIcon;
     QMenu *trayMenu;

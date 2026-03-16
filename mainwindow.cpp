@@ -2,6 +2,8 @@
 #include "modules/widgets/appmanagerwidget.h"
 #include "modules/widgets/shutdownwidget.h"
 #include "modules/widgets/settingswidget.h"
+#include "modules/widgets/userwidget.h"
+#include "modules/user/userlogindialog.h"
 #include "modules/widgets/collectionmanagerwidget.h"
 #include "modules/widgets/worklogwidget.h"
 #include "modules/widgets/bottomappbar.h"
@@ -95,6 +97,40 @@ MainWindow::~MainWindow()
     }
 }
 
+void MainWindow::showLoginDialog()
+{
+    UserLoginDialog dialog(this);
+    dialog.exec();
+}
+
+void MainWindow::showRegisterDialog()
+{
+    // 注册对话框在 UserLoginDialog 中可以通过切换访问
+    UserLoginDialog dialog(this);
+    dialog.switchToRegister();
+    dialog.exec();
+}
+
+void MainWindow::refreshAllWidgets()
+{
+    // 刷新应用管理列表
+    if (appManagerWidget) {
+        appManagerWidget->refreshAppList();
+    }
+
+    // 刷新收藏管理列表
+    if (collectionManagerWidget) {
+        collectionManagerWidget->refreshCollectionList();
+    }
+
+    // 刷新远程桌面列表
+    if (remoteDesktopWidget) {
+        remoteDesktopWidget->refreshConnectionList();
+    }
+
+    qDebug() << "[MainWindow] All widgets refreshed";
+}
+
 void MainWindow::onAutoLoginSuccess(const UserInfo& user) {
     qDebug() << "[MainWindow] 自动登录成功:" << user.email;
     if (settingsWidget) {
@@ -123,6 +159,11 @@ void MainWindow::setupUI()
     settingsWidget = new SettingsWidget(db, this);
     settingsWidget->setUpdateManager(updateManager);
     settingsWidget->setMainWindow(this);
+
+    // 创建用户中心界面
+    userWidget = new UserWidget(db, this);
+    userWidget->setMainWindow(this);
+
     workLogWidget = new WorkLogWidget(db, this);
     
     connect(appManagerWidget, &AppManagerWidget::resetAppsRequested, this, &MainWindow::resetApps);
@@ -137,6 +178,7 @@ void MainWindow::setupUI()
     tabWidget->addTab(workLogWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView), "工作日志");
     tabWidget->addTab(remoteDesktopWidget, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "远程桌面");
     tabWidget->addTab(shutdownWidget, QApplication::style()->standardIcon(QStyle::SP_BrowserStop), "定时关机");
+    tabWidget->addTab(userWidget, QApplication::style()->standardIcon(QStyle::SP_ArrowRight), "用户");
     tabWidget->addTab(settingsWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogInfoView), "设置");
  
     tabWidget->setIconSize(QSize(24, 24));

@@ -37,7 +37,7 @@ void SettingsWidget::onCloudLoginSuccess(const UserInfo& user)
         .arg(user.id)
         .arg(user.vipLevel));
 
-    ConfigSync::instance()->fetchConfig();
+    // 不再自动同步，让用户手动选择是否同步
 }
 
 void SettingsWidget::onCloudLogoutClicked()

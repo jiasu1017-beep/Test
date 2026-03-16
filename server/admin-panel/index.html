@@ -569,6 +569,9 @@
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link" id="operation-logs-tab" data-bs-toggle="tab" data-bs-target="#operation-logs" type="button" role="tab">操作日志</button>
                             </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="cloud-configs-tab" data-bs-toggle="tab" data-bs-target="#cloud-configs" type="button" role="tab">设备配置</button>
+                            </li>
                         </ul>
                         <div class="tab-content mt-2" id="userLogTabsContent">
                             <div class="tab-pane fade show active" id="all-logs" role="tabpanel">
@@ -579,6 +582,9 @@
                             </div>
                             <div class="tab-pane fade" id="operation-logs" role="tabpanel">
                                 <div id="userOperationLogsTable"></div>
+                            </div>
+                            <div class="tab-pane fade" id="cloud-configs" role="tabpanel">
+                                <div id="userCloudConfigsTable"></div>
                             </div>
                         </div>
                     </div>
@@ -785,13 +791,17 @@
                     headers: { 'Authorization': 'Bearer ' + authToken }
                 });
                 const data = await res.json();
-                
+
                 if (data.success) {
                     renderUsersTable(data.users);
                     renderPagination('usersPagination', data.pagination, (p) => loadUsers(p));
+                } else {
+                    console.error('API返回失败:', data);
+                    showToast(data.message || '加载用户列表失败', 'danger');
                 }
             } catch (err) {
-                showToast('加载用户列表失败', 'danger');
+                console.error('加载用户列表错误:', err);
+                showToast('加载用户列表失败: ' + err.message, 'danger');
             }
         }
 
@@ -1055,6 +1065,133 @@
         document.getElementById('all-logs-tab')?.addEventListener('shown.bs.tab', () => loadUserLogs('all', 1));
         document.getElementById('login-logs-tab')?.addEventListener('shown.bs.tab', () => loadUserLogs('login', 1));
         document.getElementById('operation-logs-tab')?.addEventListener('shown.bs.tab', () => loadUserLogs('operation', 1));
+        document.getElementById('cloud-configs-tab')?.addEventListener('shown.bs.tab', () => loadUserCloudConfigs());
+
+        // 加载用户的云端配置列表（多配置）
+        async function loadUserCloudConfigs() {
+            if (!currentDetailUserId) return;
+
+            try {
+                const res = await fetch(`/api/admin/users/${currentDetailUserId}/config-profiles`, {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    const profiles = data.profiles || [];
+                    let html = '';
+
+                    if (profiles.length === 0) {
+                        html = '<div class="text-center text-muted py-3">暂无云端配置（用户可在客户端上传配置）</div>';
+                    } else {
+                        html = `
+                            <div class="alert alert-info mb-3">
+                                <i class="bi bi-info-circle"></i>
+                                当前用户共有 <strong>${profiles.length}</strong> 个云端配置（用于不同设备/用途）
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>配置名称</th>
+                                            <th>创建时间</th>
+                                            <th>更新时间</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${profiles.map(profile => `
+                                            <tr>
+                                                <td><span class="badge bg-primary">${profile.config_name}</span></td>
+                                                <td>${formatDate(profile.created_at)}</td>
+                                                <td>${formatDate(profile.updated_at)}</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-info btn-action" onclick="viewCloudConfigDetail(${currentDetailUserId}, '${encodeURIComponent(profile.config_name)}')" title="查看详情">
+                                                        <i class="bi bi-eye"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `;
+                    }
+
+                    document.getElementById('userCloudConfigsTable').innerHTML = html;
+                } else {
+                    document.getElementById('userCloudConfigsTable').innerHTML =
+                        '<div class="text-center text-danger py-3">加载配置失败</div>';
+                }
+            } catch (err) {
+                document.getElementById('userCloudConfigsTable').innerHTML =
+                    '<div class="text-center text-danger py-3">加载配置失败</div>';
+            }
+        }
+
+        // 查看云端配置详情
+        async function viewCloudConfigDetail(userId, configName) {
+            try {
+                const res = await fetch(`/api/admin/users/${userId}/config-profiles/${configName}`, {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    const profile = data.profile;
+                    const configsStr = JSON.stringify(profile.configs, null, 2);
+
+                    let modalHtml = `
+                        <div class="modal fade" id="cloudConfigDetailModal" tabindex="-1">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">配置详情 - ${profile.config_name}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">配置名称</label>
+                                            <input type="text" class="form-control" value="${profile.config_name}" readonly>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">创建时间</label>
+                                            <input type="text" class="form-control" value="${formatDate(profile.created_at)}" readonly>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">更新时间</label>
+                                            <input type="text" class="form-control" value="${formatDate(profile.updated_at)}" readonly>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">配置内容</label>
+                                            <textarea class="form-control" rows="20" readonly>${configsStr}</textarea>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    // 移除旧模态框
+                    const oldModal = document.getElementById('cloudConfigDetailModal');
+                    if (oldModal) {
+                        oldModal.remove();
+                    }
+
+                    // 添加新模态框
+                    document.body.insertAdjacentHTML('beforeend', modalHtml);
+                    const modal = new bootstrap.Modal(document.getElementById('cloudConfigDetailModal'));
+                    modal.show();
+                } else {
+                    alert('加载配置详情失败: ' + data.message);
+                }
+            } catch (err) {
+                alert('加载配置详情失败');
+            }
+        }
 
         async function resetPassword(id, username) {
             if (!confirm(`确定要将用户 "${username}" 的密码重置为 666666 吗？\n\n重置后该用户需要使用新密码重新登录。`)) return;
