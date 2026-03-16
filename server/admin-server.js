@@ -226,6 +226,141 @@ app.get('/api/admin/stats', authenticateAdmin, (req, res) => {
     });
 });
 
+app.get('/api/admin/users/:id', authenticateAdmin, (req, res) => {
+    const { id } = req.params;
+
+    db.get("SELECT id, username, email, role, created_at, last_login, status FROM users WHERE id = ?", [id], (err, user) => {
+        if (err) {
+            return res.status(500).json({ success: false, message: '获取用户信息失败' });
+        }
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+
+        // 获取用户的登录次数
+        db.get("SELECT COUNT(*) as count FROM login_logs WHERE user_id = ?", [id], (err, row) => {
+            user.loginCount = row?.count || 0;
+
+            // 获取用户的操作记录数
+            db.get("SELECT COUNT(*) as count FROM operation_logs WHERE user_id = ?", [id], (err, row) => {
+                user.operationCount = row?.count || 0;
+
+                // 获取当前是否在线（是否有未过期的 session）
+                db.get("SELECT COUNT(*) as count FROM user_sessions WHERE user_id = ? AND expires_at > datetime('now')", [id], (err, row) => {
+                    user.isOnline = row?.count > 0;
+
+                    // 获取该用户的收藏应用数量
+                    db.get("SELECT COUNT(*) as count FROM app_collections WHERE created_by = ?", [id], (err, row) => {
+                        user.collectionsCount = row?.count || 0;
+
+                        res.json({ success: true, user });
+                    });
+                });
+            });
+        });
+    });
+});
+
+// 获取单个用户的所有日志
+app.get('/api/admin/users/:id/logs', authenticateAdmin, (req, res) => {
+    const { id } = req.params;
+    const { page = 1, limit = 50, type = 'all' } = req.query;
+    const offset = (page - 1) * limit;
+
+    // 首先检查用户是否存在
+    db.get("SELECT id, username FROM users WHERE id = ?", [id], (err, user) => {
+        if (err || !user) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+
+        let loginQuery, operationQuery;
+        const params = [id];
+
+        if (type === 'login') {
+            // 只获取登录日志
+            loginQuery = `SELECT * FROM login_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+            db.get("SELECT COUNT(*) as total FROM login_logs WHERE user_id = ?", [id], (err, row) => {
+                const total = row?.total || 0;
+                db.all(loginQuery, [...params, parseInt(limit), parseInt(offset)], (err, logs) => {
+                    if (err) {
+                        return res.status(500).json({ success: false, message: '获取日志失败' });
+                    }
+                    res.json({
+                        success: true,
+                        logs: logs,
+                        user: user,
+                        pagination: {
+                            page: parseInt(page),
+                            limit: parseInt(limit),
+                            total: total,
+                            pages: Math.ceil(total / limit)
+                        }
+                    });
+                });
+            });
+        } else if (type === 'operation') {
+            // 只获取操作日志
+            operationQuery = `SELECT * FROM operation_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+            db.get("SELECT COUNT(*) as total FROM operation_logs WHERE user_id = ?", [id], (err, row) => {
+                const total = row?.total || 0;
+                db.all(operationQuery, [...params, parseInt(limit), parseInt(offset)], (err, logs) => {
+                    if (err) {
+                        return res.status(500).json({ success: false, message: '获取日志失败' });
+                    }
+                    res.json({
+                        success: true,
+                        logs: logs,
+                        user: user,
+                        pagination: {
+                            page: parseInt(page),
+                            limit: parseInt(limit),
+                            total: total,
+                            pages: Math.ceil(total / limit)
+                        }
+                    });
+                });
+            });
+        } else {
+            // 获取所有日志（登录日志 + 操作日志）
+            const loginCountQuery = "SELECT COUNT(*) as count FROM login_logs WHERE user_id = ?";
+            const operationCountQuery = "SELECT COUNT(*) as count FROM operation_logs WHERE user_id = ?";
+
+            db.get(loginCountQuery, [id], (err, loginRow) => {
+                db.get(operationCountQuery, [id], (err, operationRow) => {
+                    const total = (loginRow?.count || 0) + (operationRow?.count || 0);
+
+                    // 合并两个日志表并按时间排序
+                    db.all(`SELECT 'login' as log_type, id, user_id, username, ip_address, user_agent, action, status, created_at
+                            FROM login_logs WHERE user_id = ?
+                            UNION ALL
+                            SELECT 'operation' as log_type, id, user_id, username, ip_address, null as user_agent, action, details as status, created_at
+                            FROM operation_logs WHERE user_id = ?
+                            ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+                        [id, id, parseInt(limit), parseInt(offset)], (err, logs) => {
+                        if (err) {
+                            return res.status(500).json({ success: false, message: '获取日志失败: ' + err.message });
+                        }
+
+                        res.json({
+                            success: true,
+                            logs: logs,
+                            user: user,
+                            pagination: {
+                                page: parseInt(page),
+                                limit: parseInt(limit),
+                                total: total,
+                                pages: Math.ceil(total / limit)
+                            }
+                        });
+                    });
+                });
+            });
+        }
+    });
+});
+
+// 用户列表 API（保持原有功能）
 app.get('/api/admin/users', authenticateAdmin, (req, res) => {
     const { page = 1, limit = 20, search = '', status = '' } = req.query;
     const offset = (page - 1) * limit;

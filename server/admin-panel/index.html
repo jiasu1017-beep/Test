@@ -511,6 +511,85 @@
         </div>
     </div>
 
+    <!-- 用户详情模态框 -->
+    <div class="modal fade" id="userDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">用户详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- 用户基本信息 -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0"><i class="bi bi-person"></i> 基本信息</h6>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-borderless">
+                                        <tr><td><strong>用户ID:</strong></td><td id="detailUserId">-</td></tr>
+                                        <tr><td><strong>用户名:</strong></td><td id="detailUsername">-</td></tr>
+                                        <tr><td><strong>邮箱:</strong></td><td id="detailEmail">-</td></tr>
+                                        <tr><td><strong>角色:</strong></td><td id="detailRole">-</td></tr>
+                                        <tr><td><strong>状态:</strong></td><td id="detailStatus">-</td></tr>
+                                        <tr><td><strong>注册时间:</strong></td><td id="detailCreatedAt">-</td></tr>
+                                        <tr><td><strong>最后登录:</strong></td><td id="detailLastLogin">-</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0"><i class="bi bi-graph-up"></i> 统计信息</h6>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-borderless">
+                                        <tr><td><strong>登录次数:</strong></td><td id="detailLoginCount">-</td></tr>
+                                        <tr><td><strong>操作记录:</strong></td><td id="detailOperationCount">-</td></tr>
+                                        <tr><td><strong>创建收藏:</strong></td><td id="detailCollectionsCount">-</td></tr>
+                                        <tr><td><strong>当前状态:</strong></td><td id="detailOnlineStatus">-</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 日志筛选 -->
+                    <div class="mb-3">
+                        <ul class="nav nav-tabs" id="userLogTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="all-logs-tab" data-bs-toggle="tab" data-bs-target="#all-logs" type="button" role="tab">全部日志</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="login-logs-tab" data-bs-toggle="tab" data-bs-target="#login-logs" type="button" role="tab">登录日志</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="operation-logs-tab" data-bs-toggle="tab" data-bs-target="#operation-logs" type="button" role="tab">操作日志</button>
+                            </li>
+                        </ul>
+                        <div class="tab-content mt-2" id="userLogTabsContent">
+                            <div class="tab-pane fade show active" id="all-logs" role="tabpanel">
+                                <div id="userAllLogsTable"></div>
+                            </div>
+                            <div class="tab-pane fade" id="login-logs" role="tabpanel">
+                                <div id="userLoginLogsTable"></div>
+                            </div>
+                            <div class="tab-pane fade" id="operation-logs" role="tabpanel">
+                                <div id="userOperationLogsTable"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="editCollectionModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -577,10 +656,11 @@
         let authToken = localStorage.getItem('adminToken');
         let currentPage = 'dashboard';
         let currentLogType = 'login';
-        let editUserModal, editCollectionModal, editConfigModal;
+        let editUserModal, userDetailModal, editCollectionModal, editConfigModal;
 
         document.addEventListener('DOMContentLoaded', function() {
             editUserModal = new bootstrap.Modal(document.getElementById('editUserModal'));
+            userDetailModal = new bootstrap.Modal(document.getElementById('userDetailModal'));
             editCollectionModal = new bootstrap.Modal(document.getElementById('editCollectionModal'));
             editConfigModal = new bootstrap.Modal(document.getElementById('editConfigModal'));
             
@@ -732,6 +812,9 @@
                     <td>${formatDate(u.created_at)}</td>
                     <td>${u.last_login ? formatDate(u.last_login) : '-'}</td>
                     <td>
+                        <button class="btn btn-sm btn-info btn-action" onclick="viewUserDetail(${u.id}, '${u.username}')" title="查看详情">
+                            <i class="bi bi-eye"></i>
+                        </button>
                         <button class="btn btn-sm btn-primary btn-action" onclick="editUser(${u.id}, '${u.email}', '${u.role}', '${u.status}')" title="编辑用户">
                             <i class="bi bi-pencil"></i>
                         </button>
@@ -803,6 +886,175 @@
                 showToast('删除失败', 'danger');
             }
         }
+
+        let currentDetailUserId = null;
+
+        async function viewUserDetail(id, username) {
+            currentDetailUserId = id;
+
+            try {
+                const res = await fetch(`/api/admin/users/${id}`, {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    const user = data.user;
+
+                    // 填充基本信息
+                    document.getElementById('detailUserId').textContent = user.id;
+                    document.getElementById('detailUsername').textContent = user.username;
+                    document.getElementById('detailEmail').textContent = user.email;
+                    document.getElementById('detailRole').textContent = user.role === 'admin' ? '管理员' : '普通用户';
+                    document.getElementById('detailStatus').innerHTML = user.status === 'active'
+                        ? '<span class="badge bg-success">活跃</span>'
+                        : '<span class="badge bg-danger">禁用</span>';
+                    document.getElementById('detailCreatedAt').textContent = formatDate(user.created_at);
+                    document.getElementById('detailLastLogin').textContent = user.last_login ? formatDate(user.last_login) : '从未登录';
+
+                    // 填充统计信息
+                    document.getElementById('detailLoginCount').textContent = user.loginCount || 0;
+                    document.getElementById('detailOperationCount').textContent = user.operationCount || 0;
+                    document.getElementById('detailCollectionsCount').textContent = user.collectionsCount || 0;
+                    document.getElementById('detailOnlineStatus').innerHTML = user.isOnline
+                        ? '<span class="badge bg-success">在线</span>'
+                        : '<span class="badge bg-secondary">离线</span>';
+
+                    // 加载日志
+                    loadUserLogs('all', 1);
+
+                    userDetailModal.show();
+                } else {
+                    showToast(data.message || '获取用户详情失败', 'danger');
+                }
+            } catch (err) {
+                showToast('获取用户详情失败', 'danger');
+            }
+        }
+
+        async function loadUserLogs(type, page = 1) {
+            if (!currentDetailUserId) return;
+
+            try {
+                const res = await fetch(`/api/admin/users/${currentDetailUserId}/logs?page=${page}&limit=20&type=${type}`, {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    let tableHtml = '';
+                    let containerId = '';
+
+                    if (type === 'login') {
+                        containerId = 'userLoginLogsTable';
+                        tableHtml = renderUserLoginLogs(data.logs);
+                    } else if (type === 'operation') {
+                        containerId = 'userOperationLogsTable';
+                        tableHtml = renderUserOperationLogs(data.logs);
+                    } else {
+                        containerId = 'userAllLogsTable';
+                        tableHtml = renderUserAllLogs(data.logs);
+                    }
+
+                    document.getElementById(containerId).innerHTML = tableHtml;
+                }
+            } catch (err) {
+                console.error('加载用户日志失败:', err);
+            }
+        }
+
+        function renderUserAllLogs(logs) {
+            if (!logs || logs.length === 0) {
+                return '<div class="text-center text-muted py-3">暂无日志记录</div>';
+            }
+
+            return `
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>类型</th><th>操作</th><th>详情</th><th>IP地址</th><th>时间</th></tr></thead>
+                        <tbody>
+                            ${logs.map(log => `
+                                <tr>
+                                    <td>${log.log_type === 'login'
+                                        ? '<span class="badge bg-info">登录</span>'
+                                        : '<span class="badge bg-warning">操作</span>'}</td>
+                                    <td>${log.action || '-'}</td>
+                                    <td>${log.status || '-'}</td>
+                                    <td>${log.ip_address || '-'}</td>
+                                    <td>${formatDate(log.created_at)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function renderUserLoginLogs(logs) {
+            if (!logs || logs.length === 0) {
+                return '<div class="text-center text-muted py-3">暂无登录日志</div>';
+            }
+
+            return `
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>操作</th><th>状态</th><th>IP地址</th><th>User-Agent</th><th>时间</th></tr></thead>
+                        <tbody>
+                            ${logs.map(log => `
+                                <tr>
+                                    <td>${log.action || '-'}</td>
+                                    <td>${getStatusBadge(log.status)}</td>
+                                    <td>${log.ip_address || '-'}</td>
+                                    <td><small class="text-muted">${log.user_agent ? log.user_agent.substring(0, 50) + '...' : '-'}</small></td>
+                                    <td>${formatDate(log.created_at)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function renderUserOperationLogs(logs) {
+            if (!logs || logs.length === 0) {
+                return '<div class="text-center text-muted py-3">暂无操作日志</div>';
+            }
+
+            return `
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>操作</th><th>详情</th><th>IP地址</th><th>时间</th></tr></thead>
+                        <tbody>
+                            ${logs.map(log => `
+                                <tr>
+                                    <td>${log.action || '-'}</td>
+                                    <td>${log.details || '-'}</td>
+                                    <td>${log.ip_address || '-'}</td>
+                                    <td>${formatDate(log.created_at)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function getStatusBadge(status) {
+            if (!status) return '-';
+            if (status === 'success' || status === 'active') {
+                return '<span class="badge bg-success">成功</span>';
+            } else if (status.startsWith('failed')) {
+                return '<span class="badge bg-danger">失败</span>';
+            } else if (status === 'logout') {
+                return '<span class="badge bg-secondary">登出</span>';
+            }
+            return `<span class="badge bg-info">${status}</span>`;
+        }
+
+        // 绑定日志标签页切换事件
+        document.getElementById('all-logs-tab')?.addEventListener('shown.bs.tab', () => loadUserLogs('all', 1));
+        document.getElementById('login-logs-tab')?.addEventListener('shown.bs.tab', () => loadUserLogs('login', 1));
+        document.getElementById('operation-logs-tab')?.addEventListener('shown.bs.tab', () => loadUserLogs('operation', 1));
 
         async function resetPassword(id, username) {
             if (!confirm(`确定要将用户 "${username}" 的密码重置为 666666 吗？\n\n重置后该用户需要使用新密码重新登录。`)) return;
