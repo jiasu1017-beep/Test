@@ -5,7 +5,7 @@ REM Switch to script directory
 cd /d "%~dp0"
 
 REM Set version and release directory
-set VERSION=v0.0.9
+set VERSION=v1.0.0
 set RELEASE_DIR=release-%VERSION%
 
 echo ========================================
