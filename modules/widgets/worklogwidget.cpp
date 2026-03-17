@@ -628,10 +628,20 @@ void WorkLogWidget::setupUI()
     pieChart = new QChart();
     pieChart->setTitle("分类时间分布");
     pieChart->setAnimationOptions(QChart::SeriesAnimations);
+    pieChart->setTheme(QChart::ChartThemeLight);
+
+    // 设置图例显示在下方
+    pieChart->legend()->setAlignment(Qt::AlignBottom);
+
+    // 调整饼图大小，留出下方空间给图例
+    pieChart->setBackgroundBrush(QBrush(Qt::white));
 
     pieChartView = new QChartView(pieChart, statisticsPanel);
     pieChartView->setRenderHint(QPainter::Antialiasing);
     pieChartView->setMinimumHeight(300);
+    pieChartView->setInteractive(true);  // 启用交互
+    pieChartView->setMouseTracking(true);
+    pieChartView->installEventFilter(this);  // 安装事件过滤器
     chartLayout->addWidget(pieChartView);
 
     chartLayout->addStretch();
@@ -1156,13 +1166,10 @@ void WorkLogWidget::updateStatistics()
                 pieChart->addSeries(series);
 
                 pieChart->legend()->setVisible(true);
-                pieChart->legend()->setAlignment(Qt::AlignRight);
+                pieChart->legend()->setAlignment(Qt::AlignBottom);
                 pieChart->legend()->setFont(QFont("Microsoft YaHei", 9));
-                pieChart->legend()->setMaximumWidth(180);
                 pieChart->legend()->setContentsMargins(5, 5, 5, 5);
-                pieChart->legend()->setBackgroundVisible(true);
-                pieChart->legend()->setBrush(QBrush(QColor(249, 250, 251, 245)));
-                pieChart->legend()->setPen(QPen(QColor(200, 200, 200)));
+                pieChart->legend()->setBackgroundVisible(false);
 
                 QList<QLegendMarker*> markers = pieChart->legend()->markers();
                  for (int i = 0; i < markers.count(); ++i) {
@@ -3713,10 +3720,70 @@ bool WorkLogWidget::checkPermission(const QString &permission)
 {
     QSettings settings("PonyWork", "WorkLog");
     QStringList permissions = settings.value("permissions", QStringList()).toStringList();
-    
+
     if (permissions.isEmpty()) {
         return true;
     }
-    
+
     return permissions.contains(permission);
+}
+
+bool WorkLogWidget::eventFilter(QObject *obj, QEvent *event)
+{
+    if (obj == pieChartView) {
+        if (event->type() == QEvent::MouseButtonDblClick) {
+            onPieChartDoubleClick();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(obj, event);
+}
+
+void WorkLogWidget::onPieChartDoubleClick()
+{
+    // 创建对话框
+    QDialog *dialog = new QDialog(this);
+    dialog->setWindowTitle("饼图详情 - 分类时间分布");
+    dialog->setMinimumSize(800, 600);
+    dialog->setStyleSheet("QDialog { background-color: #ffffff; }");
+
+    QVBoxLayout *layout = new QVBoxLayout(dialog);
+
+    // 创建新的图表视图（放大版）
+    QChart *largeChart = new QChart();
+    largeChart->setTitle("分类时间分布（双击查看详情）");
+    largeChart->setAnimationOptions(QChart::SeriesAnimations);
+    largeChart->legend()->setVisible(true);
+    largeChart->legend()->setAlignment(Qt::AlignBottom);
+
+    // 复制当前饼图的数据到新图表
+    if (!pieChart->series().isEmpty()) {
+        QPieSeries *originalSeries = qobject_cast<QPieSeries*>(pieChart->series().first());
+        if (originalSeries) {
+            QPieSeries *newSeries = new QPieSeries();
+            for (QPieSlice *slice : originalSeries->slices()) {
+                newSeries->append(slice->label(), slice->value());
+            }
+            largeChart->addSeries(newSeries);
+        }
+    }
+
+    QChartView *chartView = new QChartView(largeChart, dialog);
+    chartView->setRenderHint(QPainter::Antialiasing);
+    chartView->setMinimumSize(700, 500);
+    layout->addWidget(chartView);
+
+    // 添加关闭按钮
+    QPushButton *closeBtn = new QPushButton("关闭", dialog);
+    closeBtn->setStyleSheet("padding: 8px 20px; background-color: #3498db; color: white; border: none; border-radius: 4px;");
+    connect(closeBtn, &QPushButton::clicked, dialog, &QDialog::accept);
+
+    QHBoxLayout *btnLayout = new QHBoxLayout();
+    btnLayout->addStretch();
+    btnLayout->addWidget(closeBtn);
+    layout->addLayout(btnLayout);
+
+    // 显示对话框
+    dialog->exec();
+    dialog->deleteLater();
 }

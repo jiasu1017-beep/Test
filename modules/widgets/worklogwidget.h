@@ -154,6 +154,8 @@ private slots:
     void onPrevDay();
     void onNextDay();
     void onToday();
+    void onPieChartDoubleClick();
+    bool eventFilter(QObject *obj, QEvent *event) override;
 
 private:
     void setupUI();
