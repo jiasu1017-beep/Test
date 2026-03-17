@@ -18,6 +18,7 @@
 #include "modules/core/database.h"
 #include "modules/update/updatemanager.h"
 #include "modules/user/userapi.h"
+#include "modules/user/usermenuwidget.h"
 #include "modules/widgets/widgets_module.h"
 
 // Forward declarations
@@ -46,12 +47,13 @@ public:
     
 public slots:
     void setStatusText(const QString &text);
+    void showStatusMessage(const QString &text, int durationMs = 3000);
+    void showLoginDialog();
+    void showRegisterDialog();
     void resetApps();
     void refreshGlobalShortcut();
     void setBottomAppBarVisible(bool visible);
     void refreshBottomAppBarVisibility();
-    void showLoginDialog();
-    void showRegisterDialog();
     void refreshAllWidgets();
     
 private slots:
@@ -114,7 +116,10 @@ private:
     QPropertyAnimation *m_bottomAppBarAnimation;
     BottomAppBar *bottomAppBar;
     QLabel *statusLabel;
-    
+    QTimer *statusTimer;
+    QString m_defaultStatusText;
+    class UserMenuWidget *userMenuWidget;
+
     void setupGlobalShortcut();
     void toggleWindow();
     void showShortcutTips();

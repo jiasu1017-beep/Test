@@ -4,5 +4,6 @@
         <file>img/icon.png</file>
         <file>img/icon.ico</file>
         <file>img/pic.png</file>
+        <file>img/icon0.png</file>
     </qresource>
 </RCC>

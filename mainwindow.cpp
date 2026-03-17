@@ -100,16 +100,12 @@ MainWindow::~MainWindow()
 
 void MainWindow::showLoginDialog()
 {
-    UserLoginDialog dialog(this);
-    dialog.exec();
+    userMenuWidget->showLoginDialog();
 }
 
 void MainWindow::showRegisterDialog()
 {
-    // 注册对话框在 UserLoginDialog 中可以通过切换访问
-    UserLoginDialog dialog(this);
-    dialog.switchToRegister();
-    dialog.exec();
+    userMenuWidget->showRegisterDialog();
 }
 
 void MainWindow::refreshAllWidgets()
@@ -137,6 +133,7 @@ void MainWindow::onAutoLoginSuccess(const UserInfo& user) {
     if (settingsWidget) {
         settingsWidget->updateCloudLoginStatus(user);
     }
+    showStatusMessage("自动登录成功", 3000);
 }
 
 void MainWindow::onAutoLoginFailed() {
@@ -204,7 +201,12 @@ void MainWindow::setupUI()
     
     statusLabel = new QLabel(this);
     QString version = qApp->applicationVersion();
-    statusLabel->setText(QString("小马办公 v%1 - 就绪").arg(version));
+    m_defaultStatusText = QString("小马办公 v%1 - 就绪").arg(version);
+    statusLabel->setText(m_defaultStatusText);
+
+    // 状态栏消息定时器
+    statusTimer = new QTimer(this);
+    statusTimer->setSingleShot(true);
     
     QPushButton *shortcutTipsBtn = new QPushButton("快捷键提示", this);
     shortcutTipsBtn->setStyleSheet(
@@ -223,80 +225,26 @@ void MainWindow::setupUI()
         "}"
     );
     connect(shortcutTipsBtn, &QPushButton::clicked, this, &MainWindow::showShortcutTips);
-    
+
     statusBarLayout->addWidget(statusLabel);
 
-    // 用户菜单按钮
-    QToolButton *userMenuBtn = new QToolButton(this);
-    userMenuBtn->setPopupMode(QToolButton::InstantPopup);
-    userMenuBtn->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    userMenuBtn->setCursor(Qt::PointingHandCursor);
-    userMenuBtn->setIcon(QApplication::style()->standardIcon(QStyle::SP_ArrowRight));
-    userMenuBtn->setFixedSize(24, 24);
-    userMenuBtn->setToolTip("用户");
+    // 用户菜单组件
+    userMenuWidget = new UserMenuWidget(this);
 
-    // 用户菜单
-    QMenu *userMenu = new QMenu(this);
-    QAction *loginAction = new QAction("登录", this);
-    connect(loginAction, &QAction::triggered, this, &MainWindow::showLoginDialog);
-    QAction *registerAction = new QAction("注册", this);
-    connect(registerAction, &QAction::triggered, this, &MainWindow::showRegisterDialog);
-    userMenu->addAction(loginAction);
-    userMenu->addAction(registerAction);
-
-    userMenuBtn->setMenu(userMenu);
+    // 连接用户菜单信号
+    connect(userMenuWidget, &UserMenuWidget::statusMessageRequested, this, &MainWindow::showStatusMessage);
+    connect(userMenuWidget, &UserMenuWidget::showBackupVersionsDialogRequested, this, [=]() {
+        userWidget->showBackupVersionsDialog();
+    });
 
     // 添加工具栏放在右上角，与tab同一行
     QToolBar *userToolBar = new QToolBar(this);
     userToolBar->setMovable(false);
     userToolBar->setFloatable(false);
-    userToolBar->addWidget(userMenuBtn);
+    userToolBar->addWidget(userMenuWidget->getUserMenuButton());
     userToolBar->setStyleSheet("QToolBar { border: none; }");
     userToolBar->setLayoutDirection(Qt::RightToLeft);
     addToolBar(Qt::TopToolBarArea, userToolBar);
-
-    // 登录成功后更新菜单
-    connect(UserManager::instance(), &UserManager::loginSuccess, userMenu, [=]() {
-        userMenu->clear();
-        UserInfo user = UserManager::instance()->currentUser();
-        QString displayName = user.username.isEmpty() ? user.email : user.username;
-
-        QAction *userInfo = new QAction("当前用户: " + displayName, userMenu);
-        userInfo->setEnabled(false);
-        userMenu->addAction(userInfo);
-        userMenu->addSeparator();
-
-        QAction *manageConfigAction = new QAction("云端配置管理", userMenu);
-        connect(manageConfigAction, &QAction::triggered, this, [=]() {
-            userWidget->showBackupVersionsDialog();
-        });
-        userMenu->addAction(manageConfigAction);
-
-        QAction *changePwdAction = new QAction("修改密码", userMenu);
-        connect(changePwdAction, &QAction::triggered, this, []() {
-            ChangePasswordDialog dlg(nullptr);
-            dlg.exec();
-        });
-        userMenu->addAction(changePwdAction);
-
-        userMenu->addSeparator();
-
-        QAction *logoutAction = new QAction("退出登录", userMenu);
-        connect(logoutAction, &QAction::triggered, this, []() {
-            UserManager::instance()->logout();
-        });
-        userMenu->addAction(logoutAction);
-
-        userMenuBtn->setToolTip("用户: " + displayName);
-    });
-
-    // 登出后恢复菜单
-    connect(UserManager::instance(), &UserManager::logoutComplete, userMenu, [=]() {
-        userMenu->clear();
-        userMenu->addAction(loginAction);
-        userMenu->addAction(registerAction);
-        userMenuBtn->setToolTip("用户");
-    });
 
     statusBarLayout->addStretch();
     statusBarLayout->addWidget(shortcutTipsBtn);
@@ -752,6 +700,21 @@ void MainWindow::setStatusText(const QString &text)
 {
     if (statusLabel) {
         statusLabel->setText(text);
+    }
+}
+
+void MainWindow::showStatusMessage(const QString &text, int durationMs)
+{
+    if (statusLabel) {
+        statusLabel->setText(text);
+        if (durationMs > 0) {
+            statusTimer->stop();
+            disconnect(statusTimer, &QTimer::timeout, this, nullptr);
+            connect(statusTimer, &QTimer::timeout, this, [this]() {
+                statusLabel->setText(m_defaultStatusText);
+            });
+            statusTimer->start(durationMs);
+        }
     }
 }
 
