@@ -144,4 +144,29 @@ private:
     bool m_isSyncing;
 };
 
+class TaskSync : public QObject {
+    Q_OBJECT
+public:
+    static TaskSync* instance();
+
+    void syncTasks();
+    void uploadTasks(const QJsonArray& tasks);
+    void downloadTasks();
+
+signals:
+    void tasksSynced(const QJsonArray& tasks);
+    void tasksUploadComplete();
+    void tasksDownloadComplete(const QJsonArray& tasks);
+    void syncFailed(const QString& error);
+
+private slots:
+    void onTasksLoaded(const QString& endpoint, const QJsonDocument& response);
+    void onTasksSaved(const QString& endpoint, const QJsonDocument& response);
+    void onRequestFailed(const QString& endpoint, int errorCode, const QString& error);
+
+private:
+    TaskSync();
+    bool m_isSyncing;
+};
+
 #endif // USERAPI_H

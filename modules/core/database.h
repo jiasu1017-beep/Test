@@ -124,6 +124,7 @@ struct Task {
     double workDuration;
     QDateTime completionTime;
     QStringList tags;
+    QDateTime updatedAt;
 };
 
 struct Category {
@@ -140,6 +141,7 @@ class Database : public QObject
     Q_OBJECT
 signals:
     void appsChanged();
+    void tasksChanged();
 public:
     explicit Database(QObject *parent = nullptr);
     ~Database();

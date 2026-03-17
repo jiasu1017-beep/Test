@@ -572,6 +572,9 @@
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link" id="cloud-configs-tab" data-bs-toggle="tab" data-bs-target="#cloud-configs" type="button" role="tab">设备配置</button>
                             </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="user-tasks-tab" data-bs-toggle="tab" data-bs-target="#user-tasks" type="button" role="tab">工作日志</button>
+                            </li>
                         </ul>
                         <div class="tab-content mt-2" id="userLogTabsContent">
                             <div class="tab-pane fade show active" id="all-logs" role="tabpanel">
@@ -585,6 +588,13 @@
                             </div>
                             <div class="tab-pane fade" id="cloud-configs" role="tabpanel">
                                 <div id="userCloudConfigsTable"></div>
+                            </div>
+                            <div class="tab-pane fade" id="user-tasks" role="tabpanel">
+                                <div class="mb-2">
+                                    <button class="btn btn-sm btn-primary" onclick="loadUserTasks()">刷新</button>
+                                </div>
+                                <div id="userTasksTable"></div>
+                                <div id="userTasksPagination" class="mt-2"></div>
                             </div>
                         </div>
                     </div>
@@ -933,6 +943,9 @@
                     // 加载日志
                     loadUserLogs('all', 1);
 
+                    // 加载工作日志
+                    loadUserTasks(1);
+
                     userDetailModal.show();
                 } else {
                     showToast(data.message || '获取用户详情失败', 'danger');
@@ -1066,6 +1079,7 @@
         document.getElementById('login-logs-tab')?.addEventListener('shown.bs.tab', () => loadUserLogs('login', 1));
         document.getElementById('operation-logs-tab')?.addEventListener('shown.bs.tab', () => loadUserLogs('operation', 1));
         document.getElementById('cloud-configs-tab')?.addEventListener('shown.bs.tab', () => loadUserCloudConfigs());
+        document.getElementById('user-tasks-tab')?.addEventListener('shown.bs.tab', () => loadUserTasks(1));
 
         // 加载用户的云端配置列表（多配置）
         async function loadUserCloudConfigs() {
@@ -1127,6 +1141,88 @@
                 document.getElementById('userCloudConfigsTable').innerHTML =
                     '<div class="text-center text-danger py-3">加载配置失败</div>';
             }
+        }
+
+        // 加载用户的工作日志
+        async function loadUserTasks(page = 1) {
+            if (!currentDetailUserId) return;
+
+            try {
+                const res = await fetch(`/api/admin/users/${currentDetailUserId}/tasks?page=${page}&limit=10`, {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    const tasks = data.tasks || [];
+                    let html = '';
+
+                    if (tasks.length === 0) {
+                        html = '<div class="text-center text-muted py-3">暂无工作日志</div>';
+                    } else {
+                        html = `
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>标题</th>
+                                            <th>描述</th>
+                                            <th>状态</th>
+                                            <th>优先级</th>
+                                            <th>工时</th>
+                                            <th>更新时间</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${tasks.map(task => `
+                                            <tr>
+                                                <td>${task.id || '-'}</td>
+                                                <td>${task.title || '-'}</td>
+                                                <td><small>${task.description ? task.description.substring(0, 30) + (task.description.length > 30 ? '...' : '') : '-'}</small></td>
+                                                <td>${getTaskStatusBadge(task.status)}</td>
+                                                <td>${getTaskPriorityBadge(task.priority)}</td>
+                                                <td>${task.workDuration || 0}h</td>
+                                                <td>${formatDate(task.updatedAt)}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `;
+                    }
+
+                    document.getElementById('userTasksTable').innerHTML = html;
+
+                    // 渲染分页
+                    renderPagination('userTasksPagination', data.pagination, (p) => loadUserTasks(p));
+                } else {
+                    document.getElementById('userTasksTable').innerHTML =
+                        '<div class="text-center text-danger py-3">加载工作日志失败</div>';
+                }
+            } catch (err) {
+                document.getElementById('userTasksTable').innerHTML =
+                    '<div class="text-center text-danger py-3">加载工作日志失败</div>';
+            }
+        }
+
+        function getTaskStatusBadge(status) {
+            const statusMap = {
+                0: '<span class="badge bg-secondary">待办</span>',
+                1: '<span class="badge bg-primary">进行中</span>',
+                2: '<span class="badge bg-warning">暂停</span>',
+                3: '<span class="badge bg-success">已完成</span>'
+            };
+            return statusMap[status] || '<span class="badge bg-secondary">未知</span>';
+        }
+
+        function getTaskPriorityBadge(priority) {
+            const priorityMap = {
+                0: '<span class="badge bg-info">低</span>',
+                1: '<span class="badge bg-warning">中</span>',
+                2: '<span class="badge bg-danger">高</span>'
+            };
+            return priorityMap[priority] || '<span class="badge bg-secondary">未知</span>';
         }
 
         // 查看云端配置详情
@@ -1454,12 +1550,20 @@
                 el.innerHTML = '';
                 return;
             }
-            
+
             let html = '<nav><ul class="pagination mb-0">';
+
+            // 首页
+            html += `<li class="page-item ${pagination.page === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="event.preventDefault(); if(${pagination.page} > 1) callback(1)">首页</a>
+            </li>`;
+
+            // 上一页
             html += `<li class="page-item ${pagination.page === 1 ? 'disabled' : ''}">
                 <a class="page-link" href="#" onclick="event.preventDefault(); if(${pagination.page} > 1) callback(${pagination.page - 1})">上一页</a>
             </li>`;
-            
+
+            // 页码数字
             for (let i = 1; i <= pagination.pages; i++) {
                 if (i === 1 || i === pagination.pages || (i >= pagination.page - 2 && i <= pagination.page + 2)) {
                     html += `<li class="page-item ${i === pagination.page ? 'active' : ''}">
@@ -1469,13 +1573,38 @@
                     html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
                 }
             }
-            
+
+            // 下一页
             html += `<li class="page-item ${pagination.page === pagination.pages ? 'disabled' : ''}">
                 <a class="page-link" href="#" onclick="event.preventDefault(); if(${pagination.page} < ${pagination.pages}) callback(${pagination.page + 1})">下一页</a>
             </li>`;
+
+            // 末页
+            html += `<li class="page-item ${pagination.page === pagination.pages ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="event.preventDefault(); if(${pagination.page} < ${pagination.pages}) callback(${pagination.pages})">末页</a>
+            </li>`;
+
+            // 跳转功能
+            html += `<li class="page-item">
+                <div class="input-group input-group-sm" style="width: 130px; margin-left: 10px;">
+                    <input type="number" id="${elementId}_goto" class="form-control" placeholder="页码" min="1" max="${pagination.pages}">
+                    <button class="btn btn-outline-secondary" type="button" onclick="gotoPage('${elementId}', ${pagination.pages}, callback)">跳转</button>
+                </div>
+            </li>`;
+
             html += '</ul></nav>';
-            
+
             el.innerHTML = html;
+        }
+
+        function gotoPage(elementId, maxPages, callback) {
+            const input = document.getElementById(elementId + '_goto');
+            const page = parseInt(input.value);
+            if (page >= 1 && page <= maxPages) {
+                callback(page);
+            } else {
+                alert('请输入有效的页码 (1-' + maxPages + ')');
+            }
         }
 
         function formatDate(dateStr) {

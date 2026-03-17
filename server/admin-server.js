@@ -504,6 +504,91 @@ app.get('/api/admin/users/:id/config-profiles/:config_name', authenticateAdmin, 
     });
 });
 
+// 获取用户的工作日志（管理后台）
+app.get('/api/admin/users/:id/tasks', authenticateAdmin, (req, res) => {
+    const { id } = req.params;
+    const userId = parseInt(id);
+    const { page = 1, limit = 50 } = req.query;
+    const offset = (page - 1) * limit;
+
+    // 首先检查用户是否存在
+    db.get("SELECT id, username, email FROM users WHERE id = ?", [id], (err, user) => {
+        if (err || !user) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+
+        // 使用用户独立数据库
+        const userDbConn = userDb.getUserDb(userId);
+
+        // 获取总数
+        userDbConn.get("SELECT COUNT(*) as total FROM user_tasks", [], (errCount, row) => {
+            const total = row?.total || 0;
+
+            // 获取工作日志列表
+            userDbConn.all("SELECT * FROM user_tasks ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                [parseInt(limit), parseInt(offset)],
+                (err, tasks) => {
+                    if (err) {
+                        return res.status(500).json({ success: false, message: '获取工作日志失败' });
+                    }
+
+                    // 转换为前端需要的格式
+                    const parsedTasks = tasks.map(task => ({
+                        id: task.task_id,
+                        title: task.title,
+                        description: task.description,
+                        categoryId: task.category_id,
+                        priority: task.priority,
+                        status: task.status,
+                        workDuration: task.work_duration,
+                        completionTime: task.completion_time,
+                        tags: JSON.parse(task.tags || '[]'),
+                        updatedAt: task.updated_at
+                    }));
+
+                    res.json({
+                        success: true,
+                        tasks: parsedTasks,
+                        user: user,
+                        pagination: {
+                            page: parseInt(page),
+                            limit: parseInt(limit),
+                            total: total,
+                            pages: Math.ceil(total / limit)
+                        }
+                    });
+                });
+        });
+    });
+});
+
+// 删除指定用户的工作日志（管理后台）
+app.delete('/api/admin/users/:id/tasks/:task_id', authenticateAdmin, (req, res) => {
+    const { id, task_id } = req.params;
+    const userId = parseInt(id);
+
+    // 检查用户是否存在
+    db.get("SELECT id, username FROM users WHERE id = ?", [id], (err, user) => {
+        if (err || !user) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+
+        // 使用用户独立数据库删除任务
+        const userDbConn = userDb.getUserDb(userId);
+        userDbConn.run("DELETE FROM user_tasks WHERE task_id = ?", [task_id], function(err) {
+            if (err) {
+                return res.status(500).json({ success: false, message: '删除工作日志失败' });
+            }
+
+            // 记录操作日志
+            db.run("INSERT INTO operation_logs (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
+                [req.adminId, 'delete_user_task', `删除用户 ${user.username} 的工作日志: ${task_id}`, req.ip]);
+
+            res.json({ success: true, message: '工作日志删除成功' });
+        });
+    });
+});
+
 // 用户列表 API（保持原有功能）
 app.get('/api/admin/users', authenticateAdmin, (req, res) => {
     const { page = 1, limit = 20, search = '', status = '' } = req.query;
@@ -979,6 +1064,74 @@ app.post('/api/config/upload', authenticateToken, (req, res) => {
 
             res.json({ success: true, message: '配置上传成功', config_name: config_name });
         });
+});
+
+// 工作日志自动同步 - 上传/同步工作日志（跟随账号）
+app.post('/api/config/tasks/sync', authenticateToken, (req, res) => {
+    const { tasks } = req.body;
+
+    if (!tasks || !Array.isArray(tasks)) {
+        return res.status(400).json({ success: false, error: '工作日志数据格式错误' });
+    }
+
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    // 批量插入或更新工作日志
+    const stmt = userDbConn.prepare(`INSERT OR REPLACE INTO user_tasks
+        (task_id, title, description, category_id, priority, status, work_duration, completion_time, tags, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`);
+
+    let inserted = 0;
+    tasks.forEach(task => {
+        stmt.run(
+            task.id || '',
+            task.title || '',
+            task.description || '',
+            task.categoryId || 0,
+            task.priority || 0,
+            task.status || 0,
+            task.workDuration || 0,
+            task.completionTime || '',
+            JSON.stringify(task.tags || []),
+            function(err) {
+                if (!err) inserted++;
+            }
+        );
+    });
+
+    stmt.finalize((err) => {
+        if (err) {
+            return res.status(500).json({ success: false, error: '同步工作日志失败: ' + err.message });
+        }
+
+        res.json({ success: true, message: '工作日志同步成功', count: inserted });
+    });
+});
+
+// 获取工作日志（跟随账号）
+app.get('/api/config/tasks/get', authenticateToken, (req, res) => {
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    userDbConn.all("SELECT * FROM user_tasks ORDER BY updated_at DESC", [], (err, rows) => {
+        if (err) {
+            return res.status(500).json({ success: false, error: '获取工作日志失败: ' + err.message });
+        }
+
+        // 转换为前端需要的格式
+        const tasks = rows.map(row => ({
+            id: row.task_id,
+            title: row.title,
+            description: row.description,
+            categoryId: row.category_id,
+            priority: row.priority,
+            status: row.status,
+            workDuration: row.work_duration,
+            completionTime: row.completion_time,
+            tags: JSON.parse(row.tags || '[]')
+        }));
+
+        res.json({ success: true, tasks: tasks });
+    });
 });
 
 // 删除用户配置项

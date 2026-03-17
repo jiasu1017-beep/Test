@@ -18,6 +18,7 @@
 #include <QDialog>
 #include <QHeaderView>
 #include <QNetworkAccessManager>
+#include <QCheckBox>
 #include <QNetworkReply>
 #include "modules/core/database.h"
 #include "modules/user/userapi.h"
@@ -120,6 +121,10 @@ private:
     QLabel *m_statusLabel;
     QProgressBar *m_progressBar;
     QLineEdit *m_backupNameEdit;
+    QCheckBox *m_includeAppsCheck;
+    QCheckBox *m_includeCollectionsCheck;
+    QCheckBox *m_includeRemoteDesktopsCheck;
+    QCheckBox *m_includeSettingsCheck;
 
     QList<QVariantMap> m_versions;
 };

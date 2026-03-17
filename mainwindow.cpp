@@ -230,6 +230,7 @@ void MainWindow::setupUI()
 
     // 用户菜单组件
     userMenuWidget = new UserMenuWidget(this);
+    userMenuWidget->setDatabase(db);
 
     // 连接用户菜单信号
     connect(userMenuWidget, &UserMenuWidget::statusMessageRequested, this, &MainWindow::showStatusMessage);

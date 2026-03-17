@@ -54,6 +54,21 @@ function getUserDb(userId) {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
+
+        // 工作日志自动同步表（跟随账号）
+        userDb.run(`CREATE TABLE IF NOT EXISTS user_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL UNIQUE,
+            title TEXT,
+            description TEXT,
+            category_id INTEGER DEFAULT 0,
+            priority INTEGER DEFAULT 0,
+            status INTEGER DEFAULT 0,
+            work_duration REAL DEFAULT 0,
+            completion_time TEXT,
+            tags TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
     });
 
     userDbCache.set(userId, userDb);

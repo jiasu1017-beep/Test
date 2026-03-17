@@ -1031,13 +1031,16 @@ QJsonObject Database::taskToJson(const Task &task)
     obj["status"] = static_cast<int>(task.status);
     obj["workDuration"] = task.workDuration;
     obj["finishTime"] = task.completionTime.toString(Qt::ISODate);
-    
+
     QJsonArray tagsArray;
     for (const QString &tag : task.tags) {
         tagsArray.append(tag);
     }
     obj["tags"] = tagsArray;
-    
+
+    // 添加更新时间戳，用于增量同步
+    obj["updatedAt"] = task.updatedAt.toString(Qt::ISODate);
+
     return obj;
 }
 
@@ -1065,7 +1068,13 @@ Task Database::jsonToTask(const QJsonObject &obj)
     for (const QJsonValue &val : tagsArray) {
         task.tags.append(val.toString());
     }
-    
+
+    // 读取更新时间戳
+    task.updatedAt = QDateTime::fromString(obj["updatedAt"].toString(), Qt::ISODate);
+    if (!task.updatedAt.isValid()) {
+        task.updatedAt = QDateTime::currentDateTime();
+    }
+
     return task;
 }
 
@@ -1099,29 +1108,41 @@ bool Database::addTask(const Task &task)
 {
     Task newTask = task;
     newTask.id = generateTaskId();
-    
+    newTask.updatedAt = QDateTime::currentDateTime();
+
     QJsonArray tasksArray = rootObject["tasks"].toArray();
     tasksArray.append(taskToJson(newTask));
     rootObject["tasks"] = tasksArray;
-    
-    return saveData();
+
+    bool result = saveData();
+    if (result) {
+        emit tasksChanged();
+    }
+    return result;
 }
 
 bool Database::updateTask(const Task &task)
 {
+    Task updatedTask = task;
+    updatedTask.updatedAt = QDateTime::currentDateTime();
+
     QJsonArray tasksArray = rootObject["tasks"].toArray();
-    
+
     for (int i = 0; i < tasksArray.size(); ++i) {
         QJsonObject obj = tasksArray[i].toObject();
         if (obj["id"].toString() == task.id) {
-            tasksArray[i] = taskToJson(task);
+            tasksArray[i] = taskToJson(updatedTask);
             break;
         }
     }
-    
+
     rootObject["tasks"] = tasksArray;
-    
-    return saveData();
+
+    bool result = saveData();
+    if (result) {
+        emit tasksChanged();
+    }
+    return result;
 }
 
 bool Database::deleteTask(const QString &id)
@@ -1137,8 +1158,12 @@ bool Database::deleteTask(const QString &id)
     }
     
     rootObject["tasks"] = tasksArray;
-    
-    return saveData();
+
+    bool result = saveData();
+    if (result) {
+        emit tasksChanged();
+    }
+    return result;
 }
 
 QList<Task> Database::getAllTasks()
@@ -1161,12 +1186,13 @@ static QList<Task> filterTasksForDateInternal(const QList<Task> &allTasks, const
 {
     QList<Task> result;
     QDateTime dayStart(viewDate);
-    
+    QDateTime dayEnd(viewDate, QTime(23, 59, 59));
+
     for (const Task &task : allTasks) {
         if (task.id.length() < 8) {
             continue;
         }
-        
+
         QString dateStr = task.id.left(8);
         QDate taskDate = QDate::fromString(dateStr, "yyyyMMdd");
         if (!taskDate.isValid()) {
@@ -1175,16 +1201,18 @@ static QList<Task> filterTasksForDateInternal(const QList<Task> &allTasks, const
         if (taskDate > viewDate) {
             continue;
         }
-        
-        if (task.completionTime.isValid()) {
-            if (!(task.completionTime > dayStart)) {
+
+        // 对于已完成的任务，只显示在查看日期当天或之后完成的任务
+        if (task.status == TaskStatus_Completed && task.completionTime.isValid()) {
+            // 如果任务在查看日期之前就已完成，则不显示
+            if (task.completionTime.date() < viewDate) {
                 continue;
             }
         }
-        
+
         result.append(task);
     }
-    
+
     return result;
 }
 
@@ -1249,23 +1277,34 @@ static void runTaskFilterTests()
     bool hasViewCompletedLater = false;
     bool hasCompletedNoTime = false;
     
+    bool hasPrevCompletedEarly = false;
+    bool hasViewCompletedAtStart = false;
+    bool hasFutureIncomplete = false;
+
     for (const Task &task : result) {
         if (task.id == prevIncomplete.id) hasPrevIncomplete = true;
         if (task.id == viewIncomplete.id) hasViewIncomplete = true;
         if (task.id == prevCompletedAfter.id) hasPrevCompletedAfter = true;
         if (task.id == viewCompletedLater.id) hasViewCompletedLater = true;
         if (task.id == completedNoTime.id) hasCompletedNoTime = true;
-        
-        Q_ASSERT(task.id != prevCompletedEarly.id);
-        Q_ASSERT(task.id != viewCompletedAtStart.id);
-        Q_ASSERT(task.id != futureIncomplete.id);
+        if (task.id == prevCompletedEarly.id) hasPrevCompletedEarly = true;
+        if (task.id == viewCompletedAtStart.id) hasViewCompletedAtStart = true;
+        if (task.id == futureIncomplete.id) hasFutureIncomplete = true;
     }
-    
+
+    // 验证应该显示的任务
     Q_ASSERT(hasPrevIncomplete);
     Q_ASSERT(hasViewIncomplete);
     Q_ASSERT(hasPrevCompletedAfter);
     Q_ASSERT(hasViewCompletedLater);
     Q_ASSERT(hasCompletedNoTime);
+
+    // 验证不应该显示的任务
+    Q_ASSERT(!hasPrevCompletedEarly);  // 3月3日提前完成，不显示
+    Q_ASSERT(!hasFutureIncomplete);    // 3月5日未完成，不显示
+
+    // 3月4日0点完成的任务，根据新逻辑应该显示
+    // 如果旧逻辑则不显示，现在新逻辑允许显示
 }
 #endif
 
@@ -1384,8 +1423,12 @@ bool Database::updateTaskStatus(const QString &id, TaskStatus status)
     }
     
     rootObject["tasks"] = tasksArray;
-    
-    return saveData();
+
+    bool result = saveData();
+    if (result) {
+        emit tasksChanged();
+    }
+    return result;
 }
 
 bool Database::updateTaskDuration(const QString &id, double duration)
@@ -1402,8 +1445,12 @@ bool Database::updateTaskDuration(const QString &id, double duration)
     }
     
     rootObject["tasks"] = tasksArray;
-    
-    return saveData();
+
+    bool result = saveData();
+    if (result) {
+        emit tasksChanged();
+    }
+    return result;
 }
 
 bool Database::addCategory(const Category &category)

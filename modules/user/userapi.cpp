@@ -4,6 +4,7 @@
 #include <QNetworkCookie>
 #include <QUrlQuery>
 #include <QSettings>
+#include <QJsonArray>
 
 QString hashPassword(const QString& password) {
     QByteArray data = password.toUtf8();
@@ -399,9 +400,10 @@ void UserManager::onProfileResponse(const QString& endpoint, const QJsonDocument
         m_currentUser.createdAt = userObj["created_at"].toString();
         m_currentUser.lastLogin = userObj["last_login"].toString();
         m_isLoggedIn = true;
-        
+
         emit profileLoaded(m_currentUser);
-        qDebug() << "Profile loaded:" << m_currentUser.email;
+        emit loginSuccess(m_currentUser);
+        qDebug() << "Profile loaded and auto login success:" << m_currentUser.email;
     }
 }
 
@@ -621,5 +623,98 @@ void ConfigSync::onRequestFailed(const QString& endpoint, int errorCode, const Q
         m_isSyncing = false;
         emit syncFailed(error);
         qDebug() << "Config sync failed:" << error;
+    }
+}
+
+// TaskSync implementation
+TaskSync* TaskSync::instance() {
+    static TaskSync sync;
+    return &sync;
+}
+
+TaskSync::TaskSync() : QObject(), m_isSyncing(false) {
+    ApiClient* client = ApiClient::instance();
+    connect(client, &ApiClient::requestSuccess, this, &TaskSync::onTasksLoaded);
+    connect(client, &ApiClient::requestSuccess, this, &TaskSync::onTasksSaved);
+    connect(client, &ApiClient::requestFailed, this, &TaskSync::onRequestFailed);
+}
+
+void TaskSync::syncTasks() {
+    if (!UserManager::instance()->isLoggedIn()) {
+        emit syncFailed("Not logged in");
+        return;
+    }
+
+    if (m_isSyncing) return;
+    m_isSyncing = true;
+
+    ApiClient::instance()->get("/api/config/tasks/get");
+}
+
+void TaskSync::uploadTasks(const QJsonArray& tasks) {
+    if (!UserManager::instance()->isLoggedIn()) {
+        emit syncFailed("Not logged in");
+        return;
+    }
+
+    if (m_isSyncing) return;
+    m_isSyncing = true;
+
+    QJsonObject data;
+    data["tasks"] = tasks;
+
+    ApiClient::instance()->post("/api/config/tasks/sync", data);
+}
+
+void TaskSync::downloadTasks() {
+    if (!UserManager::instance()->isLoggedIn()) {
+        emit syncFailed("Not logged in");
+        return;
+    }
+
+    if (m_isSyncing) return;
+    m_isSyncing = true;
+
+    ApiClient::instance()->get("/api/config/tasks/get");
+}
+
+void TaskSync::onTasksLoaded(const QString& endpoint, const QJsonDocument& response) {
+    if (endpoint != "/api/config/tasks/get") return;
+
+    m_isSyncing = false;
+
+    QJsonObject obj = response.object();
+    if (obj["success"].toBool()) {
+        QJsonArray tasks = obj["tasks"].toArray();
+        emit tasksSynced(tasks);
+        qDebug() << "Tasks loaded successfully, count:" << tasks.size();
+    } else {
+        QString error = obj["error"].toString();
+        emit syncFailed(error);
+        qDebug() << "Tasks load failed:" << error;
+    }
+}
+
+void TaskSync::onTasksSaved(const QString& endpoint, const QJsonDocument& response) {
+    if (endpoint != "/api/config/tasks/sync") return;
+
+    m_isSyncing = false;
+
+    QJsonObject obj = response.object();
+    if (obj["success"].toBool()) {
+        emit tasksUploadComplete();
+        qDebug() << "Tasks saved successfully";
+    } else {
+        QString error = obj["error"].toString();
+        emit syncFailed(error);
+        qDebug() << "Tasks save failed:" << error;
+    }
+}
+
+void TaskSync::onRequestFailed(const QString& endpoint, int errorCode, const QString& error) {
+    if (endpoint == "/api/config/tasks/get" || endpoint == "/api/config/tasks/sync") {
+        m_isSyncing = false;
+        emit syncFailed(error);
+        qDebug() << "Tasks sync failed:" << error;
     }
 }

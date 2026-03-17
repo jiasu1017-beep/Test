@@ -657,6 +657,23 @@ void BackupVersionsDialog::setupUI()
     uploadLayout->addWidget(new QLabel("配置名称:"));
     uploadLayout->addWidget(m_backupNameEdit);
 
+    // 数据类型选择（仅上传时使用）
+    m_includeAppsCheck = new QCheckBox("应用", this);
+    m_includeAppsCheck->setChecked(true);
+    uploadLayout->addWidget(m_includeAppsCheck);
+
+    m_includeCollectionsCheck = new QCheckBox("收藏", this);
+    m_includeCollectionsCheck->setChecked(true);
+    uploadLayout->addWidget(m_includeCollectionsCheck);
+
+    m_includeRemoteDesktopsCheck = new QCheckBox("远程桌面", this);
+    m_includeRemoteDesktopsCheck->setChecked(true);
+    uploadLayout->addWidget(m_includeRemoteDesktopsCheck);
+
+    m_includeSettingsCheck = new QCheckBox("设置", this);
+    m_includeSettingsCheck->setChecked(true);
+    uploadLayout->addWidget(m_includeSettingsCheck);
+
     m_uploadWithNameBtn = new QPushButton("上传配置", this);
     m_uploadWithNameBtn->setStyleSheet("QPushButton { background-color: #28a745; color: white; padding: 8px 16px; }");
     uploadLayout->addWidget(m_uploadWithNameBtn);
@@ -1034,78 +1051,75 @@ void BackupVersionsDialog::onUploadWithNameClicked()
     QJsonObject localConfigs;
 
     if (m_db) {
-        // 获取应用列表
-        QList<AppInfo> apps = m_db->getAllApps();
-        QJsonArray appsArray;
-        for (const AppInfo &app : apps) {
-            QJsonObject appObj;
-            appObj["id"] = app.id;
-            appObj["name"] = app.name;
-            appObj["path"] = app.path;
-            appObj["iconPath"] = app.iconPath;
-            appObj["category"] = app.category;
-            appObj["sortOrder"] = app.sortOrder;
-            appObj["isFavorite"] = app.isFavorite;
-            appsArray.append(appObj);
-        }
-        localConfigs["apps"] = appsArray;
-
-        // 获取收藏列表
-        QList<AppCollection> collections = m_db->getAllCollections();
-        QJsonArray collectionsArray;
-        for (const AppCollection &col : collections) {
-            QJsonObject colObj;
-            colObj["id"] = col.id;
-            colObj["name"] = col.name;
-            colObj["description"] = col.description;
-            QJsonArray appIdsArray;
-            for (int appId : col.appIds) {
-                appIdsArray.append(appId);
+        // 获取应用列表（根据用户选择）
+        if (m_includeAppsCheck->isChecked()) {
+            QList<AppInfo> apps = m_db->getAllApps();
+            QJsonArray appsArray;
+            for (const AppInfo &app : apps) {
+                QJsonObject appObj;
+                appObj["id"] = app.id;
+                appObj["name"] = app.name;
+                appObj["path"] = app.path;
+                appObj["iconPath"] = app.iconPath;
+                appObj["category"] = app.category;
+                appObj["sortOrder"] = app.sortOrder;
+                appObj["isFavorite"] = app.isFavorite;
+                appsArray.append(appObj);
             }
-            colObj["appIds"] = appIdsArray;
-            collectionsArray.append(colObj);
+            localConfigs["apps"] = appsArray;
         }
-        localConfigs["collections"] = collectionsArray;
 
-        // 获取远程桌面配置
-        QList<RemoteDesktopConnection> desktops = m_db->getAllRemoteDesktops();
-        QJsonArray desktopsArray;
-        for (const RemoteDesktopConnection &rd : desktops) {
-            QJsonObject rdObj;
-            rdObj["id"] = rd.id;
-            rdObj["name"] = rd.name;
-            rdObj["hostAddress"] = rd.hostAddress;
-            rdObj["port"] = rd.port;
-            rdObj["username"] = rd.username;
-            desktopsArray.append(rdObj);
+        // 获取收藏列表（根据用户选择）
+        if (m_includeCollectionsCheck->isChecked()) {
+            QList<AppCollection> collections = m_db->getAllCollections();
+            QJsonArray collectionsArray;
+            for (const AppCollection &col : collections) {
+                QJsonObject colObj;
+                colObj["id"] = col.id;
+                colObj["name"] = col.name;
+                colObj["description"] = col.description;
+                QJsonArray appIdsArray;
+                for (int appId : col.appIds) {
+                    appIdsArray.append(appId);
+                }
+                colObj["appIds"] = appIdsArray;
+                collectionsArray.append(colObj);
+            }
+            localConfigs["collections"] = collectionsArray;
         }
-        localConfigs["remoteDesktops"] = desktopsArray;
 
-        // 获取定时关机任务
-        QList<Task> tasks = m_db->getAllTasks();
-        QJsonArray tasksArray;
-        for (const Task &task : tasks) {
-            QJsonObject taskObj;
-            taskObj["id"] = task.id;
-            taskObj["title"] = task.title;
-            taskObj["description"] = task.description;
-            taskObj["status"] = task.status;
-            tasksArray.append(taskObj);
+        // 获取远程桌面配置（根据用户选择）
+        if (m_includeRemoteDesktopsCheck->isChecked()) {
+            QList<RemoteDesktopConnection> desktops = m_db->getAllRemoteDesktops();
+            QJsonArray desktopsArray;
+            for (const RemoteDesktopConnection &rd : desktops) {
+                QJsonObject rdObj;
+                rdObj["id"] = rd.id;
+                rdObj["name"] = rd.name;
+                rdObj["hostAddress"] = rd.hostAddress;
+                rdObj["port"] = rd.port;
+                rdObj["username"] = rd.username;
+                desktopsArray.append(rdObj);
+            }
+            localConfigs["remoteDesktops"] = desktopsArray;
         }
-        localConfigs["tasks"] = tasksArray;
+
+        // 注意：工作日志(tasks)已改为自动同步，不再通过手动备份上传
     }
 
-    // 读取QSettings中的用户配置
-    QSettings settings;
-    QStringList allKeys = settings.allKeys();
-    QJsonObject appSettings;
-    for (const QString &key : allKeys) {
-        if (key.startsWith("app/") || key.startsWith("ui/") || key.startsWith("shortcut/")) {
-            appSettings[key] = settings.value(key).toString();
+    // 读取QSettings中的用户配置（根据用户选择）
+    if (m_includeSettingsCheck->isChecked()) {
+        QSettings settings;
+        QStringList allKeys = settings.allKeys();
+        QJsonObject appSettings;
+        for (const QString &key : allKeys) {
+            if (key.startsWith("app/") || key.startsWith("ui/") || key.startsWith("shortcut/")) {
+                appSettings[key] = settings.value(key).toString();
+            }
         }
-    }
-    if (!appSettings.isEmpty()) {
-        localConfigs["appSettings"] = appSettings;
+        if (!appSettings.isEmpty()) {
+            localConfigs["appSettings"] = appSettings;
+        }
     }
 
     QString configName = m_backupNameEdit->text().trimmed();
