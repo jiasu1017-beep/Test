@@ -8,6 +8,8 @@
 #include <QPushButton>
 #include <QLineEdit>
 #include <QComboBox>
+#include <QStandardItemModel>
+#include <QItemDelegate>
 #include <QTextEdit>
 #include <QTableWidget>
 #include <QHeaderView>
@@ -80,6 +82,48 @@ public:
     }
 };
 
+// 自定义委托：实现复选框点击
+class CheckBoxDelegate : public QItemDelegate
+{
+    Q_OBJECT
+public:
+    CheckBoxDelegate(QObject *parent = nullptr) : QItemDelegate(parent) {}
+
+    bool editorEvent(QEvent *event, QAbstractItemModel *model,
+                     const QStyleOptionViewItem &option, const QModelIndex &index) override
+    {
+        if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease) {
+            QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
+            if (mouseEvent->button() == Qt::LeftButton) {
+                // 切换复选框状态
+                Qt::CheckState state = index.model()->data(index, Qt::CheckStateRole).value<Qt::CheckState>();
+                Qt::CheckState newState = (state == Qt::Checked) ? Qt::Unchecked : Qt::Checked;
+                model->setData(index, newState, Qt::CheckStateRole);
+                return true;
+            }
+        }
+        return QItemDelegate::editorEvent(event, model, option, index);
+    }
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override
+    {
+        // 绘制复选框
+        Qt::CheckState state = index.model()->data(index, Qt::CheckStateRole).value<Qt::CheckState>();
+        QStyleOptionButton checkBoxOption;
+        checkBoxOption.rect = option.rect;
+        checkBoxOption.state = (state == Qt::Checked) ? QStyle::State_On : QStyle::State_Off;
+        checkBoxOption.state |= QStyle::State_Enabled;
+        checkBoxOption.text = index.model()->data(index, Qt::DisplayRole).toString();
+        checkBoxOption.text += "                    "; // 增加间距
+
+        QStyle *style = option.widget ? option.widget->style() : QApplication::style();
+        style->drawControl(QStyle::CE_CheckBox, &checkBoxOption, painter);
+    }
+};
+
+// 更新分类筛选下拉框显示文本（函数声明）
+void updateCategoryFilterText(QComboBox *comboBox, QStandardItemModel *model);
+
 class WorkLogWidget : public QWidget
 {
     Q_OBJECT
@@ -98,10 +142,6 @@ private slots:
     void onTaskDoubleClicked(int row, int column);
     void onRefreshTasks();
     void onFilterChanged();
-    void onAddCategory();
-    void onEditCategory();
-    void onDeleteCategory();
-    void onCategorySelectionChanged();
     void onGenerateReport();
     void onExportReport();
     void onShowStatistics();
@@ -118,13 +158,11 @@ private slots:
 private:
     void setupUI();
     void setupTaskTable();
-    void setupCategoryTree();
     void setupToolbar();
     void setupStatisticsPanel();
     void loadCategories();
     void loadTasks();
     void refreshTaskTable();
-    void refreshCategoryTree();
     void updateStatistics();
     void initDefaultCategories();
     Task getCurrentTask();
@@ -190,8 +228,7 @@ private:
     
     QWidget *leftPanel;
     QWidget *rightPanel;
-    
-    QTreeWidget *categoryTree;
+
     QTableWidget *taskTable;
     
     QLineEdit *searchEdit;
@@ -214,9 +251,6 @@ private:
     QPushButton *refreshBtn;
     QPushButton *generateReportBtn;
     QPushButton *exportBtn;
-    QPushButton *addCategoryBtn;
-    QPushButton *editCategoryBtn;
-    QPushButton *deleteCategoryBtn;
     QPushButton *quickAddBtn;
     
     QLabel *totalTasksLabel;

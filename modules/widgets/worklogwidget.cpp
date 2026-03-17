@@ -1,6 +1,30 @@
 #include "worklogwidget.h"
 #include "modules/core/aiconfig.h"
 #include <QDateTime>
+
+// 更新分类筛选下拉框显示文本（函数实现）
+void updateCategoryFilterText(QComboBox *comboBox, QStandardItemModel *model)
+{
+    int checkedCount = 0;
+    int totalCount = 0;
+    for (int i = 0; i < model->rowCount(); ++i) {
+        QStandardItem *item = model->item(i);
+        if (item->isCheckable()) {
+            totalCount++;
+            if (item->checkState() == Qt::Checked) {
+                checkedCount++;
+            }
+        }
+    }
+
+    if (checkedCount == 0) {
+        comboBox->setCurrentText("无分类");
+    } else if (checkedCount == totalCount) {
+        comboBox->setCurrentText("全选 (" + QString::number(checkedCount) + ")");
+    } else {
+        comboBox->setCurrentText("已选 " + QString::number(checkedCount) + " 个分类");
+    }
+}
 #include <QTimer>
 #include <QMessageBox>
 #include <QInputDialog>
@@ -47,7 +71,6 @@ WorkLogWidget::WorkLogWidget(Database *database, QWidget *parent)
     leftSplitter = nullptr;
     leftPanel = nullptr;
     rightPanel = nullptr;
-    categoryTree = nullptr;
     taskTable = nullptr;
     searchEdit = nullptr;
     statusFilter = nullptr;
@@ -65,9 +88,6 @@ WorkLogWidget::WorkLogWidget(Database *database, QWidget *parent)
     refreshBtn = nullptr;
     generateReportBtn = nullptr;
     exportBtn = nullptr;
-    addCategoryBtn = nullptr;
-    editCategoryBtn = nullptr;
-    deleteCategoryBtn = nullptr;
     quickAddBtn = nullptr;
     totalTasksLabel = nullptr;
     completedTasksLabel = nullptr;
@@ -537,40 +557,7 @@ void WorkLogWidget::setupUI()
     leftMainLayout->setContentsMargins(0, 0, 0, 0);
     leftMainLayout->setSpacing(8);
 
-    // 左侧分割器（上下两部分：分类管理 + 统计）
-    QSplitter *leftSplitter = new QSplitter(Qt::Vertical, leftPanel);
-    leftSplitter->setHandleWidth(1);
-
-    // 左上：分类管理面板
-    QWidget *categoryPanel = new QWidget(leftPanel);
-    QVBoxLayout *categoryLayout = new QVBoxLayout(categoryPanel);
-    categoryLayout->setContentsMargins(0, 0, 0, 0);
-    categoryLayout->setSpacing(6);
-
-    // 分类管理按钮
-    QHBoxLayout *categoryBtnLayout = new QHBoxLayout();
-    categoryBtnLayout->setSpacing(4);
-    addCategoryBtn = new QPushButton("➕ 添加", categoryPanel);
-    addCategoryBtn->setProperty("cssClass", "btn-success");
-    addCategoryBtn->setMaximumWidth(80);
-    editCategoryBtn = new QPushButton("✏️ 编辑", categoryPanel);
-    editCategoryBtn->setProperty("cssClass", "btn-warning");
-    editCategoryBtn->setMaximumWidth(80);
-    deleteCategoryBtn = new QPushButton("🗑️ 删除", categoryPanel);
-    deleteCategoryBtn->setProperty("cssClass", "btn-danger");
-    deleteCategoryBtn->setMaximumWidth(80);
-    categoryBtnLayout->addWidget(addCategoryBtn);
-    categoryBtnLayout->addWidget(editCategoryBtn);
-    categoryBtnLayout->addWidget(deleteCategoryBtn);
-    categoryLayout->addLayout(categoryBtnLayout);
-
-    // 分类树
-    setupCategoryTree();
-    categoryLayout->addWidget(categoryTree);
-
-    leftSplitter->addWidget(categoryPanel);
-
-    // 左下：工作汇总统计面板
+    // 左侧：工作汇总统计面板
     QWidget *statisticsPanel = new QWidget(leftPanel);
     QVBoxLayout *statisticsLayout = new QVBoxLayout(statisticsPanel);
     statisticsLayout->setContentsMargins(0, 0, 0, 0);
@@ -639,7 +626,7 @@ void WorkLogWidget::setupUI()
 
     // 饼图统计（合并任务完成情况和分类时间分布）
     pieChart = new QChart();
-    pieChart->setTitle("� 分类时间分布");
+    pieChart->setTitle("分类时间分布");
     pieChart->setAnimationOptions(QChart::SeriesAnimations);
 
     pieChartView = new QChartView(pieChart, statisticsPanel);
@@ -650,14 +637,7 @@ void WorkLogWidget::setupUI()
     chartLayout->addStretch();
     statisticsLayout->addWidget(chartGroup);
 
-    leftSplitter->addWidget(statisticsPanel);
-
-    // 设置左侧分割器大小（任务管理占 40%，统计占 60%）
-    QList<int> leftSizes;
-    leftSizes << 250 << 400;
-    leftSplitter->setSizes(leftSizes);
-
-    leftMainLayout->addWidget(leftSplitter);
+    leftMainLayout->addWidget(statisticsPanel);
 
     // 右侧：任务列表（主视图）
     rightPanel = new QWidget(this);
@@ -678,6 +658,14 @@ void WorkLogWidget::setupUI()
     searchEdit->setPlaceholderText("🔍 搜索任务...");
     filterLayout->addWidget(new QLabel("搜索:", this));
     filterLayout->addWidget(searchEdit, 1);
+
+    // 分类筛选下拉框
+    categoryFilter = new QComboBox(this);
+    categoryFilter->setStyle(new ComboBoxArrowStyle(categoryFilter->style()));
+    categoryFilter->setMinimumWidth(180);
+
+    filterLayout->addWidget(new QLabel("分类:", this));
+    filterLayout->addWidget(categoryFilter);
 
     statusFilter = new QComboBox(this);
     statusFilter->setStyle(new ComboBoxArrowStyle(statusFilter->style()));
@@ -787,22 +775,18 @@ void WorkLogWidget::setupUI()
     connect(generateReportBtn, &QPushButton::clicked, this, &WorkLogWidget::onGenerateReport);
     connect(exportBtn, &QPushButton::clicked, this, &WorkLogWidget::onExportReport);
 
-    connect(addCategoryBtn, &QPushButton::clicked, this, &WorkLogWidget::onAddCategory);
-    connect(editCategoryBtn, &QPushButton::clicked, this, &WorkLogWidget::onEditCategory);
-    connect(deleteCategoryBtn, &QPushButton::clicked, this, &WorkLogWidget::onDeleteCategory);
-
     connect(taskViewDate, &QDateEdit::dateChanged, this, &WorkLogWidget::onViewDateChanged);
     connect(prevDayBtn, &QPushButton::clicked, this, &WorkLogWidget::onPrevDay);
     connect(nextDayBtn, &QPushButton::clicked, this, &WorkLogWidget::onNextDay);
     connect(todayBtn, &QPushButton::clicked, this, &WorkLogWidget::onToday);
 
-    connect(categoryTree, &QTreeWidget::itemSelectionChanged, this, &WorkLogWidget::onCategorySelectionChanged);
     connect(taskTable, &QTableWidget::itemSelectionChanged, this, &WorkLogWidget::onTaskSelectionChanged);
     connect(taskTable, &QTableWidget::cellDoubleClicked, this, &WorkLogWidget::onTaskDoubleClicked);
 
     connect(searchEdit, &QLineEdit::textChanged, this, &WorkLogWidget::onFilterChanged);
     connect(statusFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &WorkLogWidget::onFilterChanged);
     connect(priorityFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &WorkLogWidget::onFilterChanged);
+    connect(categoryFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &WorkLogWidget::onFilterChanged);
     connect(timeFilterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &WorkLogWidget::onTimeFilterChanged);
     connect(customStartDate, &QDateEdit::dateChanged, this, &WorkLogWidget::updateStatistics);
     connect(customEndDate, &QDateEdit::dateChanged, this, &WorkLogWidget::updateStatistics);
@@ -849,20 +833,6 @@ void WorkLogWidget::setupTaskTable()
 
     // 设置单元格对齐方式
     taskTable->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-}
-
-void WorkLogWidget::setupCategoryTree()
-{
-    categoryTree = new QTreeWidget();
-    categoryTree->setHeaderLabel("📂 分类列表");
-    categoryTree->setSelectionMode(QAbstractItemView::SingleSelection);
-    categoryTree->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    categoryTree->setAnimated(true);
-    categoryTree->setIndentation(20);
-    categoryTree->setColumnWidth(0, 200);
-    categoryTree->setUniformRowHeights(true);
-    categoryTree->setHeaderHidden(false);
-    categoryTree->header()->setStretchLastSection(true);
 }
 
 void WorkLogWidget::setupStatisticsPanel()
@@ -940,22 +910,14 @@ void WorkLogWidget::initDefaultCategories()
 
 void WorkLogWidget::loadCategories()
 {
-    categoryTree->clear();
-
-    QTreeWidgetItem *allItem = new QTreeWidgetItem(categoryTree);
-    allItem->setText(0, "全部");
-    allItem->setData(0, Qt::UserRole, -1);
-    allItem->setExpanded(true);
+    // 加载分类到下拉框
+    categoryFilter->clear();
+    categoryFilter->addItem("全部分类", -1);
 
     QList<Category> categories = db->getAllCategories();
     for (const Category &category : categories) {
-        QTreeWidgetItem *item = new QTreeWidgetItem(allItem);
-        item->setText(0, category.name);
-        item->setData(0, Qt::UserRole, category.id);
-        item->setForeground(0, QBrush(QColor(category.color)));
+        categoryFilter->addItem(category.name, category.id);
     }
-
-    categoryTree->expandAll();
 }
 
 void WorkLogWidget::loadTasks()
@@ -976,13 +938,8 @@ void WorkLogWidget::refreshTaskTable()
 
     QString viewDateStr = viewDate.toString("yyyyMMdd");
 
-    int selectedCategoryId = -1;
-    if (categoryTree) {
-        QList<QTreeWidgetItem*> selectedItems = categoryTree->selectedItems();
-        if (!selectedItems.isEmpty()) {
-            selectedCategoryId = selectedItems.first()->data(0, Qt::UserRole).toInt();
-        }
-    }
+    // 获取选中的分类ID
+    int selectedCategoryId = categoryFilter->currentData().toInt();
 
     QSet<QString> displayedTaskIds;
 
@@ -1004,6 +961,7 @@ void WorkLogWidget::refreshTaskTable()
             continue;
         }
 
+        // 分类筛选：如果选中了分类（不为-1），则只显示该分类
         if (selectedCategoryId != -1 && task.categoryId != selectedCategoryId) {
             continue;
         }
@@ -1050,11 +1008,6 @@ void WorkLogWidget::updateTaskRow(int row, const Task &task)
             taskTable->item(row, col)->setData(Qt::UserRole, task.id);
         }
     }
-}
-
-void WorkLogWidget::refreshCategoryTree()
-{
-    loadCategories();
 }
 
 void WorkLogWidget::updateStatistics()
@@ -1390,61 +1343,6 @@ void WorkLogWidget::onFilterChanged()
     refreshTaskTable();
 }
 
-void WorkLogWidget::onAddCategory()
-{
-    showCategoryDialog();
-}
-
-void WorkLogWidget::onEditCategory()
-{
-    Category category = getCurrentCategory();
-    if (category.id == -1) {
-        QMessageBox::warning(this, "提示", "请先选择一个分类");
-        return;
-    }
-
-    showCategoryDialog(&category);
-}
-
-void WorkLogWidget::onDeleteCategory()
-{
-    Category category = getCurrentCategory();
-    if (category.id == -1) {
-        QMessageBox::warning(this, "提示", "请先选择一个分类");
-        return;
-    }
-
-    int ret = QMessageBox::question(this, "确认删除", "确定要删除这个分类吗？该分类下的任务将变为未分类。",
-                                     QMessageBox::Yes | QMessageBox::No);
-    if (ret == QMessageBox::Yes) {
-        db->deleteCategory(category.id);
-        refreshCategoryTree();
-        refreshTaskTable();
-    }
-}
-
-void WorkLogWidget::onCategorySelectionChanged()
-{
-    if (!categoryTree) return;
-
-    QList<QTreeWidgetItem*> selectedItems = categoryTree->selectedItems();
-    if (!selectedItems.isEmpty()) {
-        int categoryId = selectedItems.first()->data(0, Qt::UserRole).toInt();
-        if (currentCategoryLabel) {
-            if (categoryId == -1) {
-                currentCategoryLabel->setText("当前分类: 全部");
-            } else {
-                Category category = db->getCategoryById(categoryId);
-                if (category.id != -1) {
-                    currentCategoryLabel->setText(QString("当前分类: %1").arg(category.name));
-                }
-            }
-        }
-    }
-
-    refreshTaskTable();
-}
-
 void WorkLogWidget::onGenerateReport()
 {
     if (!checkPermission("generate_report")) {
@@ -1757,21 +1655,15 @@ Task WorkLogWidget::getCurrentTask()
 
 Category WorkLogWidget::getCurrentCategory()
 {
-    if (!categoryTree) {
-        Category category;
-        category.id = -1;
-        return category;
+    // 从 categoryFilter 中获取选中的分类
+    int categoryId = categoryFilter->currentData().toInt();
+    if (categoryId > 0) {
+        return db->getCategoryById(categoryId);
     }
 
-    QList<QTreeWidgetItem*> selectedItems = categoryTree->selectedItems();
-    if (selectedItems.isEmpty()) {
-        Category category;
-        category.id = -1;
-        return category;
-    }
-
-    int categoryId = selectedItems.first()->data(0, Qt::UserRole).toInt();
-    return db->getCategoryById(categoryId);
+    Category category;
+    category.id = -1;
+    return category;
 }
 
 QString WorkLogWidget::getPriorityString(TaskPriority priority)
@@ -2187,7 +2079,7 @@ void WorkLogWidget::showCategoryDialog(Category *category)
             db->addCategory(newCategory);
         }
 
-        refreshCategoryTree();
+        loadCategories();
     }
 }
 
