@@ -205,6 +205,7 @@ public:
     QList<SnapshotInfo> searchSnapshots(const QString &keyword);
 
     bool addTask(const Task &task);
+    bool addTaskWithId(const Task &task);  // 保留原有ID添加任务，用于同步
     bool updateTask(const Task &task);
     bool deleteTask(const QString &id);
     QList<Task> getAllTasks();

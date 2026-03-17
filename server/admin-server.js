@@ -1232,13 +1232,25 @@ app.post('/api/config/upload', authenticateToken, (req, res) => {
 
 // 工作日志自动同步 - 上传/同步工作日志（跟随账号）
 app.post('/api/config/tasks/sync', authenticateToken, (req, res) => {
-    const { tasks } = req.body;
+    const { tasks, deletedTaskIds } = req.body;
 
     if (!tasks || !Array.isArray(tasks)) {
         return res.status(400).json({ success: false, error: '工作日志数据格式错误' });
     }
 
     const userDbConn = userDb.getUserDb(req.userId);
+
+    // 处理删除的任务
+    let deleted = 0;
+    if (deletedTaskIds && Array.isArray(deletedTaskIds) && deletedTaskIds.length > 0) {
+        const deleteStmt = userDbConn.prepare("DELETE FROM user_tasks WHERE task_id = ?");
+        deletedTaskIds.forEach(taskId => {
+            deleteStmt.run(taskId, function(err) {
+                if (!err) deleted++;
+            });
+        });
+        deleteStmt.finalize();
+    }
 
     // 批量插入或更新工作日志
     const stmt = userDbConn.prepare(`INSERT OR REPLACE INTO user_tasks
@@ -1268,7 +1280,7 @@ app.post('/api/config/tasks/sync', authenticateToken, (req, res) => {
             return res.status(500).json({ success: false, error: '同步工作日志失败: ' + err.message });
         }
 
-        res.json({ success: true, message: '工作日志同步成功', count: inserted });
+        res.json({ success: true, message: '工作日志同步成功', count: inserted, deleted: deleted });
     });
 });
 

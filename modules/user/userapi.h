@@ -151,6 +151,7 @@ public:
 
     void syncTasks();
     void uploadTasks(const QJsonArray& tasks);
+    void uploadTasksWithDeleted(const QJsonArray& tasks, const QStringList& deletedTaskIds);
     void downloadTasks();
 
 signals:

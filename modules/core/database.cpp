@@ -1121,6 +1121,23 @@ bool Database::addTask(const Task &task)
     return result;
 }
 
+// 保留原有ID添加任务，用于同步
+bool Database::addTaskWithId(const Task &task)
+{
+    Task newTask = task;
+    newTask.updatedAt = QDateTime::currentDateTime();
+
+    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    tasksArray.append(taskToJson(newTask));
+    rootObject["tasks"] = tasksArray;
+
+    bool result = saveData();
+    if (result) {
+        emit tasksChanged();
+    }
+    return result;
+}
+
 bool Database::updateTask(const Task &task)
 {
     Task updatedTask = task;

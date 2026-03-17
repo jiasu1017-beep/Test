@@ -54,6 +54,8 @@ private:
     QTimer *m_syncTimer;
     bool m_pendingSync;
     QDateTime m_lastSyncTime;
+    QStringList m_deletedTaskIds;  // 跟踪已删除的任务ID，用于同步删除到云端
+    QStringList m_previousTaskIds;  // 上次同步时的任务ID列表，用于检测删除
 };
 
 #endif // USERMENUWIDGET_H

@@ -666,6 +666,22 @@ void TaskSync::uploadTasks(const QJsonArray& tasks) {
     ApiClient::instance()->post("/api/config/tasks/sync", data);
 }
 
+void TaskSync::uploadTasksWithDeleted(const QJsonArray& tasks, const QStringList& deletedTaskIds) {
+    if (!UserManager::instance()->isLoggedIn()) {
+        emit syncFailed("Not logged in");
+        return;
+    }
+
+    if (m_isSyncing) return;
+    m_isSyncing = true;
+
+    QJsonObject data;
+    data["tasks"] = tasks;
+    data["deletedTaskIds"] = QJsonArray::fromStringList(deletedTaskIds);
+
+    ApiClient::instance()->post("/api/config/tasks/sync", data);
+}
+
 void TaskSync::downloadTasks() {
     if (!UserManager::instance()->isLoggedIn()) {
         emit syncFailed("Not logged in");

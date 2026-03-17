@@ -23,6 +23,8 @@ UserMenuWidget::UserMenuWidget(QWidget *parent)
     , m_syncTimer(nullptr)
     , m_pendingSync(false)
     , m_lastSyncTime(QDateTime::fromSecsSinceEpoch(0))
+    , m_deletedTaskIds()
+    , m_previousTaskIds()
 {
     // 创建用户菜单按钮
     m_userMenuBtn = new QToolButton(m_parent);
@@ -184,6 +186,13 @@ void UserMenuWidget::syncTasksToCloud()
     // 先获取本地工作日志并上传，然后拉取云端工作日志
     if (m_db) {
         QList<Task> localTasks = m_db->getAllTasks();
+
+        // 初始化上次任务ID列表
+        m_previousTaskIds.clear();
+        for (const Task &task : localTasks) {
+            m_previousTaskIds.append(task.id);
+        }
+
         QJsonArray tasksArray;
         for (const Task &task : localTasks) {
             QJsonObject taskObj;
@@ -198,7 +207,8 @@ void UserMenuWidget::syncTasksToCloud()
             taskObj["tags"] = QJsonArray::fromStringList(task.tags);
             tasksArray.append(taskObj);
         }
-        TaskSync::instance()->uploadTasks(tasksArray);
+        // 登录时完整上传，清空删除列表
+        TaskSync::instance()->uploadTasksWithDeleted(tasksArray, QStringList());
     }
 }
 
@@ -240,15 +250,36 @@ void UserMenuWidget::onTasksSynced(const QJsonArray& tasks)
             task.tags.append(tagVal.toString());
         }
 
-        // 如果本地不存在，直接添加
+        // 如果本地不存在，检查是否完全相同（避免重复添加）
         if (!localTaskMap.contains(taskId)) {
-            m_db->addTask(task);
+            // 检查是否有完全相同的任务（通过标题、分类、状态、工时判断）
+            bool isDuplicate = false;
+            for (const Task &localTask : localTasks) {
+                if (localTask.title == task.title &&
+                    localTask.categoryId == task.categoryId &&
+                    localTask.status == task.status &&
+                    qAbs(localTask.workDuration - task.workDuration) < 0.01) {
+                    isDuplicate = true;
+                    break;
+                }
+            }
+            if (!isDuplicate) {
+                m_db->addTaskWithId(task);
+            }
         } else {
             // 如果本地存在，比较更新时间，保留最新的
             Task localTask = localTaskMap[taskId];
-            // 这里简单处理：直接更新本地任务为云端版本
-            // 可以根据 updatedAt 字段做更精细的比较
-            m_db->updateTask(task);
+            // 比较更新时间，保留最新的数据
+            if (task.updatedAt.isValid() && localTask.updatedAt.isValid()) {
+                if (task.updatedAt > localTask.updatedAt) {
+                    // 云端数据更新，覆盖本地
+                    m_db->updateTask(task);
+                } else {
+                    // 本地数据更新，不做处理（下次上传会同步到云端）
+                }
+            } else {
+                // 如果没有有效的更新时间，默认保留本地数据
+            }
         }
     }
 
@@ -260,6 +291,10 @@ void UserMenuWidget::onTasksSynced(const QJsonArray& tasks)
 
 void UserMenuWidget::onTasksUploadComplete()
 {
+    // 上传成功后更新同步时间，确保上传失败时可以重试
+    m_lastSyncTime = QDateTime::currentDateTime();
+    qDebug() << "Tasks uploaded successfully, sync time updated";
+
     // 上传完成后，下载云端最新数据
     TaskSync::instance()->downloadTasks();
 }
@@ -306,6 +341,22 @@ void UserMenuWidget::onSyncTimerTimeout()
 
         // 增量上传：只上传自上次同步以来变化的任务
         QList<Task> localTasks = m_db->getAllTasks();
+
+        // 检测被删除的任务：比较当前任务ID列表和上次同步时的任务ID列表
+        QStringList currentTaskIds;
+        for (const Task &task : localTasks) {
+            currentTaskIds.append(task.id);
+        }
+
+        // 找出被删除的任务ID（在previous中但不在current中）
+        QStringList deletedIds;
+        for (const QString &prevId : m_previousTaskIds) {
+            if (!currentTaskIds.contains(prevId)) {
+                deletedIds.append(prevId);
+                qDebug() << "Detected deleted task:" << prevId;
+            }
+        }
+
         QJsonArray tasksArray;
         for (const Task &task : localTasks) {
             // 检查任务是否在上次同步后有更新
@@ -325,10 +376,14 @@ void UserMenuWidget::onSyncTimerTimeout()
             }
         }
 
-        if (tasksArray.size() > 0) {
-            TaskSync::instance()->uploadTasks(tasksArray);
-            // 更新同步时间（等上传完成后再更新，这里先更新）
-            m_lastSyncTime = QDateTime::currentDateTime();
+        // 保存当前任务ID列表供下次比较
+        m_previousTaskIds = currentTaskIds;
+
+        if (tasksArray.size() > 0 || deletedIds.size() > 0) {
+            // 使用新函数上传任务和删除列表
+            TaskSync::instance()->uploadTasksWithDeleted(tasksArray, deletedIds);
+            // 注意：m_lastSyncTime 在 uploadTasks 成功完成后更新
+            // 以确保上传失败时可以重试
         } else {
             qDebug() << "No changed tasks to upload";
         }
