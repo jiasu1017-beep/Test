@@ -4,6 +4,7 @@
 #include "modules/widgets/settingswidget.h"
 #include "modules/widgets/userwidget.h"
 #include "modules/user/userlogindialog.h"
+#include "modules/user/changepassworddialog.h"
 #include "modules/widgets/collectionmanagerwidget.h"
 #include "modules/widgets/worklogwidget.h"
 #include "modules/widgets/bottomappbar.h"
@@ -178,7 +179,6 @@ void MainWindow::setupUI()
     tabWidget->addTab(workLogWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView), "工作日志");
     tabWidget->addTab(remoteDesktopWidget, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon), "远程桌面");
     tabWidget->addTab(shutdownWidget, QApplication::style()->standardIcon(QStyle::SP_BrowserStop), "定时关机");
-    tabWidget->addTab(userWidget, QApplication::style()->standardIcon(QStyle::SP_ArrowRight), "用户");
     tabWidget->addTab(settingsWidget, QApplication::style()->standardIcon(QStyle::SP_FileDialogInfoView), "设置");
  
     tabWidget->setIconSize(QSize(24, 24));
@@ -225,6 +225,79 @@ void MainWindow::setupUI()
     connect(shortcutTipsBtn, &QPushButton::clicked, this, &MainWindow::showShortcutTips);
     
     statusBarLayout->addWidget(statusLabel);
+
+    // 用户菜单按钮
+    QToolButton *userMenuBtn = new QToolButton(this);
+    userMenuBtn->setPopupMode(QToolButton::InstantPopup);
+    userMenuBtn->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    userMenuBtn->setCursor(Qt::PointingHandCursor);
+    userMenuBtn->setIcon(QApplication::style()->standardIcon(QStyle::SP_ArrowRight));
+    userMenuBtn->setFixedSize(24, 24);
+    userMenuBtn->setToolTip("用户");
+
+    // 用户菜单
+    QMenu *userMenu = new QMenu(this);
+    QAction *loginAction = new QAction("登录", this);
+    connect(loginAction, &QAction::triggered, this, &MainWindow::showLoginDialog);
+    QAction *registerAction = new QAction("注册", this);
+    connect(registerAction, &QAction::triggered, this, &MainWindow::showRegisterDialog);
+    userMenu->addAction(loginAction);
+    userMenu->addAction(registerAction);
+
+    userMenuBtn->setMenu(userMenu);
+
+    // 添加工具栏放在右上角，与tab同一行
+    QToolBar *userToolBar = new QToolBar(this);
+    userToolBar->setMovable(false);
+    userToolBar->setFloatable(false);
+    userToolBar->addWidget(userMenuBtn);
+    userToolBar->setStyleSheet("QToolBar { border: none; }");
+    userToolBar->setLayoutDirection(Qt::RightToLeft);
+    addToolBar(Qt::TopToolBarArea, userToolBar);
+
+    // 登录成功后更新菜单
+    connect(UserManager::instance(), &UserManager::loginSuccess, userMenu, [=]() {
+        userMenu->clear();
+        UserInfo user = UserManager::instance()->currentUser();
+        QString displayName = user.username.isEmpty() ? user.email : user.username;
+
+        QAction *userInfo = new QAction("当前用户: " + displayName, userMenu);
+        userInfo->setEnabled(false);
+        userMenu->addAction(userInfo);
+        userMenu->addSeparator();
+
+        QAction *manageConfigAction = new QAction("云端配置管理", userMenu);
+        connect(manageConfigAction, &QAction::triggered, this, [=]() {
+            userWidget->showBackupVersionsDialog();
+        });
+        userMenu->addAction(manageConfigAction);
+
+        QAction *changePwdAction = new QAction("修改密码", userMenu);
+        connect(changePwdAction, &QAction::triggered, this, []() {
+            ChangePasswordDialog dlg(nullptr);
+            dlg.exec();
+        });
+        userMenu->addAction(changePwdAction);
+
+        userMenu->addSeparator();
+
+        QAction *logoutAction = new QAction("退出登录", userMenu);
+        connect(logoutAction, &QAction::triggered, this, []() {
+            UserManager::instance()->logout();
+        });
+        userMenu->addAction(logoutAction);
+
+        userMenuBtn->setToolTip("用户: " + displayName);
+    });
+
+    // 登出后恢复菜单
+    connect(UserManager::instance(), &UserManager::logoutComplete, userMenu, [=]() {
+        userMenu->clear();
+        userMenu->addAction(loginAction);
+        userMenu->addAction(registerAction);
+        userMenuBtn->setToolTip("用户");
+    });
+
     statusBarLayout->addStretch();
     statusBarLayout->addWidget(shortcutTipsBtn);
     

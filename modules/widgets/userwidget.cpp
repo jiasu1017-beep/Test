@@ -213,6 +213,11 @@ void UserWidget::refreshUserStatus()
     }
 }
 
+void UserWidget::showBackupVersionsDialog()
+{
+    onViewVersionsClicked();
+}
+
 void UserWidget::updateLoginStatus()
 {
     bool loggedIn = UserManager::instance()->isLoggedIn();

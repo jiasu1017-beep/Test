@@ -34,6 +34,7 @@ public:
 
     void setMainWindow(MainWindow *mainWindow);
     void refreshUserStatus();
+    void showBackupVersionsDialog();
 
 private slots:
     void onLoginClicked();
