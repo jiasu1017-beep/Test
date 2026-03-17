@@ -579,12 +579,15 @@
                         <div class="tab-content mt-2" id="userLogTabsContent">
                             <div class="tab-pane fade show active" id="all-logs" role="tabpanel">
                                 <div id="userAllLogsTable"></div>
+                                <div id="userAllLogsPagination" class="mt-2"></div>
                             </div>
                             <div class="tab-pane fade" id="login-logs" role="tabpanel">
                                 <div id="userLoginLogsTable"></div>
+                                <div id="userLoginLogsPagination" class="mt-2"></div>
                             </div>
                             <div class="tab-pane fade" id="operation-logs" role="tabpanel">
                                 <div id="userOperationLogsTable"></div>
+                                <div id="userOperationLogsPagination" class="mt-2"></div>
                             </div>
                             <div class="tab-pane fade" id="cloud-configs" role="tabpanel">
                                 <div id="userCloudConfigsTable"></div>
@@ -967,19 +970,28 @@
                 if (data.success) {
                     let tableHtml = '';
                     let containerId = '';
+                    let paginationId = '';
 
                     if (type === 'login') {
                         containerId = 'userLoginLogsTable';
+                        paginationId = 'userLoginLogsPagination';
                         tableHtml = renderUserLoginLogs(data.logs);
                     } else if (type === 'operation') {
                         containerId = 'userOperationLogsTable';
+                        paginationId = 'userOperationLogsPagination';
                         tableHtml = renderUserOperationLogs(data.logs);
                     } else {
                         containerId = 'userAllLogsTable';
+                        paginationId = 'userAllLogsPagination';
                         tableHtml = renderUserAllLogs(data.logs);
                     }
 
                     document.getElementById(containerId).innerHTML = tableHtml;
+
+                    // 渲染分页
+                    if (data.pagination) {
+                        renderPagination(paginationId, data.pagination, (p) => loadUserLogs(type, p));
+                    }
                 }
             } catch (err) {
                 console.error('加载用户日志失败:', err);
@@ -1019,12 +1031,17 @@
             }
 
             return `
+                <div class="mb-2">
+                    <button class="btn btn-sm btn-danger" onclick="deleteSelectedLogs('login')">删除选中</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteAllLogs('login')">清空登录日志</button>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-sm table-hover">
-                        <thead><tr><th>操作</th><th>状态</th><th>IP地址</th><th>User-Agent</th><th>时间</th></tr></thead>
+                        <thead><tr><th style="width:40px"><input type="checkbox" onchange="toggleAllLogs(this, 'login')"></th><th>操作</th><th>状态</th><th>IP地址</th><th>User-Agent</th><th>时间</th></tr></thead>
                         <tbody>
                             ${logs.map(log => `
                                 <tr>
+                                    <td><input type="checkbox" class="log-checkbox-login" value="${log.id}"></td>
                                     <td>${log.action || '-'}</td>
                                     <td>${getStatusBadge(log.status)}</td>
                                     <td>${log.ip_address || '-'}</td>
@@ -1044,12 +1061,17 @@
             }
 
             return `
+                <div class="mb-2">
+                    <button class="btn btn-sm btn-danger" onclick="deleteSelectedLogs('operation')">删除选中</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteAllLogs('operation')">清空操作日志</button>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-sm table-hover">
-                        <thead><tr><th>操作</th><th>详情</th><th>IP地址</th><th>时间</th></tr></thead>
+                        <thead><tr><th style="width:40px"><input type="checkbox" onchange="toggleAllLogs(this, 'operation')"></th><th>操作</th><th>详情</th><th>IP地址</th><th>时间</th></tr></thead>
                         <tbody>
                             ${logs.map(log => `
                                 <tr>
+                                    <td><input type="checkbox" class="log-checkbox-operation" value="${log.id}"></td>
                                     <td>${log.action || '-'}</td>
                                     <td>${log.details || '-'}</td>
                                     <td>${log.ip_address || '-'}</td>
@@ -1103,10 +1125,15 @@
                                 <i class="bi bi-info-circle"></i>
                                 当前用户共有 <strong>${profiles.length}</strong> 个云端配置（用于不同设备/用途）
                             </div>
+                            <div class="mb-2">
+                                <button class="btn btn-sm btn-danger" onclick="deleteSelectedProfiles()">删除选中</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteAllProfiles()">清空所有配置</button>
+                            </div>
                             <div class="table-responsive">
                                 <table class="table table-sm table-hover">
                                     <thead>
                                         <tr>
+                                            <th style="width:40px"><input type="checkbox" onchange="toggleAllProfiles(this)"></th>
                                             <th>配置名称</th>
                                             <th>创建时间</th>
                                             <th>更新时间</th>
@@ -1116,6 +1143,7 @@
                                     <tbody>
                                         ${profiles.map(profile => `
                                             <tr>
+                                                <td><input type="checkbox" class="profile-checkbox" value="${profile.config_name}"></td>
                                                 <td><span class="badge bg-primary">${profile.config_name}</span></td>
                                                 <td>${formatDate(profile.created_at)}</td>
                                                 <td>${formatDate(profile.updated_at)}</td>
@@ -1161,10 +1189,15 @@
                         html = '<div class="text-center text-muted py-3">暂无工作日志</div>';
                     } else {
                         html = `
+                            <div class="mb-2">
+                                <button class="btn btn-sm btn-danger" onclick="deleteSelectedTasks()">删除选中</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteAllTasks()">清空所有工作日志</button>
+                            </div>
                             <div class="table-responsive">
                                 <table class="table table-sm table-hover">
                                     <thead>
                                         <tr>
+                                            <th style="width:40px"><input type="checkbox" onchange="toggleAllTasks(this)"></th>
                                             <th>ID</th>
                                             <th>标题</th>
                                             <th>描述</th>
@@ -1177,6 +1210,7 @@
                                     <tbody>
                                         ${tasks.map(task => `
                                             <tr>
+                                                <td><input type="checkbox" class="task-checkbox" value="${task.id}"></td>
                                                 <td>${task.id || '-'}</td>
                                                 <td>${task.title || '-'}</td>
                                                 <td><small>${task.description ? task.description.substring(0, 30) + (task.description.length > 30 ? '...' : '') : '-'}</small></td>
@@ -1206,6 +1240,91 @@
             }
         }
 
+        // 全选/取消工作日志复选框
+        function toggleAllTasks(checkbox) {
+            const checkboxes = document.querySelectorAll('.task-checkbox');
+            checkboxes.forEach(cb => cb.checked = checkbox.checked);
+        }
+
+        // 删除选中的工作日志
+        async function deleteSelectedTasks() {
+            const checkboxes = document.querySelectorAll('.task-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('请选择要删除的工作日志');
+                return;
+            }
+
+            if (!confirm(`确定要删除选中的 ${checkboxes.length} 条工作日志吗？`)) {
+                return;
+            }
+
+            const taskIds = Array.from(checkboxes).map(cb => cb.value);
+            let deletedCount = 0;
+            let failed = 0;
+
+            for (const taskId of taskIds) {
+                try {
+                    const res = await fetch(`/api/admin/users/${currentDetailUserId}/tasks/${taskId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + authToken }
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        deletedCount++;
+                    } else {
+                        failed++;
+                    }
+                } catch (err) {
+                    failed++;
+                }
+            }
+
+            if (failed > 0) {
+                showToast(`删除完成: 成功 ${deletedCount} 条, 失败 ${failed} 条`, 'warning');
+            } else {
+                showToast(`成功删除 ${deletedCount} 条工作日志`, 'success');
+            }
+            loadUserTasks();
+        }
+
+        // 清空所有工作日志
+        async function deleteAllTasks() {
+            if (!confirm('确定要清空所有工作日志吗？此操作不可恢复！')) {
+                return;
+            }
+
+            // 获取所有工作日志然后逐个删除
+            try {
+                const res = await fetch(`/api/admin/users/${currentDetailUserId}/tasks?page=1&limit=1000`, {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+
+                if (data.success && data.tasks && data.tasks.length > 0) {
+                    const taskIds = data.tasks.map(t => t.id);
+                    let deletedCount = 0;
+
+                    for (const taskId of taskIds) {
+                        const delRes = await fetch(`/api/admin/users/${currentDetailUserId}/tasks/${taskId}`, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': 'Bearer ' + authToken }
+                        });
+                        const delData = await delRes.json();
+                        if (delData.success) {
+                            deletedCount++;
+                        }
+                    }
+
+                    showToast(`成功删除 ${deletedCount} 条工作日志`, 'success');
+                } else {
+                    showToast('没有工作日志可删除', 'info');
+                }
+            } catch (err) {
+                showToast('删除失败', 'danger');
+            }
+            loadUserTasks();
+        }
+
         function getTaskStatusBadge(status) {
             const statusMap = {
                 0: '<span class="badge bg-secondary">待办</span>',
@@ -1223,6 +1342,140 @@
                 2: '<span class="badge bg-danger">高</span>'
             };
             return priorityMap[priority] || '<span class="badge bg-secondary">未知</span>';
+        }
+
+        // 全选/取消日志复选框
+        function toggleAllLogs(checkbox, type) {
+            const checkboxes = document.querySelectorAll('.log-checkbox-' + type);
+            checkboxes.forEach(cb => cb.checked = checkbox.checked);
+        }
+
+        // 全选/取消配置复选框
+        function toggleAllProfiles(checkbox) {
+            const checkboxes = document.querySelectorAll('.profile-checkbox');
+            checkboxes.forEach(cb => cb.checked = checkbox.checked);
+        }
+
+        // 删除选中的日志
+        async function deleteSelectedLogs(type) {
+            const checkboxes = document.querySelectorAll('.log-checkbox-' + type + ':checked');
+            if (checkboxes.length === 0) {
+                alert('请选择要删除的日志');
+                return;
+            }
+
+            if (!confirm(`确定要删除选中的 ${checkboxes.length} 条日志吗？`)) {
+                return;
+            }
+
+            const logIds = Array.from(checkboxes).map(cb => cb.value);
+            try {
+                const res = await fetch(`/api/admin/users/${currentDetailUserId}/logs`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({ logIds: logIds, type: type })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    loadUserLogs(type);
+                } else {
+                    showToast(data.message || '删除失败', 'danger');
+                }
+            } catch (err) {
+                showToast('删除失败', 'danger');
+            }
+        }
+
+        // 清空所有日志
+        async function deleteAllLogs(type) {
+            if (!confirm(`确定要清空所有 ${type === 'login' ? '登录' : '操作'}日志吗？此操作不可恢复！`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/admin/users/${currentDetailUserId}/logs`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({ deleteType: type })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    loadUserLogs(type);
+                } else {
+                    showToast(data.message || '删除失败', 'danger');
+                }
+            } catch (err) {
+                showToast('删除失败', 'danger');
+            }
+        }
+
+        // 删除选中的设备配置
+        async function deleteSelectedProfiles() {
+            const checkboxes = document.querySelectorAll('.profile-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('请选择要删除的配置');
+                return;
+            }
+
+            if (!confirm(`确定要删除选中的 ${checkboxes.length} 个配置吗？`)) {
+                return;
+            }
+
+            const profileNames = Array.from(checkboxes).map(cb => cb.value);
+            try {
+                const res = await fetch(`/api/admin/users/${currentDetailUserId}/config-profiles`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({ profileNames: profileNames })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    loadUserCloudConfigs();
+                } else {
+                    showToast(data.message || '删除失败', 'danger');
+                }
+            } catch (err) {
+                showToast('删除失败', 'danger');
+            }
+        }
+
+        // 清空所有设备配置
+        async function deleteAllProfiles() {
+            if (!confirm('确定要清空所有设备配置吗？此操作不可恢复！')) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/admin/users/${currentDetailUserId}/config-profiles`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    loadUserCloudConfigs();
+                } else {
+                    showToast(data.message || '删除失败', 'danger');
+                }
+            } catch (err) {
+                showToast('删除失败', 'danger');
+            }
         }
 
         // 查看云端配置详情

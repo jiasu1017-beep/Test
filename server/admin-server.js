@@ -589,6 +589,170 @@ app.delete('/api/admin/users/:id/tasks/:task_id', authenticateAdmin, (req, res) 
     });
 });
 
+// 批量删除用户日志（管理后台）
+app.delete('/api/admin/users/:id/logs', authenticateAdmin, (req, res) => {
+    const { id } = req.params;
+    const { logIds, type = 'login' } = req.body; // logIds: 日志ID数组, type: login/operation/all
+
+    // 检查用户是否存在
+    db.get("SELECT id, username FROM users WHERE id = ?", [id], (err, user) => {
+        if (err || !user) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+
+        if (logIds && Array.isArray(logIds) && logIds.length > 0) {
+            // 批量删除指定日志
+            const placeholders = logIds.map(() => '?').join(',');
+            let tableName = type === 'operation' ? 'operation_logs' : 'login_logs';
+
+            db.run(`DELETE FROM ${tableName} WHERE id IN (${placeholders}) AND user_id = ?`,
+                [...logIds, id],
+                function(err) {
+                    if (err) {
+                        return res.status(500).json({ success: false, message: '删除日志失败' });
+                    }
+
+                    db.run("INSERT INTO operation_logs (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
+                        [req.adminId, 'batch_delete_logs', `批量删除用户 ${user.username} 的 ${logIds.length} 条日志`, req.ip]);
+
+                    res.json({ success: true, message: `成功删除 ${this.changes} 条日志` });
+                });
+        } else {
+            // 删除所有日志
+            const { deleteType = 'login' } = req.body; // login/operation/all
+            let deletedCount = 0;
+            let tasks = [];
+
+            if (deleteType === 'login' || deleteType === 'all') {
+                tasks.push(new Promise((resolve, reject) => {
+                    db.run("DELETE FROM login_logs WHERE user_id = ?", [id], function(err) {
+                        if (err) reject(err);
+                        else {
+                            deletedCount += this.changes;
+                            resolve();
+                        }
+                    });
+                }));
+            }
+
+            if (deleteType === 'operation' || deleteType === 'all') {
+                tasks.push(new Promise((resolve, reject) => {
+                    db.run("DELETE FROM operation_logs WHERE user_id = ?", [id], function(err) {
+                        if (err) reject(err);
+                        else {
+                            deletedCount += this.changes;
+                            resolve();
+                        }
+                    });
+                }));
+            }
+
+            Promise.all(tasks).then(() => {
+                db.run("INSERT INTO operation_logs (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
+                    [req.adminId, 'delete_all_logs', `清空用户 ${user.username} 的所有日志 (${deleteType})`, req.ip]);
+
+                res.json({ success: true, message: `成功删除 ${deletedCount} 条日志` });
+            }).catch(err => {
+                res.status(500).json({ success: false, message: '删除日志失败: ' + err.message });
+            });
+        }
+    });
+});
+
+// 批量删除用户配置（管理后台）
+app.delete('/api/admin/users/:id/configs', authenticateAdmin, (req, res) => {
+    const { id } = req.params;
+    const userId = parseInt(id);
+    const { configKeys } = req.body; // 配置键数组
+
+    // 检查用户是否存在
+    db.get("SELECT id, username FROM users WHERE id = ?", [id], (err, user) => {
+        if (err || !user) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+
+        const userDbConn = userDb.getUserDb(userId);
+
+        if (configKeys && Array.isArray(configKeys) && configKeys.length > 0) {
+            // 批量删除指定配置
+            const placeholders = configKeys.map(() => '?').join(',');
+            userDbConn.run(`DELETE FROM user_configs WHERE key IN (${placeholders})`,
+                configKeys,
+                function(err) {
+                    if (err) {
+                        return res.status(500).json({ success: false, message: '删除配置失败' });
+                    }
+
+                    db.run("INSERT INTO operation_logs (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
+                        [req.adminId, 'batch_delete_configs', `批量删除用户 ${user.username} 的 ${configKeys.length} 个配置`, req.ip]);
+
+                    res.json({ success: true, message: `成功删除 ${this.changes} 个配置` });
+                });
+        } else {
+            // 删除所有配置
+            userDbConn.run("DELETE FROM user_configs", [], function(err) {
+                if (err) {
+                    return res.status(500).json({ success: false, message: '删除配置失败' });
+                }
+
+                const deletedCount = this.changes;
+
+                db.run("INSERT INTO operation_logs (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
+                    [req.adminId, 'delete_all_configs', `清空用户 ${user.username} 的所有配置`, req.ip]);
+
+                res.json({ success: true, message: `成功删除 ${deletedCount} 个配置` });
+            });
+        }
+    });
+});
+
+// 批量删除用户设备配置（管理后台）
+app.delete('/api/admin/users/:id/config-profiles', authenticateAdmin, (req, res) => {
+    const { id } = req.params;
+    const userId = parseInt(id);
+    const { profileNames } = req.body; // 配置名称数组
+
+    // 检查用户是否存在
+    db.get("SELECT id, username FROM users WHERE id = ?", [id], (err, user) => {
+        if (err || !user) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+
+        const userDbConn = userDb.getUserDb(userId);
+
+        if (profileNames && Array.isArray(profileNames) && profileNames.length > 0) {
+            // 批量删除指定配置
+            const placeholders = profileNames.map(() => '?').join(',');
+            userDbConn.run(`DELETE FROM user_config_profiles WHERE config_name IN (${placeholders})`,
+                profileNames,
+                function(err) {
+                    if (err) {
+                        return res.status(500).json({ success: false, message: '删除设备配置失败' });
+                    }
+
+                    db.run("INSERT INTO operation_logs (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
+                        [req.adminId, 'batch_delete_profiles', `批量删除用户 ${user.username} 的 ${profileNames.length} 个设备配置`, req.ip]);
+
+                    res.json({ success: true, message: `成功删除 ${this.changes} 个设备配置` });
+                });
+        } else {
+            // 删除所有设备配置
+            userDbConn.run("DELETE FROM user_config_profiles", [], function(err) {
+                if (err) {
+                    return res.status(500).json({ success: false, message: '删除设备配置失败' });
+                }
+
+                const deletedCount = this.changes;
+
+                db.run("INSERT INTO operation_logs (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
+                    [req.adminId, 'delete_all_profiles', `清空用户 ${user.username} 的所有设备配置`, req.ip]);
+
+                res.json({ success: true, message: `成功删除 ${deletedCount} 个设备配置` });
+            });
+        }
+    });
+});
+
 // 用户列表 API（保持原有功能）
 app.get('/api/admin/users', authenticateAdmin, (req, res) => {
     const { page = 1, limit = 20, search = '', status = '' } = req.query;
