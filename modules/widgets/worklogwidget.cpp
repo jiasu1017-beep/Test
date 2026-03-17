@@ -657,18 +657,19 @@ void WorkLogWidget::setupUI()
     searchEdit = new QLineEdit(this);
     searchEdit->setPlaceholderText("🔍 搜索任务...");
     filterLayout->addWidget(new QLabel("搜索:", this));
-    filterLayout->addWidget(searchEdit, 1);
+    filterLayout->addWidget(searchEdit, 3);
 
     // 分类筛选下拉框
     categoryFilter = new QComboBox(this);
     categoryFilter->setStyle(new ComboBoxArrowStyle(categoryFilter->style()));
-    categoryFilter->setMinimumWidth(180);
+    categoryFilter->setFixedWidth(60);
 
     filterLayout->addWidget(new QLabel("分类:", this));
     filterLayout->addWidget(categoryFilter);
 
     statusFilter = new QComboBox(this);
     statusFilter->setStyle(new ComboBoxArrowStyle(statusFilter->style()));
+    statusFilter->setFixedWidth(60);
     statusFilter->addItem("全部状态", -1);
     statusFilter->addItem("📝 待办", static_cast<int>(TaskStatus_Todo));
     statusFilter->addItem("🔄 进行中", static_cast<int>(TaskStatus_InProgress));
@@ -679,6 +680,7 @@ void WorkLogWidget::setupUI()
 
     priorityFilter = new QComboBox(this);
     priorityFilter->setStyle(new ComboBoxArrowStyle(priorityFilter->style()));
+    priorityFilter->setFixedWidth(60);
     priorityFilter->addItem("全部优先级", -1);
     priorityFilter->addItem("🔵 低", static_cast<int>(TaskPriority_Low));
     priorityFilter->addItem("🟡 中", static_cast<int>(TaskPriority_Medium));
