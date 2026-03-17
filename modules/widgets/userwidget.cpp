@@ -338,7 +338,7 @@ void UserWidget::onLoginSuccess(const UserInfo &user)
     m_syncStatusLabel->setStyleSheet("color: #28a745;");
 
     QString msg = QString("登录成功！欢迎 %1").arg(user.username.isEmpty() ? user.email : user.username);
-    showMessage(msg, false);
+    //showMessage(msg, false);
     m_syncLogText->append(QString("[%1] %2").arg(QDateTime::currentDateTime().toString("HH:mm:ss"), msg));
 }
 

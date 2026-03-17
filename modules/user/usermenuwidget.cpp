@@ -47,6 +47,9 @@ UserMenuWidget::UserMenuWidget(QWidget *parent)
 
 UserMenuWidget::~UserMenuWidget()
 {
+    // m_userMenuBtn 和 m_userMenu 的父对象是 m_parent，会自动清理
+    // 断开与 UserManager 的信号连接
+    disconnect(UserManager::instance(), nullptr, this, nullptr);
 }
 
 void UserMenuWidget::showLoginDialog()
@@ -64,6 +67,10 @@ void UserMenuWidget::showRegisterDialog()
 
 void UserMenuWidget::onLoginSuccess()
 {
+    // 清理旧action
+    m_loginAction = nullptr;
+    m_registerAction = nullptr;
+
     m_userMenu->clear();
     UserInfo user = UserManager::instance()->currentUser();
     QString displayName = user.username.isEmpty() ? user.email : user.username;
@@ -125,11 +132,6 @@ void UserMenuWidget::onChangePassword()
 void UserMenuWidget::onLogout()
 {
     UserManager::instance()->logout();
-}
-
-void UserMenuWidget::setupMenu()
-{
-    // 初始菜单状态（未登录）
 }
 
 void UserMenuWidget::updateMenuState()

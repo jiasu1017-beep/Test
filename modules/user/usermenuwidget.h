@@ -6,7 +6,6 @@
 #include <QMenu>
 #include <QAction>
 
-class UserWidget;
 class ChangePasswordDialog;
 
 class UserMenuWidget : public QObject
@@ -34,7 +33,6 @@ private slots:
     void onLogout();
 
 private:
-    void setupMenu();
     void updateMenuState();
 
     QWidget *m_parent;
