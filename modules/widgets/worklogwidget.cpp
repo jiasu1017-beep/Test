@@ -1033,13 +1033,18 @@ void WorkLogWidget::refreshCalendarView()
         QDateTime(firstDayOfMonth, QTime(0, 0, 0)),
         QDateTime(lastDayOfMonth, QTime(23, 59, 59)));
 
-    // 按日期组织任务
-    QMap<QDate, QVector<QPair<QString, TaskStatus>>> tasksByDate;
+    // 按日期组织任务 - 显示所有任务（已完成的使用completionTime，未完成的显示在今天或updatedAt）
+    QMap<QDate, QVector<QPair<QString, QPair<TaskStatus, double>>>> tasksByDate;
     for (const Task &task : monthTasks) {
+        QDate taskDate;
         if (task.completionTime.isValid()) {
-            QDate taskDate = task.completionTime.date();
-            tasksByDate[taskDate].append(qMakePair(task.title, task.status));
+            taskDate = task.completionTime.date();
+        } else {
+            // 未完成的任务显示在今天或updatedAt的日期
+            taskDate = task.updatedAt.isValid() ? task.updatedAt.date() : QDate::currentDate();
         }
+        // qMakePair(title, qMakePair(status, workDuration))
+        tasksByDate[taskDate].append(qMakePair(task.title, qMakePair(task.status, task.workDuration)));
     }
 
     // 设置任务信息到日历
@@ -1071,12 +1076,16 @@ void WorkLogWidget::onMonthChanged(const QDate &date)
         QDateTime(firstDayOfMonth, QTime(0, 0, 0)),
         QDateTime(lastDayOfMonth, QTime(23, 59, 59)));
 
-    QMap<QDate, QVector<QPair<QString, TaskStatus>>> tasksByDate;
+    QMap<QDate, QVector<QPair<QString, QPair<TaskStatus, double>>>> tasksByDate;
     for (const Task &task : monthTasks) {
+        QDate taskDate;
         if (task.completionTime.isValid()) {
-            QDate taskDate = task.completionTime.date();
-            tasksByDate[taskDate].append(qMakePair(task.title, task.status));
+            taskDate = task.completionTime.date();
+        } else {
+            // 未完成的任务显示在今天或updatedAt的日期
+            taskDate = task.updatedAt.isValid() ? task.updatedAt.date() : QDate::currentDate();
         }
+        tasksByDate[taskDate].append(qMakePair(task.title, qMakePair(task.status, task.workDuration)));
     }
     calendarWidget->setTaskInfos(tasksByDate);
 }
@@ -1498,6 +1507,7 @@ void WorkLogWidget::onDeleteTask()
         db->deleteTask(task.id);
         refreshTaskTable();
         updateStatistics();
+        refreshCalendarView();
     }
 }
 
@@ -1518,6 +1528,7 @@ void WorkLogWidget::onCompleteTask()
 
     refreshTaskTable();
     updateStatistics();
+    refreshCalendarView();
 }
 
 void WorkLogWidget::onPauseTask()
@@ -1559,6 +1570,7 @@ void WorkLogWidget::onRefreshTasks()
 {
     refreshTaskTable();
     updateStatistics();
+    refreshCalendarView();
 }
 
 void WorkLogWidget::onFilterChanged()
@@ -1782,6 +1794,7 @@ void WorkLogWidget::onQuickAddTask()
     db->addTask(task);
     refreshTaskTable();
     updateStatistics();
+    refreshCalendarView();
 }
 
 void WorkLogWidget::onStartTask()
@@ -1808,18 +1821,21 @@ void WorkLogWidget::onTaskContextMenu(const QPoint &pos)
         db->updateTaskStatus(taskId, TaskStatus_InProgress);
         refreshTaskTable();
         updateStatistics();
+        refreshCalendarView();
     });
 
     menu.addAction("⏸️ 暂停任务", this, [this, taskId]() {
         db->updateTaskStatus(taskId, TaskStatus_Paused);
         refreshTaskTable();
         updateStatistics();
+        refreshCalendarView();
     });
 
     menu.addAction("✅ 完成任务", this, [this, taskId]() {
         db->updateTaskStatus(taskId, TaskStatus_Completed);
         refreshTaskTable();
         updateStatistics();
+        refreshCalendarView();
     });
 
     menu.addSeparator();
@@ -1830,6 +1846,7 @@ void WorkLogWidget::onTaskContextMenu(const QPoint &pos)
             showTaskDialog(&task);
             refreshTaskTable();
             updateStatistics();
+            refreshCalendarView();
         }
     });
 
@@ -1844,6 +1861,7 @@ void WorkLogWidget::onTaskContextMenu(const QPoint &pos)
                 if (db->deleteTask(taskId)) {
                     refreshTaskTable();
                     updateStatistics();
+                    refreshCalendarView();
                     //QMessageBox::information(this, "成功", "任务已删除");
                 } else {
                     //QMessageBox::warning(this, "错误", "删除任务失败");
@@ -2245,6 +2263,7 @@ void WorkLogWidget::showTaskDialog(Task *task)
 
         refreshTaskTable();
         updateStatistics();
+        refreshCalendarView();
     }
 }
 
@@ -4006,6 +4025,12 @@ void WorkLogWidget::onPieChartDoubleClick()
 
 CalendarWidget::CalendarWidget(QWidget *parent)
     : QWidget(parent)
+    , m_hoveredRow(-1)
+    , m_hoveredCol(-1)
+    , m_hoverScale(1.0)
+    , m_scaleAnimation(nullptr)
+    , m_taskPopup(nullptr)
+    , m_taskPopupLabel(nullptr)
 {
     m_currentMonth = QDate::currentDate();
     m_selectedDate = QDate::currentDate();
@@ -4014,7 +4039,42 @@ CalendarWidget::CalendarWidget(QWidget *parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     // 移除背景色和边框，由paintEvent统一绘制
     setAttribute(Qt::WA_StyledBackground, false);
+    setMouseTracking(true);  // 启用鼠标追踪
+
+    // 初始化放大动画
+    m_scaleAnimation = new QPropertyAnimation(this, "hoverScaleProperty");
+    m_scaleAnimation->setDuration(150);
+    m_scaleAnimation->setEasingCurve(QEasingCurve::OutCubic);
+
+    // 创建任务详情悬浮框 - 使用顶级窗口避免层级问题
+    m_taskPopup = new QWidget(nullptr);
+    m_taskPopup->setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+    m_taskPopup->setAttribute(Qt::WA_TranslucentBackground);
+    m_taskPopup->setVisible(false);
+    m_taskPopup->setStyleSheet("background-color: white; border-radius: 8px; border: 1px solid #AED6F1;");
+
+    m_taskPopupLabel = new QLabel(m_taskPopup);
+    m_taskPopupLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    m_taskPopupLabel->setMargin(10);
+    m_taskPopupLabel->setStyleSheet("color: #2C3E50; font-size: 12px;");
+
+    QVBoxLayout *popupLayout = new QVBoxLayout(m_taskPopup);
+    popupLayout->setContentsMargins(0, 0, 0, 0);
+    popupLayout->addWidget(m_taskPopupLabel);
+
     updateCells();
+}
+
+// Q_PROPERTY 访问器实现
+qreal CalendarWidget::hoverScaleProperty() const
+{
+    return m_hoverScale;
+}
+
+void CalendarWidget::setHoverScaleProperty(qreal value)
+{
+    m_hoverScale = value;
+    update();
 }
 
 void CalendarWidget::setMonth(const QDate &date)
@@ -4030,7 +4090,7 @@ void CalendarWidget::setSelectedDate(const QDate &date)
     update();
 }
 
-void CalendarWidget::setTaskInfos(const QMap<QDate, QVector<QPair<QString, TaskStatus>>> &tasks)
+void CalendarWidget::setTaskInfos(const QMap<QDate, QVector<QPair<QString, QPair<TaskStatus, double>>>> &tasks)
 {
     m_taskInfos.clear();
     // 将任务信息转换为日期矩阵格式
@@ -4039,15 +4099,16 @@ void CalendarWidget::setTaskInfos(const QMap<QDate, QVector<QPair<QString, TaskS
     // 为每个日期设置任务信息
     for (auto it = tasks.constBegin(); it != tasks.constEnd(); ++ it) {
         QDate date = it.key();
-        const QVector<QPair<QString, TaskStatus>> &taskList = it.value();
+        const QVector<QPair<QString, QPair<TaskStatus, double>>> &taskList = it.value();
 
         // 找到对应的单元格并设置信息
         for (int row = 0; row < m_cells.size(); ++row) {
             for (int col = 0; col < m_cells[row].size(); ++col) {
                 if (m_cells[row][col].date == date && !taskList.isEmpty()) {
                     m_cells[row][col].taskCount = taskList.size();
-                    m_cells[row][col].firstTaskStatus = taskList.first().second;
+                    m_cells[row][col].firstTaskStatus = taskList.first().second.first;
                     m_cells[row][col].firstTaskTitle = taskList.first().first;
+                    m_cells[row][col].allTasks = taskList;  // 保存所有任务
                 }
             }
         }
@@ -4081,15 +4142,14 @@ void CalendarWidget::updateCells()
             // 判断是否为本月
             bool isCurrentMonth = (cellDate.month() == m_currentMonth.month());
 
-            if (isCurrentMonth) {
-                m_cells[i][j] = {cellDate, true, 0, TaskStatus_Todo, ""};
-            } else if (cellDate < m_currentMonth) {
-                // 上月
-                m_cells[i][j] = {cellDate, false, 0, TaskStatus_Todo, ""};
-            } else {
-                // 下月
-                m_cells[i][j] = {cellDate, false, 0, TaskStatus_Todo, ""};
-            }
+            DayCell cell;
+            cell.date = cellDate;
+            cell.isCurrentMonth = isCurrentMonth;
+            cell.taskCount = 0;
+            cell.firstTaskStatus = TaskStatus_Todo;
+            cell.firstTaskTitle = "";
+            cell.allTasks.clear();
+            m_cells[i][j] = cell;
         }
     }
 }
@@ -4203,6 +4263,21 @@ void CalendarWidget::paintEvent(QPaintEvent *event)
                 painter.drawRect(cellRect);
             }
 
+            // 绘制悬停效果 - 在选中状态和悬停状态不同时绘制
+            bool isHovered = (i == m_hoveredRow && j == m_hoveredCol);
+            if (isHovered && !isSelected) {
+                // 悬停时绘制金色边框和浅黄色背景
+                painter.setPen(QColor("#F39C12"));  // 金色边框
+                painter.setBrush(QColor("#FEF9E7"));  // 浅黄色背景
+                painter.drawRect(cellRect);
+
+                // 绘制加粗的边框
+                QPen hoverPen(QColor("#E67E22"), 2);
+                painter.setPen(hoverPen);
+                painter.setBrush(QBrush());  // 重置画刷
+                painter.drawRect(cellRect.adjusted(1, 1, -1, -1));
+            }
+
             // 绘制日期数字
             painter.setFont(QFont("Microsoft YaHei", 10, QFont::Bold));
             painter.setPen(textColor);
@@ -4303,4 +4378,180 @@ void CalendarWidget::mouseDoubleClickEvent(QMouseEvent *event)
         }
     }
     QWidget::mouseDoubleClickEvent(event);
+}
+
+void CalendarWidget::enterEvent(QEvent *event)
+{
+    QWidget::enterEvent(event);
+    setMouseTracking(true);
+}
+
+void CalendarWidget::leaveEvent(QEvent *event)
+{
+    QWidget::leaveEvent(event);
+    hideTaskPopup();
+
+    // 动画缩小
+    if (m_hoveredRow >= 0) {
+        m_scaleAnimation->setStartValue(m_hoverScale);
+        m_scaleAnimation->setEndValue(1.0);
+        m_scaleAnimation->start();
+    }
+
+    m_hoveredRow = -1;
+    m_hoveredCol = -1;
+    update();
+}
+
+void CalendarWidget::mouseMoveEvent(QMouseEvent *event)
+{
+    QWidget::mouseMoveEvent(event);
+    updateHoveredCell(event->pos());
+}
+
+void CalendarWidget::updateHoveredCell(const QPoint &pos)
+{
+    int w = cellWidth();
+    int h = cellHeight();
+
+    int col = pos.x() / w;
+    int row = (pos.y() - 30) / h;
+
+    // 检查是否在有效的单元格区域内
+    if (row >= 0 && row < 6 && col >= 0 && col < 7 && pos.y() > 30) {
+        // 检查是否移动到了新单元格
+        if (row != m_hoveredRow || col != m_hoveredCol) {
+            // 隐藏之前的弹出框
+            hideTaskPopup();
+
+            m_hoveredRow = row;
+            m_hoveredCol = col;
+
+            // 启动放大动画
+            m_scaleAnimation->stop();
+            m_scaleAnimation->setStartValue(m_hoverScale);
+            m_scaleAnimation->setEndValue(1.15);  // 放大到115%
+            m_scaleAnimation->start();
+
+            // 显示任务弹出框
+            if (m_cells[row][col].taskCount > 0) {
+                QPoint globalPos = mapToGlobal(pos);
+                showTaskPopup(globalPos, m_cells[row][col]);
+            }
+        }
+    } else {
+        if (m_hoveredRow >= 0) {
+            hideTaskPopup();
+            m_scaleAnimation->stop();
+            m_scaleAnimation->setStartValue(m_hoverScale);
+            m_scaleAnimation->setEndValue(1.0);
+            m_scaleAnimation->start();
+        }
+        m_hoveredRow = -1;
+        m_hoveredCol = -1;
+    }
+}
+
+void CalendarWidget::showTaskPopup(const QPoint &pos, const DayCell &cell)
+{
+    if (cell.allTasks.isEmpty()) return;
+
+    // 构建任务列表HTML
+    QString html = QString("<div style='font-weight: bold; margin-bottom: 8px; color: #1A5276;'>📅 %1 任务列表</div>")
+                      .arg(cell.date.toString("yyyy-MM-dd"));
+
+    for (const auto &task : cell.allTasks) {
+        QString taskTitle = task.first;
+        TaskStatus status = task.second.first;
+        double workHours = task.second.second;
+
+        QString statusIcon;
+        QString statusColor;
+        QString statusText;
+        switch (status) {
+            case TaskStatus_Completed:
+                statusIcon = "✓";
+                statusColor = "#27AE60";
+                statusText = "已完成";
+                break;
+            case TaskStatus_InProgress:
+                statusIcon = "▶";
+                statusColor = "#3498DB";
+                statusText = "进行中";
+                break;
+            case TaskStatus_Paused:
+                statusIcon = "⏸";
+                statusColor = "#F39C12";
+                statusText = "已暂停";
+                break;
+            default:
+                statusIcon = "○";
+                statusColor = "#95A5A6";
+                statusText = "待办";
+        }
+
+        // 格式化工时
+        QString durationStr;
+        if (workHours >= 1.0) {
+            durationStr = QString::number(workHours, 'f', 1) + "h";
+        } else {
+            int minutes = static_cast<int>(workHours * 60);
+            durationStr = QString::number(minutes) + "m";
+        }
+
+        html += QString("<div style='margin: 3px 0; padding: 2px 0; border-bottom: 1px solid #ECF0F1;'>"
+                       "<span style='color: %1; font-weight: bold;'>%2</span> "
+                       "<span style='color: #7F8C8D; font-size: 10px;'>[%3]</span> "
+                       "<span style='color: #2C3E50;'>%4</span> "
+                       "<span style='color: #E74C3C; font-size: 10px;'>⏱%5</span></div>")
+                    .arg(statusColor)
+                    .arg(statusIcon)
+                    .arg(statusText)
+                    .arg(taskTitle.toHtmlEscaped())
+                    .arg(durationStr);
+    }
+
+    m_taskPopupLabel->setText(html);
+
+    // 计算弹出框位置（在日历组件内部，紧邻单元格）
+    // 将鼠标位置转换为相对于日历组件的位置
+    int popupWidth = 220;
+    // 根据任务数量调整高度
+    int taskCount = cell.allTasks.size();
+    int popupHeight = 40 + taskCount * 25;  // 基础高度 + 每个任务25px
+    if (popupHeight > 200) popupHeight = 200;  // 最大高度限制
+
+    // 计算单元格中心位置
+    int cellCenterX = m_hoveredCol * cellWidth() + cellWidth() / 2;
+    int cellBottomY = 30 + (m_hoveredRow + 1) * cellHeight();
+
+    // 弹出框位置：先尝试显示在单元格下方
+    QPoint cellPos(cellCenterX - popupWidth / 2, cellBottomY + 2);
+
+    // 转换为屏幕坐标
+    QPoint globalPos = this->mapToGlobal(cellPos);
+
+    // 确保不超出日历组件边界
+    QRect calendarRect = this->rect();
+    if (globalPos.x() < this->mapToGlobal(QPoint(0, 0)).x()) {
+        globalPos.setX(this->mapToGlobal(QPoint(2, 0)).x());
+    }
+    if (globalPos.x() + popupWidth > this->mapToGlobal(QPoint(this->width(), 0)).x()) {
+        globalPos.setX(this->mapToGlobal(QPoint(this->width() - popupWidth - 2, 0)).x());
+    }
+    // 如果超出底部，显示在单元格上方
+    if (globalPos.y() + popupHeight > this->mapToGlobal(QPoint(0, this->height())).y()) {
+        globalPos.setY(this->mapToGlobal(QPoint(0, 30 + m_hoveredRow * cellHeight() - popupHeight - 2)).y());
+    }
+
+    // 直接设置位置和显示（popup是顶级窗口）
+    m_taskPopup->setGeometry(globalPos.x(), globalPos.y(), popupWidth, popupHeight);
+    m_taskPopup->setVisible(true);
+}
+
+void CalendarWidget::hideTaskPopup()
+{
+    if (m_taskPopup) {
+        m_taskPopup->setVisible(false);
+    }
 }

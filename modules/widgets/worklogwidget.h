@@ -41,6 +41,8 @@
 #include <QStyleOption>
 #include <QStackedWidget>
 #include <QButtonGroup>
+#include <QPropertyAnimation>
+#include <QParallelAnimationGroup>
 #include "modules/core/database.h"
 
 // 前向声明
@@ -133,10 +135,15 @@ void updateCategoryFilterText(QComboBox *comboBox, QStandardItemModel *model);
 class CalendarWidget : public QWidget
 {
     Q_OBJECT
+    Q_PROPERTY(qreal hoverScaleProperty READ hoverScaleProperty WRITE setHoverScaleProperty)
 public:
     explicit CalendarWidget(QWidget *parent = nullptr);
     void setMonth(const QDate &date);
     QDate selectedDate() const { return m_selectedDate; }
+
+    // Q_PROPERTY 访问器
+    qreal hoverScaleProperty() const;
+    void setHoverScaleProperty(qreal value);
 
 signals:
     void dateSelected(const QDate &date);
@@ -149,6 +156,9 @@ protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
+    void enterEvent(QEvent *event) override;
+    void leaveEvent(QEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
 
 private:
     void drawCalendar(QPainter &painter);
@@ -163,15 +173,28 @@ private:
         int taskCount;
         TaskStatus firstTaskStatus;
         QString firstTaskTitle;
+        QVector<QPair<QString, QPair<TaskStatus, double>>> allTasks;  // 当天所有任务 (标题, 状态, 工时)
     };
     QVector<QVector<DayCell>> m_cells;
+
+    // 鼠标悬停相关
+    int m_hoveredRow;
+    int m_hoveredCol;
+    qreal m_hoverScale;  // 悬停放大倍数
+    QPropertyAnimation *m_scaleAnimation;
+    QWidget *m_taskPopup;  // 任务详情悬浮框
+    QLabel *m_taskPopupLabel;
+
+    void updateHoveredCell(const QPoint &pos);
+    void showTaskPopup(const QPoint &pos, const DayCell &cell);
+    void hideTaskPopup();
 
     int cellWidth() const;
     int cellHeight() const;
     void updateCells();
 
 public:
-    void setTaskInfos(const QMap<QDate, QVector<QPair<QString, TaskStatus>>> &tasks);
+    void setTaskInfos(const QMap<QDate, QVector<QPair<QString, QPair<TaskStatus, double>>>> &tasks);
 };
 
 // 工作日志主Widget
