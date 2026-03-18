@@ -4065,6 +4065,12 @@ CalendarWidget::CalendarWidget(QWidget *parent)
     updateCells();
 }
 
+CalendarWidget::~CalendarWidget()
+{
+    delete m_scaleAnimation;
+    delete m_taskPopup;
+}
+
 // Q_PROPERTY 访问器实现
 qreal CalendarWidget::hoverScaleProperty() const
 {
@@ -4392,7 +4398,7 @@ void CalendarWidget::leaveEvent(QEvent *event)
     hideTaskPopup();
 
     // 动画缩小
-    if (m_hoveredRow >= 0) {
+    if (m_hoveredRow >= 0 && m_scaleAnimation) {
         m_scaleAnimation->setStartValue(m_hoverScale);
         m_scaleAnimation->setEndValue(1.0);
         m_scaleAnimation->start();
@@ -4428,10 +4434,12 @@ void CalendarWidget::updateHoveredCell(const QPoint &pos)
             m_hoveredCol = col;
 
             // 启动放大动画
-            m_scaleAnimation->stop();
-            m_scaleAnimation->setStartValue(m_hoverScale);
-            m_scaleAnimation->setEndValue(1.15);  // 放大到115%
-            m_scaleAnimation->start();
+            if (m_scaleAnimation) {
+                m_scaleAnimation->stop();
+                m_scaleAnimation->setStartValue(m_hoverScale);
+                m_scaleAnimation->setEndValue(1.15);  // 放大到115%
+                m_scaleAnimation->start();
+            }
 
             // 显示任务弹出框
             if (m_cells[row][col].taskCount > 0) {
@@ -4442,10 +4450,12 @@ void CalendarWidget::updateHoveredCell(const QPoint &pos)
     } else {
         if (m_hoveredRow >= 0) {
             hideTaskPopup();
-            m_scaleAnimation->stop();
-            m_scaleAnimation->setStartValue(m_hoverScale);
-            m_scaleAnimation->setEndValue(1.0);
-            m_scaleAnimation->start();
+            if (m_scaleAnimation) {
+                m_scaleAnimation->stop();
+                m_scaleAnimation->setStartValue(m_hoverScale);
+                m_scaleAnimation->setEndValue(1.0);
+                m_scaleAnimation->start();
+            }
         }
         m_hoveredRow = -1;
         m_hoveredCol = -1;
@@ -4532,7 +4542,6 @@ void CalendarWidget::showTaskPopup(const QPoint &pos, const DayCell &cell)
     QPoint globalPos = this->mapToGlobal(cellPos);
 
     // 确保不超出日历组件边界
-    QRect calendarRect = this->rect();
     if (globalPos.x() < this->mapToGlobal(QPoint(0, 0)).x()) {
         globalPos.setX(this->mapToGlobal(QPoint(2, 0)).x());
     }

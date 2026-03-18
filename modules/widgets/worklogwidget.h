@@ -138,6 +138,7 @@ class CalendarWidget : public QWidget
     Q_PROPERTY(qreal hoverScaleProperty READ hoverScaleProperty WRITE setHoverScaleProperty)
 public:
     explicit CalendarWidget(QWidget *parent = nullptr);
+    ~CalendarWidget();
     void setMonth(const QDate &date);
     QDate selectedDate() const { return m_selectedDate; }
 
