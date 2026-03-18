@@ -76,8 +76,7 @@ WorkLogWidget::WorkLogWidget(Database *database, QWidget *parent)
     calendarViewContainer = nullptr;
     calendarWidget = nullptr;
     viewModeGroup = nullptr;
-    tableViewBtn = nullptr;
-    calendarViewBtn = nullptr;
+    viewToggleBtn = nullptr;
     monthDateEdit = nullptr;
     tableDateWidget = nullptr;
     calendarNavWidget = nullptr;
@@ -102,7 +101,6 @@ WorkLogWidget::WorkLogWidget(Database *database, QWidget *parent)
     completeTaskBtn = nullptr;
     refreshBtn = nullptr;
     generateReportBtn = nullptr;
-    exportBtn = nullptr;
     quickAddBtn = nullptr;
     totalTasksLabel = nullptr;
     completedTasksLabel = nullptr;
@@ -723,20 +721,20 @@ void WorkLogWidget::setupUI()
     tableDateLayout = new QHBoxLayout(tableDateWidget);
     tableDateLayout->setSpacing(8);
     tableDateLayout->setContentsMargins(10, 5, 10, 5);
-    tableDateLayout->addWidget(new QLabel("📅 查看月份:", tableDateWidget));
+    tableDateLayout->addWidget(new QLabel("📅 查看日期:", tableDateWidget));
 
     taskViewDate = new QDateEdit(tableDateWidget);
     taskViewDate->setCalendarPopup(true);
     taskViewDate->setDate(QDate::currentDate());
-    taskViewDate->setDisplayFormat("yyyy-MM");
-    taskViewDate->setMinimumWidth(120);
+    taskViewDate->setDisplayFormat("yyyy-MM-dd");
+    taskViewDate->setMinimumWidth(150);
     tableDateLayout->addWidget(taskViewDate);
 
-    QPushButton *prevDayBtn = new QPushButton("◀ 上月", tableDateWidget);
+    QPushButton *prevDayBtn = new QPushButton("◀ 上一天", tableDateWidget);
     prevDayBtn->setStyleSheet("padding: 6px 12px;");
     tableDateLayout->addWidget(prevDayBtn);
 
-    QPushButton *nextDayBtn = new QPushButton("下月 ▶", tableDateWidget);
+    QPushButton *nextDayBtn = new QPushButton("下一天 ▶", tableDateWidget);
     nextDayBtn->setStyleSheet("padding: 6px 12px;");
     tableDateLayout->addWidget(nextDayBtn);
 
@@ -752,22 +750,23 @@ void WorkLogWidget::setupUI()
     calendarNavLayout = new QHBoxLayout(calendarNavWidget);
     calendarNavLayout->setSpacing(8);
     calendarNavLayout->setContentsMargins(10, 5, 10, 5);
+    calendarNavLayout->addWidget(new QLabel("📅 查看月份:", tableDateWidget));
 
     // 年月选择器 - 样式与表格视图日期选择器一致
     monthDateEdit = new QDateEdit(calendarNavWidget);
     monthDateEdit->setCalendarPopup(true);
     monthDateEdit->setDate(QDate::currentDate());
     monthDateEdit->setDisplayFormat("yyyy-MM");
-    monthDateEdit->setMinimumWidth(120);
+    monthDateEdit->setMinimumWidth(150);
     connect(monthDateEdit, &QDateEdit::dateChanged, this, &WorkLogWidget::onMonthChanged);
 
     // 上月按钮 - 样式与表格视图"前一天"按钮一致
-    prevMonthBtn = new QPushButton("◀ 上月", calendarNavWidget);
+    prevMonthBtn = new QPushButton("◀ 上一月", calendarNavWidget);
     prevMonthBtn->setStyleSheet("padding: 6px 12px;");
     connect(prevMonthBtn, &QPushButton::clicked, this, &WorkLogWidget::onPrevMonth);
 
     // 下月按钮 - 样式与表格视图"后一天"按钮一致
-    nextMonthBtn = new QPushButton("下月 ▶", calendarNavWidget);
+    nextMonthBtn = new QPushButton("下一月 ▶", calendarNavWidget);
     nextMonthBtn->setStyleSheet("padding: 6px 12px;");
     connect(nextMonthBtn, &QPushButton::clicked, this, &WorkLogWidget::onNextMonth);
 
@@ -800,31 +799,26 @@ void WorkLogWidget::setupUI()
     refreshBtn->setProperty("cssClass", "btn-secondary");
     quickAddBtn = new QPushButton("⚡ 快速添加", this);
     quickAddBtn->setProperty("cssClass", "btn-warning");
+    generateReportBtn = new QPushButton("📊 生成报告", this);
+    generateReportBtn->setProperty("cssClass", "btn-primary");
     taskBtnLayout->addWidget(addTaskBtn);
     taskBtnLayout->addWidget(editTaskBtn);
     taskBtnLayout->addWidget(deleteTaskBtn);
     taskBtnLayout->addWidget(completeTaskBtn);
     taskBtnLayout->addWidget(refreshBtn);
     taskBtnLayout->addWidget(quickAddBtn);
+    taskBtnLayout->addWidget(generateReportBtn);
 
-    // 添加视图切换按钮
-    QLabel *viewModeLabel = new QLabel("视图:", this);
-    viewModeLabel->setStyleSheet("font-weight: bold;");
-    taskBtnLayout->addWidget(viewModeLabel);
+    // 添加视图切换按钮（合并为一个按钮，点击切换视图）
+    //QLabel *viewModeLabel = new QLabel("视图:", this);
+    //viewModeLabel->setStyleSheet("font-weight: bold;");
+    //taskBtnLayout->addWidget(viewModeLabel);
 
-    viewModeGroup = new QButtonGroup(this);
-    tableViewBtn = new QPushButton("📊 表格", this);
-    tableViewBtn->setCheckable(true);
-    tableViewBtn->setChecked(true);
-    tableViewBtn->setStyleSheet("QPushButton { padding: 4px 12px; }");
-    calendarViewBtn = new QPushButton("📅 日历", this);
-    calendarViewBtn->setCheckable(true);
-    calendarViewBtn->setStyleSheet("QPushButton { padding: 4px 12px; }");
-
-    viewModeGroup->addButton(tableViewBtn, 0);
-    viewModeGroup->addButton(calendarViewBtn, 1);
-    taskBtnLayout->addWidget(tableViewBtn);
-    taskBtnLayout->addWidget(calendarViewBtn);
+    viewToggleBtn = new QPushButton("📅 日历", this);
+    viewToggleBtn->setCheckable(true);
+    viewToggleBtn->setChecked(true);
+    viewToggleBtn->setStyleSheet("QPushButton { padding: 4px 12px; }");
+    taskBtnLayout->addWidget(viewToggleBtn);
 
     taskBtnLayout->addStretch();
 
@@ -843,21 +837,8 @@ void WorkLogWidget::setupUI()
     // 初始刷新日历视图
     refreshCalendarView();
 
-    // 连接视图切换信号槽
-    connect(viewModeGroup, QOverload<int>::of(&QButtonGroup::buttonClicked),
-            this, &WorkLogWidget::onViewModeChanged);
-
-    // 报告按钮
-    QHBoxLayout *reportBtnLayout = new QHBoxLayout();
-    reportBtnLayout->setSpacing(6);
-    generateReportBtn = new QPushButton("📊 生成报告", this);
-    generateReportBtn->setProperty("cssClass", "btn-primary");
-    exportBtn = new QPushButton("💾 导出报告", this);
-    exportBtn->setProperty("cssClass", "btn-secondary");
-    reportBtnLayout->addWidget(generateReportBtn);
-    reportBtnLayout->addWidget(exportBtn);
-    reportBtnLayout->addStretch();
-    rightMainLayout->addLayout(reportBtnLayout);
+    // 连接视图切换按钮信号槽
+    connect(viewToggleBtn, &QPushButton::clicked, this, &WorkLogWidget::onViewToggleClicked);
 
     leftMainLayout->addWidget(leftPanel);
     rightMainLayout->addWidget(rightPanel);
@@ -879,7 +860,6 @@ void WorkLogWidget::setupUI()
     connect(refreshBtn, &QPushButton::clicked, this, &WorkLogWidget::onRefreshTasks);
     connect(quickAddBtn, &QPushButton::clicked, this, &WorkLogWidget::onQuickAddTask);
     connect(generateReportBtn, &QPushButton::clicked, this, &WorkLogWidget::onGenerateReport);
-    connect(exportBtn, &QPushButton::clicked, this, &WorkLogWidget::onExportReport);
 
     connect(taskViewDate, &QDateEdit::dateChanged, this, &WorkLogWidget::onViewDateChanged);
     connect(prevDayBtn, &QPushButton::clicked, this, &WorkLogWidget::onPrevDay);
@@ -1024,7 +1004,8 @@ void WorkLogWidget::setupCalendarView()
 
     // 创建日历Widget
     calendarWidget = new CalendarWidget(calendarViewContainer);
-    calendarLayout->addWidget(calendarWidget);
+    calendarWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    calendarLayout->addWidget(calendarWidget, 1);  // 添加stretch因子使日历自动拉伸
 
     // 连接日期双击信号（跳转到表格视图）
     connect(calendarWidget, &CalendarWidget::dateDoubleClicked,
@@ -1117,11 +1098,8 @@ void WorkLogWidget::onCalendarDateSelected(const QDate &date)
     if (viewStacker) {
         viewStacker->setCurrentIndex(0);
     }
-    if (tableViewBtn) {
-        tableViewBtn->setChecked(true);
-    }
-    if (calendarViewBtn) {
-        calendarViewBtn->setChecked(false);
+    if (viewToggleBtn) {
+        viewToggleBtn->setText("📅 日历");
     }
     // 显示表格视图的日期控件
     if (tableDateWidget && calendarNavWidget) {
@@ -1132,20 +1110,24 @@ void WorkLogWidget::onCalendarDateSelected(const QDate &date)
     loadTasks();
 }
 
-void WorkLogWidget::onViewModeChanged(int index)
+void WorkLogWidget::onViewToggleClicked()
 {
-    if (viewStacker) {
-        viewStacker->setCurrentIndex(index);
-    }
+    if (!viewStacker || !viewToggleBtn) return;
 
-    // 根据视图模式显示/隐藏对应的导航控件
-    if (tableDateWidget && calendarNavWidget) {
-        if (index == 0) {
-            // 表格视图：显示日期选择器，隐藏月份导航
+    int currentIndex = viewStacker->currentIndex();
+    int newIndex = (currentIndex == 0) ? 1 : 0;
+
+    viewStacker->setCurrentIndex(newIndex);
+
+    if (newIndex == 0) {
+        viewToggleBtn->setText("📅 日历");
+        if (tableDateWidget && calendarNavWidget) {
             tableDateWidget->setVisible(true);
             calendarNavWidget->setVisible(false);
-        } else {
-            // 日历视图：隐藏日期选择器，显示月份导航
+        }
+    } else {
+        viewToggleBtn->setText("📊 表格");
+        if (tableDateWidget && calendarNavWidget) {
             tableDateWidget->setVisible(false);
             calendarNavWidget->setVisible(true);
         }
@@ -4027,8 +4009,8 @@ CalendarWidget::CalendarWidget(QWidget *parent)
 {
     m_currentMonth = QDate::currentDate();
     m_selectedDate = QDate::currentDate();
-    setMinimumHeight(400);
-    setMinimumWidth(600);
+    setMinimumHeight(280);
+    setMinimumWidth(420);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     // 移除背景色和边框，由paintEvent统一绘制
     setAttribute(Qt::WA_StyledBackground, false);

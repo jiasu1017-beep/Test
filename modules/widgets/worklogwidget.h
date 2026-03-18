@@ -211,7 +211,7 @@ private slots:
     void onMonthChanged(const QDate &date);
     void onNextMonth();
     void onGoToToday();
-    void onViewModeChanged(int index);
+    void onViewToggleClicked();
     bool eventFilter(QObject *obj, QEvent *event) override;
 
 private:
@@ -296,8 +296,7 @@ private:
     CalendarWidget *calendarWidget;
 
     QButtonGroup *viewModeGroup;
-    QPushButton *tableViewBtn;
-    QPushButton *calendarViewBtn;
+    QPushButton *viewToggleBtn;  // 视图切换按钮
     QDateEdit *monthDateEdit;  // 日历视图的年份月份选择器
 
     // 视图导航布局（使用QWidget包装以控制可见性）
@@ -332,7 +331,6 @@ private:
     QPushButton *completeTaskBtn;
     QPushButton *refreshBtn;
     QPushButton *generateReportBtn;
-    QPushButton *exportBtn;
     QPushButton *quickAddBtn;
     
     QLabel *totalTasksLabel;
