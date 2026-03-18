@@ -39,7 +39,12 @@
 #include <QProxyStyle>
 #include <QPainter>
 #include <QStyleOption>
+#include <QStackedWidget>
+#include <QButtonGroup>
 #include "modules/core/database.h"
+
+// 前向声明
+class CalendarWidget;
 
 class ComboBoxArrowStyle : public QProxyStyle
 {
@@ -124,6 +129,52 @@ public:
 // 更新分类筛选下拉框显示文本（函数声明）
 void updateCategoryFilterText(QComboBox *comboBox, QStandardItemModel *model);
 
+// 自定义日历Widget - 5行7列显示
+class CalendarWidget : public QWidget
+{
+    Q_OBJECT
+public:
+    explicit CalendarWidget(QWidget *parent = nullptr);
+    void setMonth(const QDate &date);
+    QDate selectedDate() const { return m_selectedDate; }
+
+signals:
+    void dateSelected(const QDate &date);
+    void dateDoubleClicked(const QDate &date);
+
+public slots:
+    void setSelectedDate(const QDate &date);
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
+
+private:
+    void drawCalendar(QPainter &painter);
+    QDate m_currentMonth;
+    QDate m_selectedDate;
+    QVector<QVector<QDate>> m_days; // 5行7列的日期矩阵
+    QVector<QPair<QString, QColor>> m_taskInfos; // 日期的任务信息
+
+    struct DayCell {
+        QDate date;
+        bool isCurrentMonth;
+        int taskCount;
+        TaskStatus firstTaskStatus;
+        QString firstTaskTitle;
+    };
+    QVector<QVector<DayCell>> m_cells;
+
+    int cellWidth() const;
+    int cellHeight() const;
+    void updateCells();
+
+public:
+    void setTaskInfos(const QMap<QDate, QVector<QPair<QString, TaskStatus>>> &tasks);
+};
+
+// 工作日志主Widget
 class WorkLogWidget : public QWidget
 {
     Q_OBJECT
@@ -155,6 +206,12 @@ private slots:
     void onNextDay();
     void onToday();
     void onPieChartDoubleClick();
+    void onCalendarDateSelected(const QDate &date);
+    void onPrevMonth();
+    void onMonthChanged(const QDate &date);
+    void onNextMonth();
+    void onGoToToday();
+    void onViewModeChanged(int index);
     bool eventFilter(QObject *obj, QEvent *event) override;
 
 private:
@@ -162,9 +219,11 @@ private:
     void setupTaskTable();
     void setupToolbar();
     void setupStatisticsPanel();
+    void setupCalendarView();
     void loadCategories();
     void loadTasks();
     void refreshTaskTable();
+    void refreshCalendarView();
     void updateStatistics();
     void initDefaultCategories();
     Task getCurrentTask();
@@ -232,7 +291,28 @@ private:
     QWidget *rightPanel;
 
     QTableWidget *taskTable;
-    
+    QStackedWidget *viewStacker;
+    QWidget *calendarViewContainer;
+    CalendarWidget *calendarWidget;
+
+    QButtonGroup *viewModeGroup;
+    QPushButton *tableViewBtn;
+    QPushButton *calendarViewBtn;
+    QDateEdit *monthDateEdit;  // 日历视图的年份月份选择器
+
+    // 视图导航布局（使用QWidget包装以控制可见性）
+    QWidget *tableDateWidget;
+    QWidget *calendarNavWidget;
+
+    // 内部布局指针
+    QHBoxLayout *tableDateLayout;
+    QHBoxLayout *calendarNavLayout;
+
+    // 日历导航按钮
+    QPushButton *prevMonthBtn;
+    QPushButton *nextMonthBtn;
+    QPushButton *goTodayBtn;
+
     QLineEdit *searchEdit;
     QComboBox *statusFilter;
     QComboBox *priorityFilter;
@@ -275,7 +355,16 @@ private:
         ThisYear,
         Custom
     };
-    
+
+    // 视图模式枚举
+    enum ViewMode {
+        TableView,
+        CalendarView
+    };
+
+    // 当前日历月份
+    QDate currentCalendarMonth;
+
     Task *currentRunningTask;
     QTimer *taskTimer;
     QDateTime taskStartTime;

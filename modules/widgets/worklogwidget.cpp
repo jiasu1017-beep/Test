@@ -72,6 +72,21 @@ WorkLogWidget::WorkLogWidget(Database *database, QWidget *parent)
     leftPanel = nullptr;
     rightPanel = nullptr;
     taskTable = nullptr;
+    viewStacker = nullptr;
+    calendarViewContainer = nullptr;
+    calendarWidget = nullptr;
+    viewModeGroup = nullptr;
+    tableViewBtn = nullptr;
+    calendarViewBtn = nullptr;
+    monthDateEdit = nullptr;
+    tableDateWidget = nullptr;
+    calendarNavWidget = nullptr;
+    tableDateLayout = nullptr;
+    calendarNavLayout = nullptr;
+    calendarNavLayout = nullptr;
+    prevMonthBtn = nullptr;
+    nextMonthBtn = nullptr;
+    goTodayBtn = nullptr;
     searchEdit = nullptr;
     statusFilter = nullptr;
     priorityFilter = nullptr;
@@ -100,6 +115,9 @@ WorkLogWidget::WorkLogWidget(Database *database, QWidget *parent)
     pieChart = nullptr;
     taskTimer = nullptr;
     networkManager = nullptr;
+
+    // 初始化当前日历月份
+    currentCalendarMonth = QDate::currentDate();
 
     // 初始化统计标签数组
     for (int i = 0; i < 4; i++) {
@@ -700,32 +718,72 @@ void WorkLogWidget::setupUI()
 
     rightMainLayout->addLayout(filterLayout);
 
-    // 日期选择器（用于查看往日任务）
-    QHBoxLayout *dateViewLayout = new QHBoxLayout();
-    dateViewLayout->setSpacing(8);
-    dateViewLayout->addWidget(new QLabel("📅 查看日期:", this));
+    // 表格视图日期选择器（用QWidget包装以控制可见性）
+    tableDateWidget = new QWidget(this);
+    tableDateLayout = new QHBoxLayout(tableDateWidget);
+    tableDateLayout->setSpacing(8);
+    tableDateLayout->setContentsMargins(10, 5, 10, 5);
+    tableDateLayout->addWidget(new QLabel("📅 查看月份:", tableDateWidget));
 
-    taskViewDate = new QDateEdit(this);
+    taskViewDate = new QDateEdit(tableDateWidget);
     taskViewDate->setCalendarPopup(true);
     taskViewDate->setDate(QDate::currentDate());
-    taskViewDate->setDisplayFormat("yyyy-MM-dd");
-    taskViewDate->setMinimumWidth(150);
-    dateViewLayout->addWidget(taskViewDate);
+    taskViewDate->setDisplayFormat("yyyy-MM");
+    taskViewDate->setMinimumWidth(120);
+    tableDateLayout->addWidget(taskViewDate);
 
-    QPushButton *prevDayBtn = new QPushButton("◀ 前一天", this);
+    QPushButton *prevDayBtn = new QPushButton("◀ 上月", tableDateWidget);
     prevDayBtn->setStyleSheet("padding: 6px 12px;");
-    dateViewLayout->addWidget(prevDayBtn);
+    tableDateLayout->addWidget(prevDayBtn);
 
-    QPushButton *nextDayBtn = new QPushButton("后一天 ▶", this);
+    QPushButton *nextDayBtn = new QPushButton("下月 ▶", tableDateWidget);
     nextDayBtn->setStyleSheet("padding: 6px 12px;");
-    dateViewLayout->addWidget(nextDayBtn);
+    tableDateLayout->addWidget(nextDayBtn);
 
-    QPushButton *todayBtn = new QPushButton("今天", this);
+    QPushButton *todayBtn = new QPushButton("今天", tableDateWidget);
     todayBtn->setStyleSheet("padding: 6px 12px;");
-    dateViewLayout->addWidget(todayBtn);
+    tableDateLayout->addWidget(todayBtn);
 
-    dateViewLayout->addStretch();
-    rightMainLayout->addLayout(dateViewLayout);
+    tableDateLayout->addStretch();
+    rightMainLayout->addWidget(tableDateWidget);
+
+    // 日历视图月份导航（放在tableDateWidget同一位置，通过可见性切换）
+    calendarNavWidget = new QWidget(this);
+    calendarNavLayout = new QHBoxLayout(calendarNavWidget);
+    calendarNavLayout->setSpacing(8);
+    calendarNavLayout->setContentsMargins(10, 5, 10, 5);
+
+    // 年月选择器 - 样式与表格视图日期选择器一致
+    monthDateEdit = new QDateEdit(calendarNavWidget);
+    monthDateEdit->setCalendarPopup(true);
+    monthDateEdit->setDate(QDate::currentDate());
+    monthDateEdit->setDisplayFormat("yyyy-MM");
+    monthDateEdit->setMinimumWidth(120);
+    connect(monthDateEdit, &QDateEdit::dateChanged, this, &WorkLogWidget::onMonthChanged);
+
+    // 上月按钮 - 样式与表格视图"前一天"按钮一致
+    prevMonthBtn = new QPushButton("◀ 上月", calendarNavWidget);
+    prevMonthBtn->setStyleSheet("padding: 6px 12px;");
+    connect(prevMonthBtn, &QPushButton::clicked, this, &WorkLogWidget::onPrevMonth);
+
+    // 下月按钮 - 样式与表格视图"后一天"按钮一致
+    nextMonthBtn = new QPushButton("下月 ▶", calendarNavWidget);
+    nextMonthBtn->setStyleSheet("padding: 6px 12px;");
+    connect(nextMonthBtn, &QPushButton::clicked, this, &WorkLogWidget::onNextMonth);
+
+    // 今天按钮 - 样式与表格视图"今天"按钮一致
+    goTodayBtn = new QPushButton("今天", calendarNavWidget);
+    goTodayBtn->setStyleSheet("padding: 6px 12px;");
+    connect(goTodayBtn, &QPushButton::clicked, this, &WorkLogWidget::onGoToToday);
+
+    calendarNavLayout->addWidget(monthDateEdit);
+    calendarNavLayout->addWidget(prevMonthBtn);
+    calendarNavLayout->addWidget(nextMonthBtn);
+    calendarNavLayout->addWidget(goTodayBtn);
+    calendarNavLayout->addStretch();
+    calendarNavWidget->setVisible(false);  // 初始隐藏
+
+    rightMainLayout->addWidget(calendarNavWidget);  // 与tableDateWidget同一位置
 
     // 工具栏按钮
     QHBoxLayout *taskBtnLayout = new QHBoxLayout();
@@ -748,10 +806,46 @@ void WorkLogWidget::setupUI()
     taskBtnLayout->addWidget(completeTaskBtn);
     taskBtnLayout->addWidget(refreshBtn);
     taskBtnLayout->addWidget(quickAddBtn);
+
+    // 添加视图切换按钮
+    QLabel *viewModeLabel = new QLabel("视图:", this);
+    viewModeLabel->setStyleSheet("font-weight: bold;");
+    taskBtnLayout->addWidget(viewModeLabel);
+
+    viewModeGroup = new QButtonGroup(this);
+    tableViewBtn = new QPushButton("📊 表格", this);
+    tableViewBtn->setCheckable(true);
+    tableViewBtn->setChecked(true);
+    tableViewBtn->setStyleSheet("QPushButton { padding: 4px 12px; }");
+    calendarViewBtn = new QPushButton("📅 日历", this);
+    calendarViewBtn->setCheckable(true);
+    calendarViewBtn->setStyleSheet("QPushButton { padding: 4px 12px; }");
+
+    viewModeGroup->addButton(tableViewBtn, 0);
+    viewModeGroup->addButton(calendarViewBtn, 1);
+    taskBtnLayout->addWidget(tableViewBtn);
+    taskBtnLayout->addWidget(calendarViewBtn);
+
+    taskBtnLayout->addStretch();
+
     rightMainLayout->addLayout(taskBtnLayout);
 
+    // 创建视图切换器
     setupTaskTable();
-    rightMainLayout->addWidget(taskTable);
+    setupCalendarView();
+
+    viewStacker = new QStackedWidget(this);
+    viewStacker->addWidget(taskTable);
+    viewStacker->addWidget(calendarViewContainer);
+
+    rightMainLayout->addWidget(viewStacker);
+
+    // 初始刷新日历视图
+    refreshCalendarView();
+
+    // 连接视图切换信号槽
+    connect(viewModeGroup, QOverload<int>::of(&QButtonGroup::buttonClicked),
+            this, &WorkLogWidget::onViewModeChanged);
 
     // 报告按钮
     QHBoxLayout *reportBtnLayout = new QHBoxLayout();
@@ -917,6 +1011,144 @@ void WorkLogWidget::initDefaultCategories()
         ops.parentId = -1;
         ops.color = "#34495e";
         db->addCategory(ops);
+    }
+}
+
+void WorkLogWidget::setupCalendarView()
+{
+    // 创建日历视图容器
+    calendarViewContainer = new QWidget(this);
+    QVBoxLayout *calendarLayout = new QVBoxLayout(calendarViewContainer);
+    calendarLayout->setContentsMargins(5, 5, 5, 5);
+    calendarLayout->setSpacing(5);
+
+    // 创建日历Widget
+    calendarWidget = new CalendarWidget(calendarViewContainer);
+    calendarLayout->addWidget(calendarWidget);
+
+    // 连接日期双击信号（跳转到表格视图）
+    connect(calendarWidget, &CalendarWidget::dateDoubleClicked,
+            this, &WorkLogWidget::onCalendarDateSelected);
+
+    // 初始刷新日历
+    refreshCalendarView();
+}
+
+void WorkLogWidget::refreshCalendarView()
+{
+    if (!calendarWidget || !monthDateEdit) return;
+
+    // 更新年月选择器
+    monthDateEdit->setDate(currentCalendarMonth);
+
+    // 设置日历月份
+    calendarWidget->setMonth(currentCalendarMonth);
+
+    // 获取当前月份的任务
+    QDate firstDayOfMonth(currentCalendarMonth.year(), currentCalendarMonth.month(), 1);
+    QDate lastDayOfMonth = firstDayOfMonth.addMonths(1).addDays(-1);
+
+    QList<Task> monthTasks = db->getTasksByDateRange(
+        QDateTime(firstDayOfMonth, QTime(0, 0, 0)),
+        QDateTime(lastDayOfMonth, QTime(23, 59, 59)));
+
+    // 按日期组织任务
+    QMap<QDate, QVector<QPair<QString, TaskStatus>>> tasksByDate;
+    for (const Task &task : monthTasks) {
+        if (task.completionTime.isValid()) {
+            QDate taskDate = task.completionTime.date();
+            tasksByDate[taskDate].append(qMakePair(task.title, task.status));
+        }
+    }
+
+    // 设置任务信息到日历
+    calendarWidget->setTaskInfos(tasksByDate);
+}
+
+void WorkLogWidget::onPrevMonth()
+{
+    currentCalendarMonth = currentCalendarMonth.addMonths(-1);
+    refreshCalendarView();
+}
+
+void WorkLogWidget::onNextMonth()
+{
+    currentCalendarMonth = currentCalendarMonth.addMonths(1);
+    refreshCalendarView();
+}
+
+void WorkLogWidget::onMonthChanged(const QDate &date)
+{
+    currentCalendarMonth = QDate(date.year(), date.month(), 1);
+    calendarWidget->setMonth(currentCalendarMonth);
+
+    // 刷新任务数据
+    QDate firstDayOfMonth = currentCalendarMonth;
+    QDate lastDayOfMonth = firstDayOfMonth.addMonths(1).addDays(-1);
+
+    QList<Task> monthTasks = db->getTasksByDateRange(
+        QDateTime(firstDayOfMonth, QTime(0, 0, 0)),
+        QDateTime(lastDayOfMonth, QTime(23, 59, 59)));
+
+    QMap<QDate, QVector<QPair<QString, TaskStatus>>> tasksByDate;
+    for (const Task &task : monthTasks) {
+        if (task.completionTime.isValid()) {
+            QDate taskDate = task.completionTime.date();
+            tasksByDate[taskDate].append(qMakePair(task.title, task.status));
+        }
+    }
+    calendarWidget->setTaskInfos(tasksByDate);
+}
+
+void WorkLogWidget::onGoToToday()
+{
+    currentCalendarMonth = QDate::currentDate();
+    calendarWidget->setSelectedDate(QDate::currentDate());
+    refreshCalendarView();
+}
+
+void WorkLogWidget::onCalendarDateSelected(const QDate &date)
+{
+    // 双击日历日期跳转到表格视图并设置对应日期
+    if (taskViewDate) {
+        taskViewDate->setDate(date);
+    }
+    // 切换到表格视图
+    if (viewStacker) {
+        viewStacker->setCurrentIndex(0);
+    }
+    if (tableViewBtn) {
+        tableViewBtn->setChecked(true);
+    }
+    if (calendarViewBtn) {
+        calendarViewBtn->setChecked(false);
+    }
+    // 显示表格视图的日期控件
+    if (tableDateWidget && calendarNavWidget) {
+        tableDateWidget->setVisible(true);
+        calendarNavWidget->setVisible(false);
+    }
+    // 刷新任务列表
+    loadTasks();
+}
+
+void WorkLogWidget::onViewModeChanged(int index)
+{
+    if (viewStacker) {
+        viewStacker->setCurrentIndex(index);
+    }
+
+    // 根据视图模式显示/隐藏对应的导航控件
+    if (tableDateWidget && calendarNavWidget) {
+        if (index == 0) {
+            // 表格视图：显示日期选择器，隐藏月份导航
+            tableDateWidget->setVisible(true);
+            calendarNavWidget->setVisible(false);
+        } else {
+            // 日历视图：隐藏日期选择器，显示月份导航
+            tableDateWidget->setVisible(false);
+            calendarNavWidget->setVisible(true);
+        }
     }
 }
 
@@ -3786,4 +4018,307 @@ void WorkLogWidget::onPieChartDoubleClick()
     // 显示对话框
     dialog->exec();
     dialog->deleteLater();
+}
+
+// ========== CalendarWidget 实现 ==========
+
+CalendarWidget::CalendarWidget(QWidget *parent)
+    : QWidget(parent)
+{
+    m_currentMonth = QDate::currentDate();
+    m_selectedDate = QDate::currentDate();
+    setMinimumHeight(400);
+    setMinimumWidth(600);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    // 移除背景色和边框，由paintEvent统一绘制
+    setAttribute(Qt::WA_StyledBackground, false);
+    updateCells();
+}
+
+void CalendarWidget::setMonth(const QDate &date)
+{
+    m_currentMonth = QDate(date.year(), date.month(), 1);
+    updateCells();
+    update();
+}
+
+void CalendarWidget::setSelectedDate(const QDate &date)
+{
+    m_selectedDate = date;
+    update();
+}
+
+void CalendarWidget::setTaskInfos(const QMap<QDate, QVector<QPair<QString, TaskStatus>>> &tasks)
+{
+    m_taskInfos.clear();
+    // 将任务信息转换为日期矩阵格式
+    updateCells();
+
+    // 为每个日期设置任务信息
+    for (auto it = tasks.constBegin(); it != tasks.constEnd(); ++ it) {
+        QDate date = it.key();
+        const QVector<QPair<QString, TaskStatus>> &taskList = it.value();
+
+        // 找到对应的单元格并设置信息
+        for (int row = 0; row < m_cells.size(); ++row) {
+            for (int col = 0; col < m_cells[row].size(); ++col) {
+                if (m_cells[row][col].date == date && !taskList.isEmpty()) {
+                    m_cells[row][col].taskCount = taskList.size();
+                    m_cells[row][col].firstTaskStatus = taskList.first().second;
+                    m_cells[row][col].firstTaskTitle = taskList.first().first;
+                }
+            }
+        }
+    }
+    update();
+}
+
+void CalendarWidget::updateCells()
+{
+    m_cells.clear();
+    m_cells.resize(6); // 最多6行
+
+    // 获取当月第一天是星期几（周一 = 0， Sunday = 6）
+    int firstDayOfWeek = m_currentMonth.dayOfWeek() - 1; // 转换为0-6
+
+    // 日历应该从上月最后firstDayOfWeek天开始显示
+    // 获取日历第一个日期（可能来自上月）
+    QDate firstDate = m_currentMonth.addDays(-firstDayOfWeek);
+
+    // 获取下月的开始几天
+    int daysInMonth = m_currentMonth.daysInMonth();
+    int totalCells = 42; // 6行 x 7列
+    int nextMonthDay = 1;
+
+    for (int i = 0; i < 6; ++i) {
+        m_cells[i].resize(7);
+        for (int j = 0; j < 7; ++j) {
+            int dayOffset = i * 7 + j;
+            QDate cellDate = firstDate.addDays(dayOffset);
+
+            // 判断是否为本月
+            bool isCurrentMonth = (cellDate.month() == m_currentMonth.month());
+
+            if (isCurrentMonth) {
+                m_cells[i][j] = {cellDate, true, 0, TaskStatus_Todo, ""};
+            } else if (cellDate < m_currentMonth) {
+                // 上月
+                m_cells[i][j] = {cellDate, false, 0, TaskStatus_Todo, ""};
+            } else {
+                // 下月
+                m_cells[i][j] = {cellDate, false, 0, TaskStatus_Todo, ""};
+            }
+        }
+    }
+}
+
+int CalendarWidget::cellWidth() const
+{
+    return width() / 7;
+}
+
+int CalendarWidget::cellHeight() const
+{
+    // 减去星期标题行的高度
+    return (height() - 30) / 6;
+}
+
+void CalendarWidget::paintEvent(QPaintEvent *event)
+{
+    Q_UNUSED(event);
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    int w = cellWidth();
+    int h = cellHeight();
+
+    // 绘制外边框和背景 - 强制白色背景
+    QRect outerRect = rect();
+    outerRect.adjust(0, 0, -1, -1);
+    painter.setPen(QColor("#AED6F1"));  // 浅蓝色边框
+    painter.setBrush(QBrush(QColor("#FFFFFF"), Qt::SolidPattern));
+    painter.drawRoundedRect(outerRect, 8, 8);
+
+    // 强制填充整个区域为白色
+    painter.fillRect(rect(), QColor("#FFFFFF"));
+
+    // 绘制星期标题栏 - 清新浅蓝色
+    QRect headerRect(0, 0, width(), 30);
+    QLinearGradient headerGradient(headerRect.topLeft(), headerRect.bottomRight());
+    headerGradient.setColorAt(0, QColor("#AED6F1"));  // 浅蓝
+    headerGradient.setColorAt(1, QColor("#D4E6F1"));  // 更浅的蓝
+    painter.setBrush(headerGradient);
+    painter.setPen(Qt::NoPen);
+    painter.drawRect(headerRect);
+
+    // 绘制星期标题
+    QStringList weekDays = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
+    painter.setFont(QFont("Microsoft YaHei", 10, QFont::Bold));
+    for (int i = 0; i < 7; ++i) {
+        QRect weekRect(i * w + 1, 1, w - 2, 28);
+        painter.setPen(QColor("#2C3E50"));  // 深蓝灰文字
+        painter.drawText(weekRect, Qt::AlignCenter, weekDays[i]);
+    }
+
+    // 绘制日期格子
+    QDate today = QDate::currentDate();  // 循环外获取今天日期
+    painter.setFont(QFont("Microsoft YaHei", 10));
+    painter.setBrush(QBrush());  // 重置画刷，避免继承星期标题的渐变
+    for (int i = 0; i < 6; ++i) {
+        for (int j = 0; j < 7; ++j) {
+            QRect cellRect(j * w + 1, 30 + i * h + 1, w - 2, h - 2);
+            const DayCell &cell = m_cells[i][j];
+
+            // 背景色 - 使用明确的条件判断
+            QColor bgColor;
+            QColor textColor;
+            QColor borderColor = QColor("#E8E8E8");
+
+            // 先设置默认白色背景
+            bgColor = QColor("#FFFFFF");
+            textColor = QColor("#2C3E50");
+
+            // 选中日期 - 蓝色渐变（优先）
+            bool isSelected = (cell.isCurrentMonth && cell.date == m_selectedDate);
+            if (isSelected) {
+                QLinearGradient selectedGradient(cellRect.topLeft(), cellRect.bottomRight());
+                selectedGradient.setColorAt(0, QColor("#5DADE2"));
+                selectedGradient.setColorAt(1, QColor("#3498DB"));
+                painter.setBrush(selectedGradient);
+                painter.setPen(Qt::NoPen);
+                painter.drawRoundedRect(cellRect, 6, 6);
+                painter.setBrush(QBrush());
+                textColor = QColor("#FFFFFF");
+            }
+            // 今日之前 - 薄荷绿（仅当未选中时）
+            else if (cell.isCurrentMonth && cell.date < today) {
+                bgColor = QColor("#E8F8F5");
+                textColor = QColor("#1D8348");
+                painter.fillRect(cellRect, bgColor);
+            }
+            // 今日之后 - 浅蓝色（仅当未选中时）
+            else if (cell.isCurrentMonth && cell.date > today) {
+                bgColor = QColor("#EBF5FB");
+                textColor = QColor("#2874A6");
+                painter.fillRect(cellRect, bgColor);
+            }
+            // 今天 - 浅蓝色（仅当未选中时）
+            else if (cell.isCurrentMonth && cell.date == today) {
+                bgColor = QColor("#D4E6F1");
+                textColor = QColor("#1A5276");
+                painter.fillRect(cellRect, bgColor);
+            }
+            // 非本月日期 - 浅灰色
+            else if (!cell.isCurrentMonth) {
+                bgColor = QColor("#F4F6F6");
+                textColor = QColor("#BDC3C7");
+                painter.fillRect(cellRect, bgColor);
+            }
+
+            // 绘制网格线（选中日期跳过，避免覆盖圆角效果）
+            if (!isSelected) {
+                painter.setPen(borderColor);
+                painter.drawRect(cellRect);
+            }
+
+            // 绘制日期数字
+            painter.setFont(QFont("Microsoft YaHei", 10, QFont::Bold));
+            painter.setPen(textColor);
+
+            QRect dateRect = cellRect.adjusted(5, 3, -5, -3);
+            painter.drawText(dateRect, Qt::AlignTop | Qt::AlignLeft, QString::number(cell.date.day()));
+
+            // 绘制今日标记（橙色圆圈）- 未选中时显示
+            if (cell.isCurrentMonth && cell.date == today && cell.date != m_selectedDate) {
+                painter.setRenderHint(QPainter::Antialiasing);
+                painter.setPen(QColor("#F39C12"));  // 橙色
+                painter.setBrush(Qt::NoBrush);
+                painter.drawEllipse(cellRect.center().x() - 9, cellRect.top() + 3, 18, 18);
+            }
+
+            // 绘制任务信息
+            if (cell.isCurrentMonth && cell.taskCount > 0) {
+                // 任务状态颜色点（圆形）
+                QColor statusColor;
+                switch (cell.firstTaskStatus) {
+                    case TaskStatus_Completed: statusColor = QColor("#27AE60"); break;  // 绿色
+                    case TaskStatus_InProgress: statusColor = QColor("#3498DB"); break;  // 蓝色
+                    case TaskStatus_Paused: statusColor = QColor("#F39C12"); break;  // 橙色
+                    default: statusColor = QColor("#F39C12"); break;
+                }
+
+                painter.setRenderHint(QPainter::Antialiasing);
+                //painter.setBrush(statusColor);
+                painter.setPen(Qt::NoPen);
+                painter.drawEllipse(cellRect.left() + 6, cellRect.bottom() - 14, 6, 6);
+
+                // 任务标题（截断）
+                QString title = cell.firstTaskTitle;
+                int maxChars = (cell.taskCount > 1) ? 6 : 8;
+                if (title.length() > maxChars) {
+                    title = title.left(maxChars) + "..";
+                }
+
+                painter.setRenderHint(QPainter::Antialiasing, false);
+                painter.setFont(QFont("Microsoft YaHei", 8));
+                // 任务文字颜色
+                if (cell.isCurrentMonth && cell.date == m_selectedDate) {
+                    painter.setPen(QColor("#FFFFFF"));  // 选中时白色
+                } else if (cell.isCurrentMonth && cell.date == today) {
+                    painter.setPen(QColor("#1A5276"));  // 今天深蓝色
+                } else if (!cell.isCurrentMonth) {
+                    painter.setPen(QColor("#BDC3C7"));  // 跨月灰色
+                } else {
+                    painter.setPen(QColor("#2C3E50"));  // 普通日期深蓝灰
+                }
+
+                QRect taskRect(cellRect.left() + 14, cellRect.bottom() - 17, w - 20, 14);
+                painter.drawText(taskRect, Qt::AlignLeft | Qt::AlignVCenter, title);
+
+                // 如果有更多任务，显示数量
+                if (cell.taskCount > 1) {
+                    QString moreText = QString("+%1").arg(cell.taskCount - 1);
+                    painter.setFont(QFont("Microsoft YaHei", 7));
+                    QRect moreRect(cellRect.right() - 28, cellRect.bottom() - 15, 24, 12);
+                    painter.drawText(moreRect, Qt::AlignRight | Qt::AlignVCenter, moreText);
+                }
+            }
+        }
+    }
+}
+
+void CalendarWidget::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton) {
+        int w = cellWidth();
+        int h = cellHeight();
+
+        int col = event->x() / w;
+        int row = (event->y() - 30) / h;
+
+        if (row >= 0 && row < 6 && col >= 0 && col < 7) {
+            m_selectedDate = m_cells[row][col].date;
+            update();
+            emit dateSelected(m_selectedDate);
+        }
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void CalendarWidget::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton) {
+        int w = cellWidth();
+        int h = cellHeight();
+
+        int col = event->x() / w;
+        int row = (event->y() - 30) / h;
+
+        if (row >= 0 && row < 6 && col >= 0 && col < 7) {
+            m_selectedDate = m_cells[row][col].date;
+            update();
+            emit dateDoubleClicked(m_selectedDate);
+        }
+    }
+    QWidget::mouseDoubleClickEvent(event);
 }
