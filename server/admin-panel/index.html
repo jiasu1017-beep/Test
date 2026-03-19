@@ -383,35 +383,50 @@
                     <div id="logsPage" style="display: none;">
                         <h4 class="mb-4"><i class="bi bi-journal-text"></i> 日志管理</h4>
                         <div class="table-container">
-                            <ul class="nav nav-tabs mb-3">
-                                <li class="nav-item">
-                                    <a class="nav-link active" href="#" onclick="switchLogType('login')">登录日志</a>
+                            <ul class="nav nav-tabs mb-3" id="logTypeTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#loginLogs" type="button" role="tab">登录日志</button>
                                 </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="switchLogType('operation')">操作日志</a>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#operationLogs" type="button" role="tab">操作日志</button>
                                 </li>
                             </ul>
-                            <div class="d-flex mb-3">
-                                <input type="date" class="form-control" id="logStartDate" style="width: 150px;">
-                                <span class="mx-2 align-self-center">至</span>
-                                <input type="date" class="form-control" id="logEndDate" style="width: 150px;">
-                                <button class="btn btn-primary ms-3" onclick="loadLogs()">查询</button>
+                            <div class="tab-content">
+                                <div class="tab-pane fade show active" id="loginLogs" role="tabpanel">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>用户名</th>
+                                                <th>操作</th>
+                                                <th>状态</th>
+                                                <th>IP地址</th>
+                                                <th>时间</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="logsTableBody">
+                                            <tr><td colspan="6" class="text-center">加载中...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="tab-pane fade" id="operationLogs" role="tabpanel">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>用户名</th>
+                                                <th>操作</th>
+                                                <th>状态</th>
+                                                <th>IP地址</th>
+                                                <th>时间</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="operationLogsTableBody">
+                                            <tr><td colspan="6" class="text-center">加载中...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>用户名</th>
-                                        <th>操作</th>
-                                        <th>状态</th>
-                                        <th>IP地址</th>
-                                        <th>时间</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="logsTableBody">
-                                    <tr><td colspan="6" class="text-center">加载中...</td></tr>
-                                </tbody>
-                            </table>
                             <div class="pagination-wrapper">
                                 <div id="logsPagination"></div>
                             </div>
@@ -682,7 +697,24 @@
             userDetailModal = new bootstrap.Modal(document.getElementById('userDetailModal'));
             editCollectionModal = new bootstrap.Modal(document.getElementById('editCollectionModal'));
             editConfigModal = new bootstrap.Modal(document.getElementById('editConfigModal'));
-            
+
+            document.getElementById('userDetailModal').addEventListener('hidden.bs.modal', function() {
+                currentDetailUserId = null;
+                const firstTab = document.querySelector('#userLogTabs .nav-link');
+                if (firstTab) {
+                    new bootstrap.Tab(firstTab).show();
+                }
+            });
+
+            document.getElementById('logTypeTabs').addEventListener('shown.bs.tab', function(e) {
+                const targetId = e.target.dataset.bsTarget;
+                if (targetId === '#loginLogs') {
+                    switchLogType('login');
+                } else if (targetId === '#operationLogs') {
+                    switchLogType('operation');
+                }
+            });
+
             if (authToken) {
                 showAdminPanel();
                 loadDashboard();
@@ -1564,15 +1596,15 @@
         }
 
         async function loadLogs(page = 1) {
-            const startDate = document.getElementById('logStartDate').value;
-            const endDate = document.getElementById('logEndDate').value;
+            const startDate = document.getElementById('logStartDate')?.value || '';
+            const endDate = document.getElementById('logEndDate')?.value || '';
 
             try {
                 const res = await fetch(`/api/admin/logs?page=${page}&limit=50&type=${currentLogType}&startDate=${startDate}&endDate=${endDate}`, {
                     headers: { 'Authorization': 'Bearer ' + authToken }
                 });
                 const data = await res.json();
-                
+
                 if (data.success) {
                     renderLogsTable(data.logs);
                     renderPagination('logsPagination', data.pagination, (p) => loadLogs(p));
@@ -1584,13 +1616,12 @@
 
         function switchLogType(type) {
             currentLogType = type;
-            document.querySelectorAll('.nav-tabs .nav-link').forEach(l => l.classList.remove('active'));
-            event.target.classList.add('active');
             loadLogs(1);
         }
 
         function renderLogsTable(logs) {
-            const tbody = document.getElementById('logsTableBody');
+            const tbodyId = currentLogType === 'login' ? 'logsTableBody' : 'operationLogsTableBody';
+            const tbody = document.getElementById(tbodyId);
             if (!logs || logs.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无数据</td></tr>';
                 return;
