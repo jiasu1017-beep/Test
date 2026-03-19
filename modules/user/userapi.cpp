@@ -5,11 +5,66 @@
 #include <QUrlQuery>
 #include <QSettings>
 #include <QJsonArray>
+#include <QFile>
+#include <QDir>
+#include <QTextStream>
+#include <QMutex>
+#include <QMutexLocker>
+#include <QCoreApplication>
 
 QString hashPassword(const QString& password) {
     QByteArray data = password.toUtf8();
     QByteArray hash = QCryptographicHash::hash(data, QCryptographicHash::Sha256);
     return hash.toHex();
+}
+
+static QMutex s_logMutex;
+
+static QString getHttpLogFilePath() {
+    QString appDir = QCoreApplication::applicationDirPath();
+    QString logDir = appDir + "/logs";
+    QDir dir(logDir);
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+    QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss");
+    return logDir + QString("/http_request_%1.log").arg(timestamp);
+}
+
+static void writeHttpLog(const QString& type, const QString& endpoint, const QString& requestBody,
+                         int statusCode, const QString& responseBody, const QString& error) {
+    QMutexLocker locker(&s_logMutex);
+
+    QString logFilePath = getHttpLogFilePath();
+    QFile file(logFilePath);
+
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Append)) {
+        qWarning() << "Cannot open http log file:" << logFilePath;
+        return;
+    }
+
+    QTextStream out(&file);
+    QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
+    QString method = type;
+
+    out << "==========" << timestamp << "==========\n";
+    out << "METHOD:" << method << "\n";
+    out << "ENDPOINT:" << endpoint << "\n";
+
+    if (!requestBody.isEmpty()) {
+        out << "REQUEST:" << requestBody << "\n";
+    }
+
+    if (!error.isEmpty()) {
+        out << "ERROR:" << error << "\n";
+    } else {
+        out << "STATUS:" << statusCode << "\n";
+        if (!responseBody.isEmpty()) {
+            out << "RESPONSE:" << responseBody << "\n";
+        }
+    }
+    out << "\n";
+    file.close();
 }
 
 ApiClient* ApiClient::instance() {
@@ -44,17 +99,19 @@ void ApiClient::get(const QString& endpoint, const QJsonObject& params) {
         }
         url += "?" + query.toString();
     }
-    
+
     QNetworkRequest request;
     request.setUrl(QUrl(url));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    
+
     if (!m_authToken.isEmpty()) {
         request.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     }
-    
+
     QNetworkReply* reply = m_manager->get(request);
     reply->setProperty("endpoint", endpoint);
+    reply->setProperty("requestBody", QString());
+    reply->setProperty("httpMethod", "GET");
     connect(reply, &QNetworkReply::finished, this, &ApiClient::onReplyFinished);
 }
 
@@ -66,13 +123,15 @@ void ApiClient::post(const QString& endpoint, const QString& jsonStr) {
     QNetworkRequest request;
     request.setUrl(QUrl(m_baseUrl + endpoint));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    
+
     if (!m_authToken.isEmpty()) {
         request.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     }
-    
+
     QNetworkReply* reply = m_manager->post(request, jsonStr.toUtf8());
     reply->setProperty("endpoint", endpoint);
+    reply->setProperty("requestBody", jsonStr);
+    reply->setProperty("httpMethod", "POST");
     connect(reply, &QNetworkReply::finished, this, &ApiClient::onReplyFinished);
 }
 
@@ -84,35 +143,38 @@ void ApiClient::onReplyFinished() {
     }
 
     QString endpoint = reply->property("endpoint").toString();
+    QString requestBody = reply->property("requestBody").toString();
+    QString httpMethod = reply->property("httpMethod").toString();
     int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     qDebug() << "[API 响应]" << "endpoint:" << endpoint << "status:" << statusCode;
-    
+
     QByteArray data = reply->readAll();
-    qDebug() << "[API 响应] 响应数据:" << QString::fromUtf8(data);
-    
-    // 优先尝试解析 JSON 响应体，即使有错误也要处理后端返回的数据
+    QString responseBody = QString::fromUtf8(data);
+    qDebug() << "[API 响应] 响应数据:" << responseBody;
+
     QJsonDocument doc = QJsonDocument::fromJson(data);
     if (!doc.isNull() && doc.isObject()) {
-        // 有有效的 JSON 响应，发送成功信号让上层处理
         qDebug() << "[API 响应] JSON 解析成功，发送 requestSuccess";
+        writeHttpLog(httpMethod, endpoint, requestBody, statusCode, responseBody, QString());
         emit requestSuccess(endpoint, doc);
         reply->deleteLater();
         return;
     }
-    
-    // 无法解析 JSON，处理错误
+
     if (reply->error() != QNetworkReply::NoError) {
         qDebug() << "[API 响应] 网络错误:" << reply->errorString();
+        writeHttpLog(httpMethod, endpoint, requestBody, statusCode, QString(), reply->errorString());
         emit requestFailed(endpoint, statusCode, reply->errorString());
     } else {
-        QString error = data;
+        QString error = responseBody;
         if (error.isEmpty()) {
             error = "HTTP " + QString::number(statusCode);
         }
         qDebug() << "[API 响应] HTTP 错误:" << error;
+        writeHttpLog(httpMethod, endpoint, requestBody, statusCode, QString(), error);
         emit requestFailed(endpoint, statusCode, error);
     }
-    
+
     reply->deleteLater();
 }
 
