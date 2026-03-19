@@ -1619,12 +1619,17 @@ int Database::getDailyTaskCount(const QString &dateStr)
 
 void Database::setCurrentUser(int userId)
 {
+    qDebug() << "[Database] setCurrentUser:" << currentUserId << "->" << userId;
+
     if (currentUserId == userId) {
+        qDebug() << "[Database] User unchanged, skipping";
         return;
     }
 
     // 保存当前用户数据
-    saveTaskData();
+    if (!taskFilePath.isEmpty()) {
+        saveTaskData();
+    }
 
     // 更新当前用户ID
     currentUserId = userId;
@@ -1637,18 +1642,16 @@ void Database::setCurrentUser(int userId)
         if (!dir.exists()) {
             dir.mkpath(".");
         }
-
-        // 加载本地用户任务数据
-        loadTaskData();
-
-        // 从服务器同步任务数据
-        // 注意：TaskSync 会通过信号通知数据更新
+        qDebug() << "[Database] Logged in, using user task file:" << taskFilePath;
     } else {
-        // 未登录用户使用默认任务文件
         taskFilePath = dataPath + "/tasks.json";
-        // 重新加载任务数据
-        loadTaskData();
+        qDebug() << "[Database] Logged out, using default task file:" << taskFilePath;
     }
+
+    // 清空当前数据并重新加载
+    taskRootObject = QJsonObject();
+    taskRootObject["tasks"] = QJsonArray();
+    loadTaskData();
 
     // 发出信号通知UI刷新
     emit tasksChanged();

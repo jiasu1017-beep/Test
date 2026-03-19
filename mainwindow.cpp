@@ -1,10 +1,12 @@
 #include "mainwindow.h"
+#include "modules/core/database.h"
 #include "modules/widgets/appmanagerwidget.h"
 #include "modules/widgets/shutdownwidget.h"
 #include "modules/widgets/settingswidget.h"
 #include "modules/widgets/userwidget.h"
 #include "modules/user/userlogindialog.h"
 #include "modules/user/changepassworddialog.h"
+#include "modules/user/userapi.h"
 #include "modules/widgets/collectionmanagerwidget.h"
 #include "modules/widgets/worklogwidget.h"
 #include "modules/widgets/bottomappbar.h"
@@ -67,6 +69,18 @@ MainWindow::MainWindow(QWidget *parent)
     qDebug() << "[MainWindow] 启动自动登录流程";
     connect(UserManager::instance(), &UserManager::profileLoaded, this, &MainWindow::onAutoLoginSuccess);
     connect(UserManager::instance(), &UserManager::loginFailed, this, &MainWindow::onAutoLoginFailed);
+    // 登录成功时切换用户任务数据（任务同步由UserMenuWidget统一处理）
+    connect(UserManager::instance(), &UserManager::loginSuccess, this, [this](const UserInfo& user) {
+        db->setCurrentUser(user.id);
+    });
+    // 任务同步完成后刷新UI
+    connect(TaskSync::instance(), &TaskSync::tasksSynced, this, [this]() {
+        emit db->tasksChanged();
+    });
+    // 登出时切换回默认任务数据
+    connect(UserManager::instance(), &UserManager::logoutComplete, this, [this]() {
+        db->setCurrentUser(0);
+    });
     UserManager::instance()->autoLogin();
     
     if (db->getAutoCheckUpdate()) {
@@ -130,6 +144,8 @@ void MainWindow::refreshAllWidgets()
 
 void MainWindow::onAutoLoginSuccess(const UserInfo& user) {
     qDebug() << "[MainWindow] 自动登录成功:" << user.email;
+    // 切换到该用户的任务数据（任务同步由UserMenuWidget统一处理）
+    db->setCurrentUser(user.id);
     if (settingsWidget) {
         settingsWidget->updateCloudLoginStatus(user);
     }
@@ -632,6 +648,16 @@ void MainWindow::closeEvent(QCloseEvent *event)
             );
             event->ignore();
         } else {
+            // 直接退出时保存并上传任务数据
+            if (UserManager::instance()->isLoggedIn()) {
+                db->saveTaskData();
+                QList<Task> tasks = db->getAllTasks();
+                QJsonArray tasksArray;
+                for (const Task &task : tasks) {
+                    tasksArray.append(db->taskToJson(task));
+                }
+                TaskSync::instance()->uploadTasks(tasksArray);
+            }
             event->accept();
         }
         return;
@@ -689,6 +715,16 @@ void MainWindow::closeEvent(QCloseEvent *event)
         if (msgBox.clickedButton() == okButton) {
             if (dontShowAgain->isChecked()) {
                 db->setShowClosePrompt(false);
+            }
+            // 保存并上传当前用户任务数据
+            if (UserManager::instance()->isLoggedIn()) {
+                db->saveTaskData();
+                QList<Task> tasks = db->getAllTasks();
+                QJsonArray tasksArray;
+                for (const Task &task : tasks) {
+                    tasksArray.append(db->taskToJson(task));
+                }
+                TaskSync::instance()->uploadTasks(tasksArray);
             }
             event->accept();
         } else {

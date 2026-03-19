@@ -137,8 +137,10 @@ void UserMenuWidget::onLoginSuccess()
 
     emit statusMessageRequested("登录成功", 3000);
 
-    // 自动同步工作日志到云端
-    syncTasksToCloud();
+    // 延迟同步，等待 setCurrentUser 完成数据切换
+    QTimer::singleShot(0, this, [this]() {
+        syncTasksToCloud();
+    });
 }
 
 void UserMenuWidget::onLogoutComplete()
