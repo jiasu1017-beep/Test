@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QListView>
 #include <QPushButton>
+#include <QToolButton>
 #include <QLabel>
 #include <QComboBox>
 #include <QVBoxLayout>
@@ -75,9 +76,11 @@ private slots:
     void onChangeArguments();
     void onIconViewMode();
     void onListViewMode();
+    void onViewModeChanged(QAction *action);
     void onMoveUp();
     void onMoveDown();
     void onInitApps();
+    void onSortModeChanged(QAction *action);
 
 private:
     void setupUI();
@@ -104,6 +107,10 @@ private:
     QString currentCategory;
     int currentType;
     QList<AppInfo> allApps;
+    AppSortMode currentSortMode;
+    QMenu *sortModeMenu;
+    QToolButton *sortModeButton;
+    QToolButton *viewModeButton;
 };
 
 #endif

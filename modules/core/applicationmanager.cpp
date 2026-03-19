@@ -12,6 +12,7 @@
 #include <QFileIconProvider>
 #include <QSettings>
 #include <QRegExp>
+#include <QDateTime>
 #include <windows.h>
 #include <tlhelp32.h>
 #include <psapi.h>
@@ -286,10 +287,12 @@ void ApplicationManager::updateAppUsage(const AppInfo &app)
     if (!m_db) {
         return;
     }
-    
+
     AppInfo updatedApp = app;
     updatedApp.useCount++;
-    
+    updatedApp.lastUsedTime = QDateTime::currentDateTime();
+    updatedApp.isPinned = false;  // 使用后重新加入动态排序
+
     if (m_db->updateApp(updatedApp)) {
         emit useCountUpdated(updatedApp);
     }

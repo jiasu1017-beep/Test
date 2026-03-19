@@ -89,28 +89,22 @@
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="iconViewButton">
+      <widget class="QToolButton" name="viewModeButton">
        <property name="text">
-        <string>图标</string>
+        <string>图标视图</string>
        </property>
-       <property name="checkable">
-        <bool>true</bool>
-       </property>
-       <property name="checked">
-        <bool>true</bool>
+       <property name="popupMode">
+        <enum>QToolButton::InstantPopup</enum>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="listViewButton">
+      <widget class="QToolButton" name="sortModeButton">
        <property name="text">
-        <string>列表</string>
+        <string>最近使用</string>
        </property>
-       <property name="checkable">
-        <bool>true</bool>
-       </property>
-       <property name="checked">
-        <bool>false</bool>
+       <property name="popupMode">
+        <enum>QToolButton::InstantPopup</enum>
        </property>
       </widget>
      </item>

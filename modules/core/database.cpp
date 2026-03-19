@@ -124,6 +124,8 @@ QJsonObject Database::appToJson(const AppInfo &app)
     obj["sortOrder"] = app.sortOrder;
     obj["type"] = static_cast<int>(app.type);
     obj["remoteDesktopId"] = app.remoteDesktopId;
+    obj["lastUsedTime"] = app.lastUsedTime.toString(Qt::ISODate);
+    obj["isPinned"] = app.isPinned;
     return obj;
 }
 
@@ -145,6 +147,16 @@ AppInfo Database::jsonToApp(const QJsonObject &obj)
     app.type = static_cast<AppType>(typeInt);
 
     app.remoteDesktopId = obj["remoteDesktopId"].toInt(-1);
+
+    // lastUsedTime: 旧数据无此字段，默认为空 QDateTime
+    if (obj.contains("lastUsedTime")) {
+        app.lastUsedTime = QDateTime::fromString(obj["lastUsedTime"].toString(), Qt::ISODate);
+    } else {
+        app.lastUsedTime = QDateTime();
+    }
+
+    // isPinned: 旧数据无此字段，默认为 false
+    app.isPinned = obj.value("isPinned").toBool(false);
 
     return app;
 }

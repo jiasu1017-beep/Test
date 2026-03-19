@@ -18,6 +18,7 @@
 #include <QCheckBox>
 #include <QTimer>
 #include <QMetaType>
+#include <algorithm>
 #include <windows.h>
 #include <shellapi.h>
 
@@ -201,23 +202,38 @@ QSize AppListDelegate::sizeHint(const QStyleOptionViewItem &option, const QModel
 }
 
 AppManagerWidget::AppManagerWidget(Database *db, QWidget *parent)
-    : QWidget(parent), db(db), ui(new Ui::AppManagerWidget)
+    : QWidget(parent), db(db), ui(new Ui::AppManagerWidget), currentSortMode(AppSortMode_Recent)
 {
     ui->setupUi(this);
-    
+
     qRegisterMetaType<AppInfo>("AppInfo");
-    
+
     appManager = new ApplicationManager(db, this);
     connect(appManager, &ApplicationManager::appLaunched, this, [this](const AppInfo &app) {
         refreshAppList();
     });
-    
+
     iconDelegate = new AppIconDelegate(this);
     listDelegate = new AppListDelegate(this);
     appModel = new QStandardItemModel(this);
     ui->appListView->setModel(appModel);
     ui->appListView->setItemDelegate(iconDelegate);
-    
+
+    sortModeMenu = new QMenu(this);
+    QAction *actionRecent = new QAction("最近使用", this);
+    actionRecent->setData(AppSortMode_Recent);
+    QAction *actionUsageCount = new QAction("使用次数", this);
+    actionUsageCount->setData(AppSortMode_UsageCount);
+    QAction *actionManual = new QAction("手动排序", this);
+    actionManual->setData(AppSortMode_Manual);
+    sortModeMenu->addAction(actionRecent);
+    sortModeMenu->addAction(actionUsageCount);
+    sortModeMenu->addAction(actionManual);
+    connect(sortModeMenu, &QMenu::triggered, this, &AppManagerWidget::onSortModeChanged);
+
+    ui->sortModeButton->setMenu(sortModeMenu);
+    ui->sortModeButton->setText("最近使用");
+
     setupUI();
     refreshAppList();
 }
@@ -263,15 +279,74 @@ void AppManagerWidget::setupUI()
     ui->initButton->setStyleSheet("QPushButton { background-color: #e91e63; color: white; padding: 8px 16px; border-radius: 5px; font-weight: bold; } "
                                    "QPushButton:hover { background-color: #c2185b; }");
     connect(ui->initButton, &QPushButton::clicked, this, &AppManagerWidget::onInitApps);
-    
-    ui->iconViewButton->setStyleSheet("QPushButton:checked { background-color: #1976d2; color: white; } "
-                                     "QPushButton { background-color: #e0e0e0; color: #333; }");
-    connect(ui->iconViewButton, &QPushButton::clicked, this, &AppManagerWidget::onIconViewMode);
-    
-    ui->listViewButton->setStyleSheet("QPushButton:checked { background-color: #1976d2; color: white; } "
-                                    "QPushButton { background-color: #e0e0e0; color: #333; }");
-    connect(ui->listViewButton, &QPushButton::clicked, this, &AppManagerWidget::onListViewMode);
-    
+
+    // 视图模式按钮
+    QMenu *viewModeMenu = new QMenu(this);
+    QAction *actionIconView = new QAction("图标视图", this);
+    actionIconView->setData("icon");
+    QAction *actionListView = new QAction("列表视图", this);
+    actionListView->setData("list");
+    viewModeMenu->addAction(actionIconView);
+    viewModeMenu->addAction(actionListView);
+    connect(viewModeMenu, &QMenu::triggered, this, &AppManagerWidget::onViewModeChanged);
+
+    ui->viewModeButton->setMenu(viewModeMenu);
+    ui->viewModeButton->setText("图标视图");
+
+    // 设置视图模式和排序模式按钮的统一样式
+    QString toolButtonStyle = R"(
+        QToolButton {
+            background-color: #f5f5f5;
+            color: #555555;
+            padding: 6px 16px;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+            font-size: 13px;
+        }
+        QToolButton:hover {
+            background-color: #ffffff;
+            border-color: #1976d2;
+            color: #1976d2;
+        }
+        QToolButton::menu-indicator {
+            image: none;
+            subcontrol-position: right center;
+            subcontrol-origin: padding;
+            width: 12px;
+            padding-right: 4px;
+        }
+        QToolButton::menu-indicator:after {
+            content: "▼";
+            font-size: 8px;
+            color: #888;
+        }
+        QToolButton:hover::menu-indicator:after {
+            color: #1976d2;
+        }
+    )";
+    QString menuStyle = R"(
+        QMenu {
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 4px;
+        }
+        QMenu::item {
+            padding: 8px 24px;
+            border-radius: 4px;
+            color: #333;
+        }
+        QMenu::item:selected {
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+    )";
+
+    ui->viewModeButton->setStyleSheet(toolButtonStyle);
+    ui->sortModeButton->setStyleSheet(toolButtonStyle);
+    viewModeMenu->setStyleSheet(menuStyle);
+    sortModeMenu->setStyleSheet(menuStyle);
+
     ui->categoryComboBox->setStyleSheet(
         "QComboBox {"
         "   padding: 6px 12px;"
@@ -370,8 +445,6 @@ void AppManagerWidget::onIconViewMode()
     ui->appListView->setItemDelegate(iconDelegate);
     ui->appListView->setIconSize(QSize(72, 72));
     ui->appListView->setSpacing(15);
-    ui->iconViewButton->setChecked(true);
-    ui->listViewButton->setChecked(false);
 }
 
 void AppManagerWidget::onListViewMode()
@@ -380,31 +453,65 @@ void AppManagerWidget::onListViewMode()
     ui->appListView->setItemDelegate(listDelegate);
     ui->appListView->setIconSize(QSize(32, 32));
     ui->appListView->setSpacing(5);
-    ui->iconViewButton->setChecked(false);
-    ui->listViewButton->setChecked(true);
+}
+
+void AppManagerWidget::onViewModeChanged(QAction *action)
+{
+    if (!action) return;
+
+    QString mode = action->data().toString();
+
+    if (mode == "icon") {
+        ui->appListView->setViewMode(QListView::IconMode);
+        ui->appListView->setItemDelegate(iconDelegate);
+        ui->appListView->setIconSize(QSize(72, 72));
+        ui->appListView->setSpacing(15);
+        ui->viewModeButton->setText("图标视图");
+    } else if (mode == "list") {
+        ui->appListView->setViewMode(QListView::ListMode);
+        ui->appListView->setItemDelegate(listDelegate);
+        ui->appListView->setIconSize(QSize(32, 32));
+        ui->appListView->setSpacing(5);
+        ui->viewModeButton->setText("列表视图");
+    }
 }
 
 void AppManagerWidget::onMoveUp()
 {
     QModelIndex current = ui->appListView->currentIndex();
     if (!current.isValid() || current.row() <= 0) return;
-    
+
     int row = current.row();
+
+    // 切换到手动排序模式
+    if (currentSortMode != AppSortMode_Manual) {
+        currentSortMode = AppSortMode_Manual;
+        ui->sortModeButton->setText("手动排序");
+    }
+
+    // 获取按 sortOrder 排序的应用列表
     QList<AppInfo> apps = db->getAllApps();
-    
+    std::sort(apps.begin(), apps.end(), [](const AppInfo &a, const AppInfo &b) {
+        return a.sortOrder < b.sortOrder;
+    });
+
     if (row > 0 && row < apps.size()) {
         AppInfo currentApp = apps[row];
         AppInfo prevApp = apps[row - 1];
-        
+
         int tempOrder = currentApp.sortOrder;
         currentApp.sortOrder = prevApp.sortOrder;
         prevApp.sortOrder = tempOrder;
-        
+
+        // 标记为固定
+        currentApp.isPinned = true;
+        prevApp.isPinned = true;
+
         db->updateApp(currentApp);
         db->updateApp(prevApp);
-        
+
         refreshAppList();
-        
+
         QModelIndex newIndex = appModel->index(row - 1, 0);
         ui->appListView->setCurrentIndex(newIndex);
     }
@@ -414,23 +521,38 @@ void AppManagerWidget::onMoveDown()
 {
     QModelIndex current = ui->appListView->currentIndex();
     if (!current.isValid()) return;
-    
+
     int row = current.row();
+
+    // 切换到手动排序模式
+    if (currentSortMode != AppSortMode_Manual) {
+        currentSortMode = AppSortMode_Manual;
+        ui->sortModeButton->setText("手动排序");
+    }
+
+    // 获取按 sortOrder 排序的应用列表
     QList<AppInfo> apps = db->getAllApps();
-    
+    std::sort(apps.begin(), apps.end(), [](const AppInfo &a, const AppInfo &b) {
+        return a.sortOrder < b.sortOrder;
+    });
+
     if (row >= 0 && row < apps.size() - 1) {
         AppInfo currentApp = apps[row];
         AppInfo nextApp = apps[row + 1];
-        
+
         int tempOrder = currentApp.sortOrder;
         currentApp.sortOrder = nextApp.sortOrder;
         nextApp.sortOrder = tempOrder;
-        
+
+        // 标记为固定
+        currentApp.isPinned = true;
+        nextApp.isPinned = true;
+
         db->updateApp(currentApp);
         db->updateApp(nextApp);
-        
+
         refreshAppList();
-        
+
         QModelIndex newIndex = appModel->index(row + 1, 0);
         ui->appListView->setCurrentIndex(newIndex);
     }
@@ -450,22 +572,69 @@ void AppManagerWidget::saveAppOrder()
 void AppManagerWidget::refreshAppList()
 {
     appModel->clear();
-    
+
     allApps = db->getAllApps();
-    
+
+    // 根据当前排序模式排序
+    switch (currentSortMode) {
+    case AppSortMode_Recent:
+        std::sort(allApps.begin(), allApps.end(), [](const AppInfo &a, const AppInfo &b) {
+            // isPinned 的应用排在前面
+            if (a.isPinned != b.isPinned) {
+                return a.isPinned > b.isPinned;
+            }
+            // 都是 pinned 或都不是 pinned 时，按 lastUsedTime 排序
+            if (a.isPinned) {
+                return a.sortOrder < b.sortOrder;
+            }
+            // 未使用的排在后面
+            if (!a.lastUsedTime.isValid() && !b.lastUsedTime.isValid()) {
+                return false;
+            }
+            if (!a.lastUsedTime.isValid()) return false;
+            if (!b.lastUsedTime.isValid()) return true;
+            return a.lastUsedTime > b.lastUsedTime;
+        });
+        break;
+    case AppSortMode_UsageCount:
+        std::sort(allApps.begin(), allApps.end(), [](const AppInfo &a, const AppInfo &b) {
+            // isPinned 的应用排在前面
+            if (a.isPinned != b.isPinned) {
+                return a.isPinned > b.isPinned;
+            }
+            // 都是 pinned 或都不是 pinned 时，按 useCount 排序
+            if (a.isPinned) {
+                return a.sortOrder < b.sortOrder;
+            }
+            // 未使用过的排在后面
+            if (a.useCount == 0 && b.useCount == 0) {
+                return false;
+            }
+            if (a.useCount == 0) return false;
+            if (b.useCount == 0) return true;
+            return a.useCount > b.useCount;
+        });
+        break;
+    case AppSortMode_Manual:
+        std::sort(allApps.begin(), allApps.end(), [](const AppInfo &a, const AppInfo &b) {
+            return a.sortOrder < b.sortOrder;
+        });
+        break;
+    }
+
     for (const AppInfo &app : allApps) {
         QStandardItem *item = new QStandardItem(app.name);
         item->setData(app.id, Qt::UserRole);
         item->setData(QVariant::fromValue(app), Qt::UserRole + 1);
         item->setIcon(getAppIcon(app));
-        
+
         if (app.isFavorite) {
             item->setBackground(QColor(255, 249, 196));
         }
-        
+
         appModel->appendRow(item);
     }
-    
+
     filterAppsByCategory(currentCategory);
 }
 
@@ -1052,4 +1221,30 @@ void AppManagerWidget::launchApp(const AppInfo &app)
 void AppManagerWidget::onInitApps()
 {
     emit resetAppsRequested();
+}
+
+void AppManagerWidget::onSortModeChanged(QAction *action)
+{
+    if (!action) return;
+
+    bool ok;
+    int mode = action->data().toInt(&ok);
+    if (!ok) return;
+
+    currentSortMode = static_cast<AppSortMode>(mode);
+
+    // 更新按钮文本
+    switch (currentSortMode) {
+    case AppSortMode_Recent:
+        ui->sortModeButton->setText("最近使用");
+        break;
+    case AppSortMode_UsageCount:
+        ui->sortModeButton->setText("使用次数");
+        break;
+    case AppSortMode_Manual:
+        ui->sortModeButton->setText("手动排序");
+        break;
+    }
+
+    refreshAppList();
 }

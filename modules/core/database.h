@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QFile>
 #include <QFileInfo>
+#include <QDateTime>
 
 enum AppType {
     AppType_Executable,
@@ -15,6 +16,12 @@ enum AppType {
     AppType_Folder,
     AppType_Document,
     AppType_RemoteDesktop
+};
+
+enum AppSortMode {
+    AppSortMode_Recent,      // 最近使用
+    AppSortMode_UsageCount,  // 使用次数
+    AppSortMode_Manual       // 手动排序
 };
 
 enum SnapshotType {
@@ -35,6 +42,11 @@ struct AppInfo {
     int sortOrder;
     AppType type;
     int remoteDesktopId;
+    QDateTime lastUsedTime;
+    bool isPinned;
+
+    AppInfo() : id(0), useCount(0), isFavorite(false), sortOrder(0),
+                type(AppType_Executable), remoteDesktopId(-1), isPinned(false) {}
 };
 
 Q_DECLARE_METATYPE(AppInfo)
