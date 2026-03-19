@@ -1448,32 +1448,11 @@ void WorkLogWidget::updateStatistics()
 
 void WorkLogWidget::onAddTask()
 {
-    // 检查登录状态
-    if (!UserManager::instance()->isLoggedIn()) {
-        QMessageBox::StandardButton ret = QMessageBox::question(this, "需要登录",
-            "添加工作日志需要登录账号，是否现在登录？",
-            QMessageBox::Yes | QMessageBox::No);
-        if (ret == QMessageBox::Yes) {
-            UserLoginDialog dialog;
-            dialog.exec();
-            // 如果登录成功，则继续添加任务
-            if (UserManager::instance()->isLoggedIn()) {
-                showTaskDialog();
-            }
-        }
-        return;
-    }
     showTaskDialog();
 }
 
 void WorkLogWidget::onEditTask()
 {
-    // 检查登录状态
-    if (!UserManager::instance()->isLoggedIn()) {
-        QMessageBox::information(this, "需要登录", "编辑工作日志需要登录账号");
-        return;
-    }
-
     Task task = getCurrentTask();
     if (task.id.isEmpty()) {
         QMessageBox::warning(this, "提示", "请先选择一个任务");
@@ -1485,12 +1464,6 @@ void WorkLogWidget::onEditTask()
 
 void WorkLogWidget::onDeleteTask()
 {
-    // 检查登录状态
-    if (!UserManager::instance()->isLoggedIn()) {
-        QMessageBox::information(this, "需要登录", "删除工作日志需要登录账号");
-        return;
-    }
-
     Task task = getCurrentTask();
     if (task.id.isEmpty()) {
         QMessageBox::warning(this, "提示", "请先选择一个任务");
@@ -1509,12 +1482,6 @@ void WorkLogWidget::onDeleteTask()
 
 void WorkLogWidget::onCompleteTask()
 {
-    // 检查登录状态
-    if (!UserManager::instance()->isLoggedIn()) {
-        QMessageBox::information(this, "需要登录", "完成任务需要登录账号");
-        return;
-    }
-
     Task task = getCurrentTask();
     if (task.id.isEmpty()) {
         QMessageBox::warning(this, "提示", "请先选择一个任务");
@@ -1535,12 +1502,6 @@ void WorkLogWidget::onCompleteTask()
 
 void WorkLogWidget::onPauseTask()
 {
-    // 检查登录状态
-    if (!UserManager::instance()->isLoggedIn()) {
-        QMessageBox::information(this, "需要登录", "暂停任务需要登录账号");
-        return;
-    }
-
     Task task = getCurrentTask();
     if (task.id.isEmpty()) {
         QMessageBox::warning(this, "提示", "请先选择一个任务");
