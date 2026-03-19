@@ -224,7 +224,7 @@ AppManagerWidget::AppManagerWidget(Database *db, QWidget *parent)
     actionRecent->setData(AppSortMode_Recent);
     QAction *actionUsageCount = new QAction("使用次数", this);
     actionUsageCount->setData(AppSortMode_UsageCount);
-    QAction *actionManual = new QAction("手动排序", this);
+    QAction *actionManual = new QAction("默认排序", this);
     actionManual->setData(AppSortMode_Manual);
     sortModeMenu->addAction(actionRecent);
     sortModeMenu->addAction(actionUsageCount);
@@ -293,35 +293,20 @@ void AppManagerWidget::setupUI()
     ui->viewModeButton->setMenu(viewModeMenu);
     ui->viewModeButton->setText("图标视图");
 
-    // 设置视图模式和排序模式按钮的统一样式
+    // 设置视图模式和排序模式按钮的统一样式（参考添加应用按钮风格）
     QString toolButtonStyle = R"(
         QToolButton {
-            background-color: #f5f5f5;
-            color: #555555;
-            padding: 6px 16px;
-            border-radius: 4px;
-            border: 1px solid #e0e0e0;
-            font-size: 13px;
+            background-color: #9c27b0;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 5px;
+            font-weight: bold;
         }
         QToolButton:hover {
-            background-color: #ffffff;
-            border-color: #1976d2;
-            color: #1976d2;
+            background-color: #7b1fa2;
         }
-        QToolButton::menu-indicator {
-            image: none;
-            subcontrol-position: right center;
-            subcontrol-origin: padding;
-            width: 12px;
-            padding-right: 4px;
-        }
-        QToolButton::menu-indicator:after {
-            content: "▼";
-            font-size: 8px;
-            color: #888;
-        }
-        QToolButton:hover::menu-indicator:after {
-            color: #1976d2;
+        QToolButton:pressed {
+            background-color: #6a1b9a;
         }
     )";
     QString menuStyle = R"(
@@ -486,7 +471,7 @@ void AppManagerWidget::onMoveUp()
     // 切换到手动排序模式
     if (currentSortMode != AppSortMode_Manual) {
         currentSortMode = AppSortMode_Manual;
-        ui->sortModeButton->setText("手动排序");
+        ui->sortModeButton->setText("默认排序");
     }
 
     // 获取按 sortOrder 排序的应用列表
@@ -527,7 +512,7 @@ void AppManagerWidget::onMoveDown()
     // 切换到手动排序模式
     if (currentSortMode != AppSortMode_Manual) {
         currentSortMode = AppSortMode_Manual;
-        ui->sortModeButton->setText("手动排序");
+        ui->sortModeButton->setText("默认排序");
     }
 
     // 获取按 sortOrder 排序的应用列表
