@@ -756,6 +756,41 @@ void TaskSync::downloadTasks() {
     ApiClient::instance()->get("/api/config/tasks/get");
 }
 
+// 增量上传任务
+void TaskSync::uploadIncrementalTasks(const QJsonArray& tasks, const QString& lastSyncTime) {
+    if (!UserManager::instance()->isLoggedIn()) {
+        emit syncFailed("Not logged in");
+        return;
+    }
+
+    if (m_isSyncing) return;
+    m_isSyncing = true;
+
+    QJsonObject data;
+    data["tasks"] = tasks;
+    data["lastSyncTime"] = lastSyncTime;
+    data["incremental"] = true;
+
+    ApiClient::instance()->post("/api/config/tasks/incremental", data);
+}
+
+// 增量下载任务
+void TaskSync::downloadIncrementalTasks(const QString& lastSyncTime) {
+    if (!UserManager::instance()->isLoggedIn()) {
+        emit syncFailed("Not logged in");
+        return;
+    }
+
+    if (m_isSyncing) return;
+    m_isSyncing = true;
+
+    QJsonObject params;
+    params["lastSyncTime"] = lastSyncTime;
+    params["incremental"] = true;
+
+    ApiClient::instance()->get("/api/config/tasks/incremental", params);
+}
+
 void TaskSync::onTasksLoaded(const QString& endpoint, const QJsonDocument& response) {
     if (endpoint != "/api/config/tasks/get") return;
 

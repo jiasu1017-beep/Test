@@ -10,6 +10,7 @@
 class ChangePasswordDialog;
 class Database;
 class MainWindow;
+class NetworkMonitor;
 
 class UserMenuWidget : public QObject
 {
@@ -36,10 +37,13 @@ private slots:
     void onChangePassword();
     void onLogout();
     void onTasksChanged();
+    void onNetworkStatusChanged(bool online);
+    void onSyncRequested();
 
 private:
     void updateMenuState();
     void syncTasksToCloud();
+    void syncTasksIncremental();
     void onTasksSynced(const QJsonArray& tasks);
     void onTasksUploadComplete();
     void onTasksSyncFailed(const QString& error);
@@ -56,6 +60,7 @@ private:
     QDateTime m_lastSyncTime;
     QStringList m_deletedTaskIds;  // 跟踪已删除的任务ID，用于同步删除到云端
     QStringList m_previousTaskIds;  // 上次同步时的任务ID列表，用于检测删除
+    NetworkMonitor* m_networkMonitor;
 };
 
 #endif // USERMENUWIDGET_H

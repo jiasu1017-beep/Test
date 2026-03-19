@@ -7,6 +7,7 @@
 #include "modules/user/userlogindialog.h"
 #include "modules/user/userapi.h"
 #include "modules/core/aiconfig.h"
+#include "modules/core/database.h"
 #include <QApplication>
 #include <QStyle>
 #include <QDialog>
@@ -2542,6 +2543,29 @@ QWidget *SettingsWidget::createUpdatePage()
     cloudStatusLabel->setStyleSheet("color: #888;");
     cloudLayout->addLayout(cloudBtnLayout);
     cloudLayout->addWidget(cloudStatusLabel);
+
+    // 冲突策略选择
+    QHBoxLayout* conflictLayout = new QHBoxLayout();
+    QLabel* conflictLabel = new QLabel("冲突处理策略:", page);
+    conflictStrategyCombo = new QComboBox(page);
+    conflictStrategyCombo->addItem("本地优先", static_cast<int>(SyncConflictStrategy_Local));
+    conflictStrategyCombo->addItem("云端优先", static_cast<int>(SyncConflictStrategy_Cloud));
+    conflictStrategyCombo->addItem("每次手动选择", static_cast<int>(SyncConflictStrategy_Manual));
+    conflictLayout->addWidget(conflictLabel);
+    conflictLayout->addWidget(conflictStrategyCombo);
+    conflictLayout->addStretch();
+    cloudLayout->addLayout(conflictLayout);
+
+    // 加载保存的冲突策略
+    QSettings settings;
+    int savedStrategy = settings.value("sync/conflictStrategy", 0).toInt();
+    conflictStrategyCombo->setCurrentIndex(conflictStrategyCombo->findData(savedStrategy));
+    connect(conflictStrategyCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            [this](int index) {
+                QSettings settings;
+                settings.setValue("sync/conflictStrategy", conflictStrategyCombo->itemData(index).toInt());
+            });
+
     layout->addWidget(cloudGroup);
 
     connect(cloudLoginBtn, &QPushButton::clicked, this, &SettingsWidget::onCloudLoginClicked);

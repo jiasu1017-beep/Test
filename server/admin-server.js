@@ -1315,6 +1315,91 @@ app.get('/api/config/tasks/get', authenticateToken, (req, res) => {
     });
 });
 
+// 增量同步：上传任务
+app.post('/api/config/tasks/incremental', authenticateToken, (req, res) => {
+    const { tasks, lastSyncTime, incremental } = req.body;
+
+    if (!tasks || !Array.isArray(tasks)) {
+        return res.status(400).json({ success: false, error: '工作日志数据格式错误' });
+    }
+
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    // 批量插入或更新工作日志（增量模式）
+    const stmt = userDbConn.prepare(`INSERT OR REPLACE INTO user_tasks
+        (task_id, title, description, category_id, priority, status, work_duration, completion_time, tags, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+
+    let inserted = 0;
+    tasks.forEach(task => {
+        const updatedAt = task.updatedAt || new Date().toISOString();
+        const tags = typeof task.tags === 'string' ? task.tags : JSON.stringify(task.tags || []);
+
+        stmt.run(
+            task.id,
+            task.title,
+            task.description,
+            task.categoryId,
+            task.priority,
+            task.status,
+            task.workDuration,
+            task.completionTime,
+            tags,
+            updatedAt,
+            function(err) {
+                if (!err) inserted++;
+            }
+        );
+    });
+    stmt.finalize();
+
+    // 记录同步日志
+    const syncLogStmt = userDbConn.prepare(`INSERT INTO sync_logs (entity_type, entity_id, action, data, created_at) VALUES (?, ?, ?, ?, ?)`);
+    syncLogStmt.run('task', 'batch', 'upload', JSON.stringify({ count: tasks.length, lastSyncTime }), new Date().toISOString());
+    syncLogStmt.finalize();
+
+    res.json({ success: true, inserted: inserted });
+});
+
+// 增量同步：下载任务
+app.get('/api/config/tasks/incremental', authenticateToken, (req, res) => {
+    const lastSyncTime = req.query.lastSyncTime;
+
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    // 只获取上次同步时间之后修改的任务
+    let query = "SELECT * FROM user_tasks";
+    let params = [];
+
+    if (lastSyncTime) {
+        query += " WHERE updated_at > ?";
+        params.push(lastSyncTime);
+    }
+
+    query += " ORDER BY updated_at DESC";
+
+    userDbConn.all(query, params, (err, rows) => {
+        if (err) {
+            return res.status(500).json({ success: false, error: '获取工作日志失败: ' + err.message });
+        }
+
+        const tasks = rows.map(row => ({
+            id: row.task_id,
+            title: row.title,
+            description: row.description,
+            categoryId: row.category_id,
+            priority: row.priority,
+            status: row.status,
+            workDuration: row.work_duration,
+            completionTime: row.completion_time,
+            tags: JSON.parse(row.tags || '[]'),
+            updatedAt: row.updated_at
+        }));
+
+        res.json({ success: true, tasks: tasks });
+    });
+});
+
 // 删除用户配置项
 app.delete('/api/config/:key', authenticateToken, (req, res) => {
     const { key } = req.params;

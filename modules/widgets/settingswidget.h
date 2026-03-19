@@ -124,6 +124,7 @@ private:
     QPushButton *cloudSyncBtn;
     QPushButton *cloudChangePasswordBtn;
     QLabel *cloudStatusLabel;
+    QComboBox *conflictStrategyCombo;
 
 private slots:
     void onAIImageKeyTableSelectionChanged();

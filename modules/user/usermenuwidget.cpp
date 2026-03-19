@@ -3,6 +3,7 @@
 #include "userlogindialog.h"
 #include "changepassworddialog.h"
 #include "../core/database.h"
+#include "../core/networkmonitor.h"
 #include <QApplication>
 #include <QStyle>
 #include <QIcon>
@@ -25,6 +26,7 @@ UserMenuWidget::UserMenuWidget(QWidget *parent)
     , m_lastSyncTime(QDateTime::fromSecsSinceEpoch(0))
     , m_deletedTaskIds()
     , m_previousTaskIds()
+    , m_networkMonitor(nullptr)
 {
     // 创建用户菜单按钮
     m_userMenuBtn = new QToolButton(m_parent);
@@ -81,6 +83,14 @@ void UserMenuWidget::setDatabase(Database *db)
 
         // 连接任务变化信号，实现自动同步（带防抖）
         connect(m_db, &Database::tasksChanged, this, &UserMenuWidget::onTasksChanged);
+
+        // 初始化网络监控
+        m_networkMonitor = NetworkMonitor::instance();
+        m_networkMonitor->startMonitoring();
+        connect(m_networkMonitor, &NetworkMonitor::networkStatusChanged,
+                this, &UserMenuWidget::onNetworkStatusChanged);
+        connect(m_networkMonitor, &NetworkMonitor::syncRequested,
+                this, &UserMenuWidget::onSyncRequested);
     }
 }
 
@@ -308,19 +318,52 @@ void UserMenuWidget::onTasksUploadComplete()
     m_lastSyncTime = QDateTime::currentDateTime();
     qDebug() << "Tasks uploaded successfully, sync time updated";
 
-    // 上传完成后，下载云端最新数据
-    TaskSync::instance()->downloadTasks();
+    // 设置同步状态
+    if (m_networkMonitor) {
+        m_networkMonitor->setSyncing(false);
+    }
+
+    // 上传完成后，增量下载云端最新数据
+    TaskSync::instance()->downloadIncrementalTasks(m_lastSyncTime.toUTC().toString(Qt::ISODate));
 }
 
 void UserMenuWidget::onTasksSyncFailed(const QString& error)
 {
     qDebug() << "Tasks sync failed:" << error;
+    if (m_networkMonitor) {
+        m_networkMonitor->setSyncing(false);
+    }
+}
+
+void UserMenuWidget::onNetworkStatusChanged(bool online)
+{
+    if (online) {
+        qDebug() << "Network became online, checking for pending sync...";
+        // 如果有待同步的数据，立即触发同步
+        if (m_pendingSync && UserManager::instance()->isLoggedIn()) {
+            onSyncTimerTimeout();
+        }
+    } else {
+        qDebug() << "Network became offline";
+    }
+}
+
+void UserMenuWidget::onSyncRequested()
+{
+    if (UserManager::instance()->isLoggedIn() && m_db) {
+        qDebug() << "Sync requested from NetworkMonitor";
+        if (!m_syncTimer->isActive()) {
+            m_syncTimer->start();
+        }
+    }
 }
 
 void UserMenuWidget::onTasksChanged()
 {
     // 当本地任务发生变化时，触发防抖同步
-    if (UserManager::instance()->isLoggedIn() && m_db) {
+    // 检查网络状态：离线时不触发同步
+    bool isOnline = m_networkMonitor ? m_networkMonitor->isOnline() : true;
+    if (UserManager::instance()->isLoggedIn() && m_db && isOnline) {
         // 标记有待同步的数据
         m_pendingSync = true;
 
@@ -339,8 +382,21 @@ void UserMenuWidget::onTasksChanged()
 
 void UserMenuWidget::onSyncTimerTimeout()
 {
+    // 检查网络状态
+    bool isOnline = m_networkMonitor ? m_networkMonitor->isOnline() : true;
+    if (!isOnline) {
+        qDebug() << "Offline, skipping sync";
+        return;
+    }
+
     if (m_pendingSync && UserManager::instance()->isLoggedIn() && m_db) {
         m_pendingSync = false;
+
+        // 设置同步状态
+        if (m_networkMonitor) {
+            m_networkMonitor->setSyncing(true);
+        }
+
         qDebug() << "Sync timer timeout, uploading changed tasks to cloud...";
 
         // 增量上传：只上传自上次同步以来变化的任务

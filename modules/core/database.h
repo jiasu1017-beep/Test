@@ -138,6 +138,42 @@ struct Task {
     QDateTime completionTime;
     QStringList tags;
     QDateTime updatedAt;
+    qint64 version;  // 同步版本号，每次修改自增
+
+    Task() : categoryId(0), priority(TaskPriority_Medium),
+             status(TaskStatus_Todo), workDuration(0), version(0) {}
+};
+
+enum SyncConflictStrategy {
+    SyncConflictStrategy_Local,      // 本地优先
+    SyncConflictStrategy_Cloud,        // 云端优先
+    SyncConflictStrategy_Manual        // 手动选择
+};
+
+enum SyncStatus {
+    SyncStatus_Pending,   // 待同步
+    SyncStatus_Synced,    // 已同步
+    SyncStatus_Conflict  // 冲突
+};
+
+struct SyncState {
+    QString entityType;      // "task", "config", "category"
+    QString entityId;
+    qint64 localVersion;     // 本地版本号
+    qint64 lastSyncVersion;  // 上次同步的版本
+    QDateTime lastSyncTime; // 上次同步时间
+    SyncStatus status;      // 同步状态
+};
+
+struct SyncLog {
+    int id;
+    QString entityType;
+    QString entityId;
+    QString action;          // "upload", "download", "conflict_resolved"
+    QString beforeData;      // JSON
+    QString afterData;       // JSON
+    QString resolution;      // "local_wins", "cloud_wins", "manual"
+    QDateTime timestamp;
 };
 
 struct Category {
@@ -223,6 +259,21 @@ public:
     bool addTaskWithId(const Task &task);  // 保留原有ID添加任务，用于同步
     bool updateTask(const Task &task);
     bool deleteTask(const QString &id);
+
+    // 同步相关方法
+    qint64 getNextTaskVersion();                    // 获取下一个任务版本号
+    bool updateTaskVersion(const QString& id);     // 更新任务的版本号
+    QList<Task> getTasksModifiedSince(const QDateTime& since);  // 获取指定时间后修改的任务
+
+    // 同步状态管理
+    bool saveSyncState(const SyncState& state);
+    SyncState getSyncState(const QString& entityType, const QString& entityId);
+    bool updateLastSyncTime(const QString& entityType, const QString& entityId, qint64 version);
+
+    // 同步日志
+    bool addSyncLog(const SyncLog& log);
+    QList<SyncLog> getSyncLogs(const QString& entityType = QString(), int limit = 100);
+    bool clearSyncLogs();
     QList<Task> getAllTasks();
     QList<Task> getTasksForDate(const QDate &date);
     QList<Task> getTasksByStatus(TaskStatus status);

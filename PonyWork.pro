@@ -15,6 +15,7 @@ SOURCES += main.cpp \
            modules/core/aiconfig.cpp \
            modules/core/logger.cpp \
            modules/core/applicationmanager.cpp \
+           modules/core/networkmonitor.cpp \
            modules/user/userapi.cpp \
            modules/user/userlogindialog.cpp \
            modules/user/usermenuwidget.cpp \
@@ -28,6 +29,8 @@ SOURCES += main.cpp \
            modules/widgets/appcollectionupdater.cpp \
            modules/widgets/cloud_login_impl.cpp \
            modules/widgets/worklogwidget.cpp \
+           modules/widgets/syncconflictdialog.cpp \
+           modules/widgets/synclogwidget.cpp \
            modules/widgets/bottomappbar.cpp \
            modules/widgets/userwidget.cpp \
            modules/update/updatemanager.cpp \
@@ -46,6 +49,7 @@ HEADERS  += mainwindow.h \
             modules/core/aiconfig.h \
             modules/core/logger.h \
             modules/core/applicationmanager.h \
+            modules/core/networkmonitor.h \
             modules/user/userapi.h \
             modules/user/userlogindialog.h \
             modules/user/usermenuwidget.h \
@@ -58,6 +62,8 @@ HEADERS  += mainwindow.h \
             modules/widgets/snapshotmanagerwidget.h \
             modules/widgets/appcollectionupdater.h \
             modules/widgets/worklogwidget.h \
+            modules/widgets/syncconflictdialog.h \
+            modules/widgets/synclogwidget.h \
             modules/widgets/bottomappbar.h \
             modules/widgets/userwidget.h \
             modules/core/appcollectiontypes.h \

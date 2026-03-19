@@ -154,6 +154,10 @@ public:
     void uploadTasksWithDeleted(const QJsonArray& tasks, const QStringList& deletedTaskIds);
     void downloadTasks();
 
+    // 增量同步
+    void uploadIncrementalTasks(const QJsonArray& tasks, const QString& lastSyncTime);
+    void downloadIncrementalTasks(const QString& lastSyncTime);
+
 signals:
     void tasksSynced(const QJsonArray& tasks);
     void tasksUploadComplete();

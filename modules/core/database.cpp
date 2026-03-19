@@ -1048,6 +1048,9 @@ QJsonObject Database::taskToJson(const Task &task)
     // 添加更新时间戳，用于增量同步
     obj["updatedAt"] = task.updatedAt.toString(Qt::ISODate);
 
+    // 添加版本号，用于冲突检测
+    obj["version"] = task.version;
+
     return obj;
 }
 
@@ -1081,6 +1084,9 @@ Task Database::jsonToTask(const QJsonObject &obj)
     if (!task.updatedAt.isValid()) {
         task.updatedAt = QDateTime::currentDateTime();
     }
+
+    // 读取版本号
+    task.version = obj["version"].toVariant().toLongLong();
 
     return task;
 }
@@ -1146,7 +1152,7 @@ bool Database::updateTask(const Task &task)
 bool Database::deleteTask(const QString &id)
 {
     QJsonArray tasksArray = taskRootObject["tasks"].toArray();
-    
+
     for (int i = 0; i < tasksArray.size(); ++i) {
         QJsonObject obj = tasksArray[i].toObject();
         if (obj["id"].toString() == id) {
@@ -1154,7 +1160,7 @@ bool Database::deleteTask(const QString &id)
             break;
         }
     }
-    
+
     taskRootObject["tasks"] = tasksArray;
 
     bool result = saveTaskData();
@@ -1162,6 +1168,161 @@ bool Database::deleteTask(const QString &id)
         emit tasksChanged();
     }
     return result;
+}
+
+// 获取下一个任务版本号
+qint64 Database::getNextTaskVersion()
+{
+    qint64 currentVersion = taskRootObject["taskVersion"].toVariant().toLongLong();
+    qint64 newVersion = currentVersion + 1;
+    taskRootObject["taskVersion"] = newVersion;
+    saveTaskData();
+    return newVersion;
+}
+
+// 更新任务的版本号
+bool Database::updateTaskVersion(const QString& id)
+{
+    qint64 newVersion = getNextTaskVersion();
+
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
+    for (int i = 0; i < tasksArray.size(); ++i) {
+        QJsonObject obj = tasksArray[i].toObject();
+        if (obj["id"].toString() == id) {
+            obj["version"] = newVersion;
+            tasksArray[i] = obj;
+            break;
+        }
+    }
+    taskRootObject["tasks"] = tasksArray;
+    return saveTaskData();
+}
+
+// 获取指定时间后修改的任务
+QList<Task> Database::getTasksModifiedSince(const QDateTime& since)
+{
+    QList<Task> result;
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
+
+    for (const QJsonValue &val : tasksArray) {
+        Task task = jsonToTask(val.toObject());
+        if (task.updatedAt.isValid() && task.updatedAt > since) {
+            result.append(task);
+        }
+    }
+    return result;
+}
+
+// 保存同步状态
+bool Database::saveSyncState(const SyncState& state)
+{
+    QJsonObject syncStateObj;
+    QString key = state.entityType + "_" + state.entityId;
+    syncStateObj["entityType"] = state.entityType;
+    syncStateObj["entityId"] = state.entityId;
+    syncStateObj["localVersion"] = state.localVersion;
+    syncStateObj["lastSyncVersion"] = state.lastSyncVersion;
+    syncStateObj["lastSyncTime"] = state.lastSyncTime.toString(Qt::ISODate);
+    syncStateObj["status"] = static_cast<int>(state.status);
+
+    QJsonObject syncStatesObj = taskRootObject["syncStates"].toObject();
+    syncStatesObj[key] = syncStateObj;
+    taskRootObject["syncStates"] = syncStatesObj;
+
+    return saveTaskData();
+}
+
+// 获取同步状态
+SyncState Database::getSyncState(const QString& entityType, const QString& entityId)
+{
+    SyncState state;
+    state.entityType = entityType;
+    state.entityId = entityId;
+    state.localVersion = 0;
+    state.lastSyncVersion = 0;
+    state.status = SyncStatus_Pending;
+
+    QJsonObject syncStatesObj = taskRootObject["syncStates"].toObject();
+    QString key = entityType + "_" + entityId;
+    if (syncStatesObj.contains(key)) {
+        QJsonObject obj = syncStatesObj[key].toObject();
+        state.localVersion = obj["localVersion"].toVariant().toLongLong();
+        state.lastSyncVersion = obj["lastSyncVersion"].toVariant().toLongLong();
+        state.lastSyncTime = QDateTime::fromString(obj["lastSyncTime"].toString(), Qt::ISODate);
+        state.status = static_cast<SyncStatus>(obj["status"].toInt(0));
+    }
+
+    return state;
+}
+
+// 更新上次同步时间
+bool Database::updateLastSyncTime(const QString& entityType, const QString& entityId, qint64 version)
+{
+    SyncState state = getSyncState(entityType, entityId);
+    state.lastSyncVersion = version;
+    state.lastSyncTime = QDateTime::currentDateTime();
+    state.status = SyncStatus_Synced;
+    return saveSyncState(state);
+}
+
+// 添加同步日志
+bool Database::addSyncLog(const SyncLog& log)
+{
+    QJsonObject logObj;
+    logObj["id"] = log.id;
+    logObj["entityType"] = log.entityType;
+    logObj["entityId"] = log.entityId;
+    logObj["action"] = log.action;
+    logObj["beforeData"] = log.beforeData;
+    logObj["afterData"] = log.afterData;
+    logObj["resolution"] = log.resolution;
+    logObj["timestamp"] = log.timestamp.toString(Qt::ISODate);
+
+    QJsonArray logsArray = taskRootObject["syncLogs"].toArray();
+    logsArray.append(logObj);
+
+    // 只保留最近1000条日志
+    while (logsArray.size() > 1000) {
+        logsArray.removeAt(0);
+    }
+
+    taskRootObject["syncLogs"] = logsArray;
+    return saveTaskData();
+}
+
+// 获取同步日志
+QList<SyncLog> Database::getSyncLogs(const QString& entityType, int limit)
+{
+    QList<SyncLog> result;
+    QJsonArray logsArray = taskRootObject["syncLogs"].toArray();
+
+    int count = 0;
+    // 从最新到最旧遍历
+    for (int i = logsArray.size() - 1; i >= 0 && count < limit; --i) {
+        QJsonObject obj = logsArray[i].toObject();
+        if (entityType.isEmpty() || obj["entityType"].toString() == entityType) {
+            SyncLog log;
+            log.id = obj["id"].toInt();
+            log.entityType = obj["entityType"].toString();
+            log.entityId = obj["entityId"].toString();
+            log.action = obj["action"].toString();
+            log.beforeData = obj["beforeData"].toString();
+            log.afterData = obj["afterData"].toString();
+            log.resolution = obj["resolution"].toString();
+            log.timestamp = QDateTime::fromString(obj["timestamp"].toString(), Qt::ISODate);
+            result.append(log);
+            count++;
+        }
+    }
+
+    return result;
+}
+
+// 清空同步日志
+bool Database::clearSyncLogs()
+{
+    taskRootObject["syncLogs"] = QJsonArray();
+    return saveTaskData();
 }
 
 QList<Task> Database::getAllTasks()

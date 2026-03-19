@@ -69,6 +69,16 @@ function getUserDb(userId) {
             tags TEXT,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
+
+        // 同步日志表
+        userDb.run(`CREATE TABLE IF NOT EXISTS sync_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type TEXT,
+            entity_id TEXT,
+            action TEXT,
+            data TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
     });
 
     userDbCache.set(userId, userDb);
