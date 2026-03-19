@@ -1,5 +1,6 @@
 #include "appmanagerwidget.h"
 #include "ui_appmanagerwidget.h"
+#include "modules/core/database.h"
 #include <QApplication>
 #include <QStyle>
 #include <QFileInfo>
@@ -493,7 +494,7 @@ void AppManagerWidget::loadCategories()
         model->appendRow(item);
     }
     
-    QList<Category> categories = db->getAllCategories();
+    QList<Category> categories = Database::getBuiltinCategories();
     if (!categories.isEmpty()) {
         QStandardItem *catHeader = new QStandardItem("按分类筛选");
         catHeader->setData("header", Qt::UserRole);

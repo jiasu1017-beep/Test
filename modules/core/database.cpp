@@ -15,8 +15,7 @@ Database::Database(QObject *parent) : QObject(parent)
     nextAppId = 1;
     nextCollectionId = 1;
     nextRemoteDesktopId = 1;
-    nextSnapshotId = 1;
-    nextCategoryId = 1;
+    currentUserId = 0;
 }
 
 Database::~Database()
@@ -30,9 +29,10 @@ bool Database::init()
     if (!dir.exists()) {
         dir.mkpath(".");
     }
-    
+
     dataFilePath = dataPath + "/data.json";
-    
+    taskFilePath = dataPath + "/tasks.json";
+
     if (!loadData()) {
         rootObject = QJsonObject();
         rootObject["apps"] = QJsonArray();
@@ -40,20 +40,21 @@ bool Database::init()
         rootObject["remoteDesktops"] = QJsonArray();
         rootObject["snapshots"] = QJsonArray();
         rootObject["tasks"] = QJsonArray();
-        rootObject["categories"] = QJsonArray();
         rootObject["settings"] = QJsonObject();
         rootObject["nextAppId"] = 1;
         rootObject["nextCollectionId"] = 1;
         rootObject["nextRemoteDesktopId"] = 1;
         rootObject["nextSnapshotId"] = 1;
-        rootObject["nextCategoryId"] = 1;
         saveData();
     }
-    
+
+    // 加载任务数据（不自动迁移，让用户自己选择是否保留旧数据）
+    loadTaskData();
+
 #ifdef QT_DEBUG
     runTaskFilterTests();
 #endif
-    
+
     return true;
 }
 
@@ -77,20 +78,15 @@ bool Database::loadData()
     nextCollectionId = rootObject["nextCollectionId"].toInt(1);
     nextRemoteDesktopId = rootObject["nextRemoteDesktopId"].toInt(1);
     nextSnapshotId = rootObject["nextSnapshotId"].toInt(1);
-    nextCategoryId = rootObject["nextCategoryId"].toInt(1);
-    
+
     if (!rootObject.contains("snapshots")) {
         rootObject["snapshots"] = QJsonArray();
     }
-    
+
     if (!rootObject.contains("tasks")) {
         rootObject["tasks"] = QJsonArray();
     }
-    
-    if (!rootObject.contains("categories")) {
-        rootObject["categories"] = QJsonArray();
-    }
-    
+
     return true;
 }
 
@@ -100,8 +96,7 @@ bool Database::saveData()
     rootObject["nextCollectionId"] = nextCollectionId;
     rootObject["nextRemoteDesktopId"] = nextRemoteDesktopId;
     rootObject["nextSnapshotId"] = nextSnapshotId;
-    rootObject["nextCategoryId"] = nextCategoryId;
-    
+
     QJsonDocument doc(rootObject);
     QFile file(dataFilePath);
     if (!file.open(QIODevice::WriteOnly)) {
@@ -1078,43 +1073,17 @@ Task Database::jsonToTask(const QJsonObject &obj)
     return task;
 }
 
-QJsonObject Database::categoryToJson(const Category &category)
-{
-    QJsonObject obj;
-    obj["id"] = category.id;
-    obj["name"] = category.name;
-    obj["description"] = category.description;
-    obj["parentId"] = category.parentId;
-    obj["color"] = category.color;
-    obj["sortOrder"] = category.sortOrder;
-    
-    return obj;
-}
-
-Category Database::jsonToCategory(const QJsonObject &obj)
-{
-    Category category;
-    category.id = obj["id"].toInt();
-    category.name = obj["name"].toString();
-    category.description = obj["description"].toString();
-    category.parentId = obj["parentId"].toInt(-1);
-    category.color = obj["color"].toString("#3498db");
-    category.sortOrder = obj["sortOrder"].toInt(0);
-    
-    return category;
-}
-
 bool Database::addTask(const Task &task)
 {
     Task newTask = task;
     newTask.id = generateTaskId();
     newTask.updatedAt = QDateTime::currentDateTime();
 
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     tasksArray.append(taskToJson(newTask));
-    rootObject["tasks"] = tasksArray;
+    taskRootObject["tasks"] = tasksArray;
 
-    bool result = saveData();
+    bool result = saveTaskData();
     if (result) {
         emit tasksChanged();
     }
@@ -1127,11 +1096,11 @@ bool Database::addTaskWithId(const Task &task)
     Task newTask = task;
     newTask.updatedAt = QDateTime::currentDateTime();
 
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     tasksArray.append(taskToJson(newTask));
-    rootObject["tasks"] = tasksArray;
+    taskRootObject["tasks"] = tasksArray;
 
-    bool result = saveData();
+    bool result = saveTaskData();
     if (result) {
         emit tasksChanged();
     }
@@ -1143,7 +1112,7 @@ bool Database::updateTask(const Task &task)
     Task updatedTask = task;
     updatedTask.updatedAt = QDateTime::currentDateTime();
 
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
 
     for (int i = 0; i < tasksArray.size(); ++i) {
         QJsonObject obj = tasksArray[i].toObject();
@@ -1153,9 +1122,9 @@ bool Database::updateTask(const Task &task)
         }
     }
 
-    rootObject["tasks"] = tasksArray;
+    taskRootObject["tasks"] = tasksArray;
 
-    bool result = saveData();
+    bool result = saveTaskData();
     if (result) {
         emit tasksChanged();
     }
@@ -1164,7 +1133,7 @@ bool Database::updateTask(const Task &task)
 
 bool Database::deleteTask(const QString &id)
 {
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     
     for (int i = 0; i < tasksArray.size(); ++i) {
         QJsonObject obj = tasksArray[i].toObject();
@@ -1174,9 +1143,9 @@ bool Database::deleteTask(const QString &id)
         }
     }
     
-    rootObject["tasks"] = tasksArray;
+    taskRootObject["tasks"] = tasksArray;
 
-    bool result = saveData();
+    bool result = saveTaskData();
     if (result) {
         emit tasksChanged();
     }
@@ -1186,7 +1155,7 @@ bool Database::deleteTask(const QString &id)
 QList<Task> Database::getAllTasks()
 {
     QList<Task> tasks;
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     
     for (const QJsonValue &val : tasksArray) {
         tasks.append(jsonToTask(val.toObject()));
@@ -1334,7 +1303,7 @@ QList<Task> Database::getTasksForDate(const QDate &date)
 QList<Task> Database::getTasksByStatus(TaskStatus status)
 {
     QList<Task> tasks;
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     
     for (const QJsonValue &val : tasksArray) {
         QJsonObject obj = val.toObject();
@@ -1349,7 +1318,7 @@ QList<Task> Database::getTasksByStatus(TaskStatus status)
 QList<Task> Database::getTasksByCategory(int categoryId)
 {
     QList<Task> tasks;
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     
     for (const QJsonValue &val : tasksArray) {
         QJsonObject obj = val.toObject();
@@ -1364,7 +1333,7 @@ QList<Task> Database::getTasksByCategory(int categoryId)
 QList<Task> Database::getTasksByDateRange(const QDateTime &startDate, const QDateTime &endDate)
 {
     QList<Task> tasks;
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     
     QDate startDateObj = startDate.date();
     QDate endDateObj = endDate.date();
@@ -1408,7 +1377,7 @@ Task Database::getTaskById(const QString &id)
     Task task;
     task.id = "";
     
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     
     for (const QJsonValue &val : tasksArray) {
         QJsonObject obj = val.toObject();
@@ -1423,7 +1392,7 @@ Task Database::getTaskById(const QString &id)
 
 bool Database::updateTaskStatus(const QString &id, TaskStatus status)
 {
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     
     for (int i = 0; i < tasksArray.size(); ++i) {
         QJsonObject obj = tasksArray[i].toObject();
@@ -1439,9 +1408,9 @@ bool Database::updateTaskStatus(const QString &id, TaskStatus status)
         }
     }
     
-    rootObject["tasks"] = tasksArray;
+    taskRootObject["tasks"] = tasksArray;
 
-    bool result = saveData();
+    bool result = saveTaskData();
     if (result) {
         emit tasksChanged();
     }
@@ -1450,7 +1419,7 @@ bool Database::updateTaskStatus(const QString &id, TaskStatus status)
 
 bool Database::updateTaskDuration(const QString &id, double duration)
 {
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     
     for (int i = 0; i < tasksArray.size(); ++i) {
         QJsonObject obj = tasksArray[i].toObject();
@@ -1461,203 +1430,113 @@ bool Database::updateTaskDuration(const QString &id, double duration)
         }
     }
     
-    rootObject["tasks"] = tasksArray;
+    taskRootObject["tasks"] = tasksArray;
 
-    bool result = saveData();
+    bool result = saveTaskData();
     if (result) {
         emit tasksChanged();
     }
     return result;
 }
 
-bool Database::addCategory(const Category &category)
-{
-    Category newCategory = category;
-    newCategory.id = nextCategoryId++;
-    
-    QJsonArray categoriesArray = rootObject["categories"].toArray();
-    categoriesArray.append(categoryToJson(newCategory));
-    rootObject["categories"] = categoriesArray;
-    
-    return saveData();
-}
-
-bool Database::updateCategory(const Category &category)
-{
-    QJsonArray categoriesArray = rootObject["categories"].toArray();
-    
-    for (int i = 0; i < categoriesArray.size(); ++i) {
-        QJsonObject obj = categoriesArray[i].toObject();
-        if (obj["id"].toInt() == category.id) {
-            categoriesArray[i] = categoryToJson(category);
-            break;
-        }
-    }
-    
-    rootObject["categories"] = categoriesArray;
-    
-    return saveData();
-}
-
-bool Database::deleteCategory(int id)
-{
-    QJsonArray categoriesArray = rootObject["categories"].toArray();
-    
-    for (int i = 0; i < categoriesArray.size(); ++i) {
-        QJsonObject obj = categoriesArray[i].toObject();
-        if (obj["id"].toInt() == id) {
-            categoriesArray.removeAt(i);
-            break;
-        }
-    }
-    
-    rootObject["categories"] = categoriesArray;
-    
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
-    for (int i = 0; i < tasksArray.size(); ++i) {
-        QJsonObject taskObj = tasksArray[i].toObject();
-        if (taskObj["categoryId"].toInt() == id) {
-            taskObj["categoryId"] = -1;
-            tasksArray[i] = taskObj;
-        }
-    }
-    rootObject["tasks"] = tasksArray;
-    
-    return saveData();
-}
-
-QList<Category> Database::getAllCategories()
+QList<Category> Database::getBuiltinCategories()
 {
     QList<Category> categories;
-    QJsonArray categoriesArray = rootObject["categories"].toArray();
-    
-    QList<QJsonObject> categoryObjects;
-    for (const QJsonValue &val : categoriesArray) {
-        categoryObjects.append(val.toObject());
-    }
-    
-    std::sort(categoryObjects.begin(), categoryObjects.end(), [](const QJsonObject &a, const QJsonObject &b) {
-        return a["sortOrder"].toInt() < b["sortOrder"].toInt();
-    });
-    
-    for (const QJsonObject &obj : categoryObjects) {
-        categories.append(jsonToCategory(obj));
-    }
-    
+
+    // 工作
+    Category cat1;
+    cat1.id = 1;
+    cat1.name = "工作";
+    cat1.description = "";
+    cat1.parentId = -1;
+    cat1.color = "#3498db";
+    cat1.sortOrder = 0;
+    categories.append(cat1);
+
+    // 会议
+    Category cat2;
+    cat2.id = 2;
+    cat2.name = "会议";
+    cat2.description = "";
+    cat2.parentId = -1;
+    cat2.color = "#f39c12";
+    cat2.sortOrder = 1;
+    categories.append(cat2);
+
+    // 个人
+    Category cat3;
+    cat3.id = 3;
+    cat3.name = "个人";
+    cat3.description = "";
+    cat3.parentId = -1;
+    cat3.color = "#9b59b6";
+    cat3.sortOrder = 2;
+    categories.append(cat3);
+
+    // 其他
+    Category cat4;
+    cat4.id = 4;
+    cat4.name = "其他";
+    cat4.description = "";
+    cat4.parentId = -1;
+    cat4.color = "#95a5a6";
+    cat4.sortOrder = 3;
+    categories.append(cat4);
+
     return categories;
-}
-
-QList<Category> Database::getRootCategories()
-{
-    QList<Category> categories;
-    QJsonArray categoriesArray = rootObject["categories"].toArray();
-    
-    for (const QJsonValue &val : categoriesArray) {
-        QJsonObject obj = val.toObject();
-        if (obj["parentId"].toInt(-1) == -1) {
-            categories.append(jsonToCategory(obj));
-        }
-    }
-    
-    return categories;
-}
-
-QList<Category> Database::getSubCategories(int parentId)
-{
-    QList<Category> categories;
-    QJsonArray categoriesArray = rootObject["categories"].toArray();
-    
-    for (const QJsonValue &val : categoriesArray) {
-        QJsonObject obj = val.toObject();
-        if (obj["parentId"].toInt(-1) == parentId) {
-            categories.append(jsonToCategory(obj));
-        }
-    }
-    
-    return categories;
-}
-
-Category Database::getCategoryById(int id)
-{
-    Category category;
-    category.id = -1;
-    
-    QJsonArray categoriesArray = rootObject["categories"].toArray();
-    
-    for (const QJsonValue &val : categoriesArray) {
-        QJsonObject obj = val.toObject();
-        if (obj["id"].toInt() == id) {
-            category = jsonToCategory(obj);
-            break;
-        }
-    }
-    
-    return category;
-}
-
-Category Database::getCategoryByName(const QString &name)
-{
-    Category category;
-    category.id = -1;
-    
-    QJsonArray categoriesArray = rootObject["categories"].toArray();
-    
-    for (const QJsonValue &val : categoriesArray) {
-        QJsonObject obj = val.toObject();
-        if (obj["name"].toString() == name) {
-            category = jsonToCategory(obj);
-            break;
-        }
-    }
-    
-    return category;
 }
 
 QHash<QString, double> Database::getCategoryWorkHours(const QDateTime &startDate, const QDateTime &endDate)
 {
     QHash<QString, double> result;
-    QList<Category> categories = getAllCategories();
+    QList<Category> categories = getBuiltinCategories();
     for (const Category &cat : categories) {
         result[cat.name] = 0.0;
     }
     
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     for (const QJsonValue &val : tasksArray) {
         QJsonObject obj = val.toObject();
         QDateTime finishTime = QDateTime::fromString(obj["finishTime"].toString(), Qt::ISODate);
         if (finishTime.isValid() && finishTime >= startDate && finishTime <= endDate) {
             int categoryId = obj["categoryId"].toInt(-1);
-            Category cat = getCategoryById(categoryId);
-            if (cat.id != -1) {
-                result[cat.name] += obj["workDuration"].toDouble(0.0);
+            // 从内置分类中查找
+            for (const Category &cat : getBuiltinCategories()) {
+                if (cat.id == categoryId) {
+                    result[cat.name] += obj["workDuration"].toDouble(0.0);
+                    break;
+                }
             }
         }
     }
-    
+
     return result;
 }
 
 QHash<QString, int> Database::getCategoryTaskCount(const QDateTime &startDate, const QDateTime &endDate)
 {
     QHash<QString, int> result;
-    QList<Category> categories = getAllCategories();
+    QList<Category> categories = getBuiltinCategories();
     for (const Category &cat : categories) {
         result[cat.name] = 0;
     }
     
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     for (const QJsonValue &val : tasksArray) {
         QJsonObject obj = val.toObject();
         QDateTime finishTime = QDateTime::fromString(obj["finishTime"].toString(), Qt::ISODate);
         if (finishTime.isValid() && finishTime >= startDate && finishTime <= endDate) {
             int categoryId = obj["categoryId"].toInt(-1);
-            Category cat = getCategoryById(categoryId);
-            if (cat.id != -1) {
-                result[cat.name]++;
+            // 从内置分类中查找
+            for (const Category &cat : getBuiltinCategories()) {
+                if (cat.id == categoryId) {
+                    result[cat.name]++;
+                    break;
+                }
             }
         }
     }
-    
+
     return result;
 }
 
@@ -1665,7 +1544,7 @@ double Database::getTotalWorkHours(const QDateTime &startDate, const QDateTime &
 {
     double total = 0.0;
     
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     for (const QJsonValue &val : tasksArray) {
         QJsonObject obj = val.toObject();
         QDateTime finishTime = QDateTime::fromString(obj["finishTime"].toString(), Qt::ISODate);
@@ -1681,7 +1560,7 @@ int Database::getTotalTaskCount(const QDateTime &startDate, const QDateTime &end
 {
     int count = 0;
     
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     for (const QJsonValue &val : tasksArray) {
         QJsonObject obj = val.toObject();
         QDateTime finishTime = QDateTime::fromString(obj["finishTime"].toString(), Qt::ISODate);
@@ -1710,7 +1589,7 @@ QString Database::generateTaskId()
 
 bool Database::taskExists(const QString &taskId)
 {
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
     
     for (const QJsonValue &val : tasksArray) {
         QJsonObject obj = val.toObject();
@@ -1725,8 +1604,8 @@ bool Database::taskExists(const QString &taskId)
 int Database::getDailyTaskCount(const QString &dateStr)
 {
     int count = 0;
-    QJsonArray tasksArray = rootObject["tasks"].toArray();
-    
+    QJsonArray tasksArray = taskRootObject["tasks"].toArray();
+
     for (const QJsonValue &val : tasksArray) {
         QJsonObject obj = val.toObject();
         QString taskId = obj["id"].toString();
@@ -1734,6 +1613,114 @@ int Database::getDailyTaskCount(const QString &dateStr)
             count++;
         }
     }
-    
+
     return count;
+}
+
+void Database::setCurrentUser(int userId)
+{
+    if (currentUserId == userId) {
+        return;
+    }
+
+    // 保存当前用户数据
+    saveTaskData();
+
+    // 更新当前用户ID
+    currentUserId = userId;
+
+    // 更新任务文件路径
+    QString dataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (userId > 0) {
+        taskFilePath = dataPath + QString("/user_%1/tasks.json").arg(userId);
+        QDir dir(QFileInfo(taskFilePath).absolutePath());
+        if (!dir.exists()) {
+            dir.mkpath(".");
+        }
+
+        // 加载本地用户任务数据
+        loadTaskData();
+
+        // 从服务器同步任务数据
+        // 注意：TaskSync 会通过信号通知数据更新
+    } else {
+        // 未登录用户使用默认任务文件
+        taskFilePath = dataPath + "/tasks.json";
+        // 重新加载任务数据
+        loadTaskData();
+    }
+
+    // 发出信号通知UI刷新
+    emit tasksChanged();
+}
+
+bool Database::loadTaskData()
+{
+    QFile file(taskFilePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        // 文件不存在，初始化为空数据
+        taskRootObject = QJsonObject();
+        taskRootObject["tasks"] = QJsonArray();
+        return false;
+    }
+
+    QByteArray data = file.readAll();
+    file.close();
+
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isObject()) {
+        taskRootObject = QJsonObject();
+        taskRootObject["tasks"] = QJsonArray();
+        return false;
+    }
+
+    taskRootObject = doc.object();
+
+    if (!taskRootObject.contains("tasks")) {
+        taskRootObject["tasks"] = QJsonArray();
+    }
+
+    return true;
+}
+
+bool Database::saveTaskData()
+{
+    QJsonDocument doc(taskRootObject);
+    QFile file(taskFilePath);
+    if (!file.open(QIODevice::WriteOnly)) {
+        qWarning("Cannot save task file: %s", qPrintable(file.errorString()));
+        return false;
+    }
+
+    file.write(doc.toJson(QJsonDocument::Indented));
+    file.close();
+
+    return true;
+}
+
+bool Database::migrateTaskData()
+{
+    // 分类现在是内置的，不再迁移
+    // 只检查是否需要将 tasks 从 data.json 迁移到 tasks.json
+    QFileInfo taskFileInfo(taskFilePath);
+    if (taskFileInfo.exists()) {
+        return false; // 迁移已完成
+    }
+
+    // 将任务数据迁移到 tasks.json
+    QJsonArray tasksArray = rootObject["tasks"].toArray();
+
+    taskRootObject = QJsonObject();
+    taskRootObject["tasks"] = tasksArray;
+
+    // 保存任务文件
+    saveTaskData();
+
+    // 从 data.json 中移除 tasks
+    rootObject["tasks"] = QJsonArray();
+
+    // 保存 data.json
+    saveData();
+
+    return true;
 }

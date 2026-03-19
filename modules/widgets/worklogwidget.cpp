@@ -1,5 +1,8 @@
 #include "worklogwidget.h"
 #include "modules/core/aiconfig.h"
+#include "modules/core/database.h"
+#include "modules/user/userapi.h"
+#include "modules/user/userlogindialog.h"
 #include <QDateTime>
 
 // 更新分类筛选下拉框显示文本（函数实现）
@@ -123,10 +126,12 @@ WorkLogWidget::WorkLogWidget(Database *database, QWidget *parent)
     }
 
     setupUI();
-    initDefaultCategories();
     loadCategories();
     loadTasks();
     updateStatistics();
+
+    // 连接数据库任务变化信号，用户切换时自动刷新
+    connect(db, &Database::tasksChanged, this, &WorkLogWidget::onRefreshTasks);
 
     taskTimer = new QTimer(this);
     networkManager = new QNetworkAccessManager(this);
@@ -946,54 +951,6 @@ void WorkLogWidget::setupStatisticsPanel()
     }
 }
 
-void WorkLogWidget::initDefaultCategories()
-{
-    QList<Category> existingCategories = db->getAllCategories();
-    if (existingCategories.isEmpty()) {
-        Category work;
-        work.name = "工作";
-        work.description = "工作相关任务";
-        work.parentId = -1;
-        work.color = "#3498db";
-        db->addCategory(work);
-
-        Category dev;
-        dev.name = "研发";
-        dev.description = "研发相关任务";
-        dev.parentId = -1;
-        dev.color = "#e74c3c";
-        db->addCategory(dev);
-
-        Category meeting;
-        meeting.name = "会议";
-        meeting.description = "会议相关任务";
-        meeting.parentId = -1;
-        meeting.color = "#f39c12";
-        db->addCategory(meeting);
-
-        Category doc;
-        doc.name = "文档";
-        doc.description = "文档相关任务";
-        doc.parentId = -1;
-        doc.color = "#9b59b6";
-        db->addCategory(doc);
-
-        Category support;
-        support.name = "客户支持";
-        support.description = "客户支持相关任务";
-        support.parentId = -1;
-        support.color = "#1abc9c";
-        db->addCategory(support);
-
-        Category ops;
-        ops.name = "运维";
-        ops.description = "运维相关任务";
-        ops.parentId = -1;
-        ops.color = "#34495e";
-        db->addCategory(ops);
-    }
-}
-
 void WorkLogWidget::setupCalendarView()
 {
     // 创建日历视图容器
@@ -1145,11 +1102,11 @@ void WorkLogWidget::onViewToggleClicked()
 
 void WorkLogWidget::loadCategories()
 {
-    // 加载分类到下拉框
+    // 加载内置分类到下拉框
     categoryFilter->clear();
     categoryFilter->addItem("全部分类", -1);
 
-    QList<Category> categories = db->getAllCategories();
+    QList<Category> categories = Database::getBuiltinCategories();
     for (const Category &category : categories) {
         categoryFilter->addItem(category.name, category.id);
     }
@@ -1219,8 +1176,14 @@ void WorkLogWidget::updateTaskRow(int row, const Task &task)
 
     taskTable->setItem(row, 1, new QTableWidgetItem(task.title));
 
-    Category category = db->getCategoryById(task.categoryId);
-    QString categoryName = category.id != -1 ? category.name : "未分类";
+    // 从内置分类中查找
+    QString categoryName = "未分类";
+    for (const Category &cat : Database::getBuiltinCategories()) {
+        if (cat.id == task.categoryId) {
+            categoryName = cat.name;
+            break;
+        }
+    }
     taskTable->setItem(row, 2, new QTableWidgetItem(categoryName));
 
     taskTable->setItem(row, 3, new QTableWidgetItem(getPriorityString(task.priority)));
@@ -1333,8 +1296,14 @@ void WorkLogWidget::updateStatistics()
             QMap<QString, double> categoryHours;
             for (const Task &task : filteredTasks) {
                 if (task.status == TaskStatus_Completed) {
-                    Category cat = db->getCategoryById(task.categoryId);
-                    QString catName = cat.name.isEmpty() ? "未分类" : cat.name;
+                    // 从内置分类中查找
+                    QString catName = "未分类";
+                    for (const Category &cat : Database::getBuiltinCategories()) {
+                        if (cat.id == task.categoryId) {
+                            catName = cat.name;
+                            break;
+                        }
+                    }
                     categoryHours[catName] += task.workDuration;
                 }
             }
@@ -1479,11 +1448,32 @@ void WorkLogWidget::updateStatistics()
 
 void WorkLogWidget::onAddTask()
 {
+    // 检查登录状态
+    if (!UserManager::instance()->isLoggedIn()) {
+        QMessageBox::StandardButton ret = QMessageBox::question(this, "需要登录",
+            "添加工作日志需要登录账号，是否现在登录？",
+            QMessageBox::Yes | QMessageBox::No);
+        if (ret == QMessageBox::Yes) {
+            UserLoginDialog dialog;
+            dialog.exec();
+            // 如果登录成功，则继续添加任务
+            if (UserManager::instance()->isLoggedIn()) {
+                showTaskDialog();
+            }
+        }
+        return;
+    }
     showTaskDialog();
 }
 
 void WorkLogWidget::onEditTask()
 {
+    // 检查登录状态
+    if (!UserManager::instance()->isLoggedIn()) {
+        QMessageBox::information(this, "需要登录", "编辑工作日志需要登录账号");
+        return;
+    }
+
     Task task = getCurrentTask();
     if (task.id.isEmpty()) {
         QMessageBox::warning(this, "提示", "请先选择一个任务");
@@ -1495,6 +1485,12 @@ void WorkLogWidget::onEditTask()
 
 void WorkLogWidget::onDeleteTask()
 {
+    // 检查登录状态
+    if (!UserManager::instance()->isLoggedIn()) {
+        QMessageBox::information(this, "需要登录", "删除工作日志需要登录账号");
+        return;
+    }
+
     Task task = getCurrentTask();
     if (task.id.isEmpty()) {
         QMessageBox::warning(this, "提示", "请先选择一个任务");
@@ -1513,6 +1509,12 @@ void WorkLogWidget::onDeleteTask()
 
 void WorkLogWidget::onCompleteTask()
 {
+    // 检查登录状态
+    if (!UserManager::instance()->isLoggedIn()) {
+        QMessageBox::information(this, "需要登录", "完成任务需要登录账号");
+        return;
+    }
+
     Task task = getCurrentTask();
     if (task.id.isEmpty()) {
         QMessageBox::warning(this, "提示", "请先选择一个任务");
@@ -1533,6 +1535,12 @@ void WorkLogWidget::onCompleteTask()
 
 void WorkLogWidget::onPauseTask()
 {
+    // 检查登录状态
+    if (!UserManager::instance()->isLoggedIn()) {
+        QMessageBox::information(this, "需要登录", "暂停任务需要登录账号");
+        return;
+    }
+
     Task task = getCurrentTask();
     if (task.id.isEmpty()) {
         QMessageBox::warning(this, "提示", "请先选择一个任务");
@@ -1896,10 +1904,14 @@ Task WorkLogWidget::getCurrentTask()
 
 Category WorkLogWidget::getCurrentCategory()
 {
-    // 从 categoryFilter 中获取选中的分类
+    // 从内置分类中获取选中的分类
     int categoryId = categoryFilter->currentData().toInt();
     if (categoryId > 0) {
-        return db->getCategoryById(categoryId);
+        for (const Category &cat : Database::getBuiltinCategories()) {
+            if (cat.id == categoryId) {
+                return cat;
+            }
+        }
     }
 
     Category category;
@@ -2094,7 +2106,7 @@ void WorkLogWidget::showTaskDialog(Task *task)
     )");
 
     categoryCombo->addItem("📁 未分类", -1);
-    QList<Category> categories = db->getAllCategories();
+    QList<Category> categories = Database::getBuiltinCategories();
     for (const Category &cat : categories) {
         categoryCombo->addItem("📁 " + cat.name, cat.id);
     }
@@ -2267,63 +2279,8 @@ void WorkLogWidget::showTaskDialog(Task *task)
     }
 }
 
-void WorkLogWidget::showCategoryDialog(Category *category)
-{
-    QDialog dialog(this);
-    dialog.setWindowTitle(category ? "编辑分类" : "新建分类");
-    dialog.resize(400, 300);
-
-    QFormLayout *formLayout = new QFormLayout(&dialog);
-
-    QLineEdit *nameEdit = new QLineEdit(&dialog);
-    QTextEdit *descEdit = new QTextEdit(&dialog);
-    QLineEdit *colorEdit = new QLineEdit(&dialog);
-
-    colorEdit->setPlaceholderText("例如: #3498db");
-
-    formLayout->addRow("名称:", nameEdit);
-    formLayout->addRow("描述:", descEdit);
-    formLayout->addRow("颜色:", colorEdit);
-
-    if (category) {
-        nameEdit->setText(category->name);
-        descEdit->setPlainText(category->description);
-        colorEdit->setText(category->color);
-    } else {
-        colorEdit->setText("#3498db");
-    }
-
-    QHBoxLayout *btnLayout = new QHBoxLayout();
-    QPushButton *okBtn = new QPushButton("确定", &dialog);
-    QPushButton *cancelBtn = new QPushButton("取消", &dialog);
-    btnLayout->addWidget(okBtn);
-    btnLayout->addWidget(cancelBtn);
-    formLayout->addRow(btnLayout);
-
-    connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
-    connect(cancelBtn, &QPushButton::clicked, &dialog, &QDialog::reject);
-
-    if (dialog.exec() == QDialog::Accepted) {
-        Category newCategory;
-        if (category) {
-            newCategory = *category;
-        }
-
-        newCategory.name = nameEdit->text();
-        newCategory.description = descEdit->toPlainText();
-        newCategory.color = colorEdit->text();
-        newCategory.parentId = -1;
-
-        if (category) {
-            db->updateCategory(newCategory);
-        } else {
-            newCategory.sortOrder = db->getAllCategories().size();
-            db->addCategory(newCategory);
-        }
-
-        loadCategories();
-    }
-}
+// 分类是内置的，不支持用户修改
+// void WorkLogWidget::showCategoryDialog(Category *category) 已移除
 
 QString WorkLogWidget::generateWeeklyReport(const QDateTime &startDate, const QDateTime &endDate)
 {
@@ -2344,8 +2301,14 @@ QString WorkLogWidget::generateWeeklyReport(const QDateTime &startDate, const QD
     QHash<QString, QList<Task>> categoryTasks;
     for (const Task &task : tasks) {
         if (task.status == TaskStatus_Completed) {
-            Category cat = db->getCategoryById(task.categoryId);
-            QString categoryName = cat.id != -1 ? cat.name : "未分类";
+            // 从内置分类中查找
+            QString categoryName = "未分类";
+            for (const Category &cat : Database::getBuiltinCategories()) {
+                if (cat.id == task.categoryId) {
+                    categoryName = cat.name;
+                    break;
+                }
+            }
             categoryTasks[categoryName].append(task);
         }
     }
@@ -2437,8 +2400,14 @@ QString WorkLogWidget::generateMonthlyReport(const QDateTime &startDate, const Q
     QHash<QString, QList<Task>> categoryTasks;
     for (const Task &task : tasks) {
         if (task.status == TaskStatus_Completed) {
-            Category cat = db->getCategoryById(task.categoryId);
-            QString categoryName = cat.id != -1 ? cat.name : "未分类";
+            // 从内置分类中查找
+            QString categoryName = "未分类";
+            for (const Category &cat : Database::getBuiltinCategories()) {
+                if (cat.id == task.categoryId) {
+                    categoryName = cat.name;
+                    break;
+                }
+            }
             categoryTasks[categoryName].append(task);
         }
     }
@@ -2531,11 +2500,17 @@ QString WorkLogWidget::generateQuarterlyReport(const QDateTime &startDate, const
     QList<Task> tasks = db->getTasksByDateRange(startDate, endDate);
 
     QHash<QString, QList<Task>> categoryTasks;
-    
+
     for (const Task &task : tasks) {
         if (task.status == TaskStatus_Completed) {
-            Category cat = db->getCategoryById(task.categoryId);
-            QString categoryName = cat.id != -1 ? cat.name : "未分类";
+            // 从内置分类中查找
+            QString categoryName = "未分类";
+            for (const Category &cat : Database::getBuiltinCategories()) {
+                if (cat.id == task.categoryId) {
+                    categoryName = cat.name;
+                    break;
+                }
+            }
             categoryTasks[categoryName].append(task);
         }
     }
@@ -3104,12 +3079,9 @@ void WorkLogWidget::analyzeTaskWithAI(const QString &model, const QString &title
 QString WorkLogWidget::getExistingCategories()
 {
     QStringList categories;
-    QList<Category> allCategories = db->getAllCategories();
+    QList<Category> allCategories = Database::getBuiltinCategories();
     for (const Category &cat : allCategories) {
         categories.append(cat.name);
-    }
-    if (categories.isEmpty()) {
-        categories << "工作" << "学习" << "生活" << "其他";
     }
     return categories.join("、");
 }

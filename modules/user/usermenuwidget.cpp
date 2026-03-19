@@ -53,6 +53,11 @@ UserMenuWidget::UserMenuWidget(QWidget *parent)
     connect(UserManager::instance(), &UserManager::loginSuccess, this, &UserMenuWidget::onLoginSuccess);
     connect(UserManager::instance(), &UserManager::logoutComplete, this, &UserMenuWidget::onLogoutComplete);
 
+    // 连接任务同步信号（只连接一次）
+    connect(TaskSync::instance(), &TaskSync::tasksSynced, this, &UserMenuWidget::onTasksSynced);
+    connect(TaskSync::instance(), &TaskSync::tasksUploadComplete, this, &UserMenuWidget::onTasksUploadComplete);
+    connect(TaskSync::instance(), &TaskSync::syncFailed, this, &UserMenuWidget::onTasksSyncFailed);
+
     // 检查当前登录状态
     updateMenuState();
 }
@@ -68,10 +73,10 @@ void UserMenuWidget::setDatabase(Database *db)
 {
     m_db = db;
     if (m_db) {
-        // 创建防抖定时器（60秒延迟）
+        // 创建防抖定时器（2秒延迟）
         m_syncTimer = new QTimer(this);
         m_syncTimer->setSingleShot(true);
-        m_syncTimer->setInterval(60000); // 60秒防抖
+        m_syncTimer->setInterval(2000); // 2秒防抖
         connect(m_syncTimer, &QTimer::timeout, this, &UserMenuWidget::onSyncTimerTimeout);
 
         // 连接任务变化信号，实现自动同步（带防抖）
@@ -94,6 +99,12 @@ void UserMenuWidget::showRegisterDialog()
 
 void UserMenuWidget::onLoginSuccess()
 {
+    // 取消可能存在的防抖定时器，避免重复同步
+    if (m_syncTimer && m_syncTimer->isActive()) {
+        m_syncTimer->stop();
+    }
+    m_pendingSync = false;
+
     // 清理旧action
     m_loginAction = nullptr;
     m_registerAction = nullptr;
@@ -175,11 +186,6 @@ void UserMenuWidget::updateMenuState()
 
 void UserMenuWidget::syncTasksToCloud()
 {
-    // 连接信号
-    connect(TaskSync::instance(), &TaskSync::tasksSynced, this, &UserMenuWidget::onTasksSynced);
-    connect(TaskSync::instance(), &TaskSync::tasksUploadComplete, this, &UserMenuWidget::onTasksUploadComplete);
-    connect(TaskSync::instance(), &TaskSync::syncFailed, this, &UserMenuWidget::onTasksSyncFailed);
-
     // 设置同步时间，登录时完整上传所有任务
     m_lastSyncTime = QDateTime::fromSecsSinceEpoch(0);
 
@@ -203,8 +209,9 @@ void UserMenuWidget::syncTasksToCloud()
             taskObj["priority"] = task.priority;
             taskObj["status"] = task.status;
             taskObj["workDuration"] = task.workDuration;
-            taskObj["completionTime"] = task.completionTime.toString(Qt::ISODate);
+            taskObj["completionTime"] = task.completionTime.toUTC().toString(Qt::ISODate);
             taskObj["tags"] = QJsonArray::fromStringList(task.tags);
+            taskObj["updatedAt"] = task.updatedAt.toUTC().toString(Qt::ISODate);
             tasksArray.append(taskObj);
         }
         // 登录时完整上传，清空删除列表
@@ -237,12 +244,16 @@ void UserMenuWidget::onTasksSynced(const QJsonArray& tasks)
         task.priority = static_cast<TaskPriority>(taskObj["priority"].toInt());
         task.status = static_cast<TaskStatus>(taskObj["status"].toInt());
         task.workDuration = taskObj["workDuration"].toDouble();
-        task.completionTime = QDateTime::fromString(taskObj["completionTime"].toString(), Qt::ISODate);
+        task.completionTime = QDateTime::fromString(taskObj["completionTime"].toString(), Qt::ISODate).toLocalTime();
 
-        // 读取云端任务的更新时间
-        task.updatedAt = QDateTime::fromString(taskObj["updatedAt"].toString(), Qt::ISODate);
+        // 读取云端任务的更新时间（UTC时间）
+        QString updatedAtStr = taskObj["updatedAt"].toString();
+        task.updatedAt = QDateTime::fromString(updatedAtStr, Qt::ISODate).toLocalTime();
+        
+        // 如果没有有效的更新时间，说明是旧数据，跳过该任务
         if (!task.updatedAt.isValid()) {
-            task.updatedAt = QDateTime::currentDateTime();
+            qDebug() << "Skipping task with invalid updatedAt:" << taskId;
+            continue;
         }
 
         QJsonArray tagsArray = taskObj["tags"].toArray();
@@ -330,15 +341,6 @@ void UserMenuWidget::onSyncTimerTimeout()
         m_pendingSync = false;
         qDebug() << "Sync timer timeout, uploading changed tasks to cloud...";
 
-        // 连接信号（如果尚未连接）
-        static bool connected = false;
-        if (!connected) {
-            connected = true;
-            connect(TaskSync::instance(), &TaskSync::tasksSynced, this, &UserMenuWidget::onTasksSynced);
-            connect(TaskSync::instance(), &TaskSync::tasksUploadComplete, this, &UserMenuWidget::onTasksUploadComplete);
-            connect(TaskSync::instance(), &TaskSync::syncFailed, this, &UserMenuWidget::onTasksSyncFailed);
-        }
-
         // 增量上传：只上传自上次同步以来变化的任务
         QList<Task> localTasks = m_db->getAllTasks();
 
@@ -369,8 +371,9 @@ void UserMenuWidget::onSyncTimerTimeout()
                 taskObj["priority"] = task.priority;
                 taskObj["status"] = task.status;
                 taskObj["workDuration"] = task.workDuration;
-                taskObj["completionTime"] = task.completionTime.toString(Qt::ISODate);
+                taskObj["completionTime"] = task.completionTime.toUTC().toString(Qt::ISODate);
                 taskObj["tags"] = QJsonArray::fromStringList(task.tags);
+                taskObj["updatedAt"] = task.updatedAt.toUTC().toString(Qt::ISODate);
                 tasksArray.append(taskObj);
                 qDebug() << "Uploading changed task:" << task.title;
             }

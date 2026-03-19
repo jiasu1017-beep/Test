@@ -230,6 +230,19 @@ void UserLoginDialog::setupLoginPage() {
 
     m_rememberMeCheck = new QCheckBox("✓ 记住我（7 天内自动登录）", this);
     m_rememberMeCheck->setChecked(true);
+    // 取消勾选时清除保存的凭证
+    connect(m_rememberMeCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        if (!checked) {
+            // 取消勾选时立即清除保存的凭证
+            QSettings settings;
+            settings.remove("login_identifier");
+            settings.remove("login_password");
+            settings.setValue("login_remember", false);
+            // 清除输入框
+            m_loginIdentifierEdit->clear();
+            m_loginPasswordEdit->clear();
+        }
+    });
     layout->addWidget(m_rememberMeCheck);
 
     m_loginStatusLabel = new QLabel(this);

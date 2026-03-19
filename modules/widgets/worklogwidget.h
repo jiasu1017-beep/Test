@@ -44,6 +44,7 @@
 #include <QPropertyAnimation>
 #include <QParallelAnimationGroup>
 #include "modules/core/database.h"
+#include "modules/user/userapi.h"
 
 // 前向声明
 class CalendarWidget;
@@ -249,14 +250,12 @@ private:
     void refreshTaskTable();
     void refreshCalendarView();
     void updateStatistics();
-    void initDefaultCategories();
     Task getCurrentTask();
     Category getCurrentCategory();
     QString getPriorityString(TaskPriority priority);
     QString getStatusString(TaskStatus status);
     QString getDurationString(double hours);
     void showTaskDialog(Task *task = nullptr);
-    void showCategoryDialog(Category *category = nullptr);
     QString generateWeeklyReport(const QDateTime &startDate, const QDateTime &endDate);
     QString generateMonthlyReport(const QDateTime &startDate, const QDateTime &endDate);
     QString generateQuarterlyReport(const QDateTime &startDate, const QDateTime &endDate);

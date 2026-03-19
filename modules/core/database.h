@@ -7,6 +7,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QFile>
+#include <QFileInfo>
 
 enum AppType {
     AppType_Executable,
@@ -147,6 +148,8 @@ public:
     ~Database();
 
     bool init();
+    void setCurrentUser(int userId);
+    int getCurrentUserId() const { return currentUserId; }
     
     bool addApp(const AppInfo &app);
     bool updateApp(const AppInfo &app);
@@ -218,31 +221,32 @@ public:
     bool updateTaskStatus(const QString &id, TaskStatus status);
     bool updateTaskDuration(const QString &id, double duration);
 
-    bool addCategory(const Category &category);
-    bool updateCategory(const Category &category);
-    bool deleteCategory(int id);
-    QList<Category> getAllCategories();
-    QList<Category> getRootCategories();
-    QList<Category> getSubCategories(int parentId);
-    Category getCategoryById(int id);
-    Category getCategoryByName(const QString &name);
+    static QList<Category> getBuiltinCategories();
 
     QHash<QString, double> getCategoryWorkHours(const QDateTime &startDate, const QDateTime &endDate);
     QHash<QString, int> getCategoryTaskCount(const QDateTime &startDate, const QDateTime &endDate);
     double getTotalWorkHours(const QDateTime &startDate, const QDateTime &endDate);
     int getTotalTaskCount(const QDateTime &startDate, const QDateTime &endDate);
 
+    // 公开方法供外部调用保存和转换任务数据
+    bool saveTaskData();
+    QJsonObject taskToJson(const Task &task);
+
 private:
     QString dataFilePath;
+    QString taskFilePath;
+    int currentUserId;
     QJsonObject rootObject;
+    QJsonObject taskRootObject;
     int nextAppId;
     int nextCollectionId;
     int nextRemoteDesktopId;
     int nextSnapshotId;
-    int nextCategoryId;
-    
+
     bool loadData();
     bool saveData();
+    bool loadTaskData();
+    bool migrateTaskData();
     QJsonObject appToJson(const AppInfo &app);
     AppInfo jsonToApp(const QJsonObject &obj);
     QJsonObject collectionToJson(const AppCollection &collection);
@@ -251,10 +255,7 @@ private:
     RemoteDesktopConnection jsonToRemoteDesktop(const QJsonObject &obj);
     QJsonObject snapshotToJson(const SnapshotInfo &snapshot);
     SnapshotInfo jsonToSnapshot(const QJsonObject &obj);
-    QJsonObject taskToJson(const Task &task);
     Task jsonToTask(const QJsonObject &obj);
-    QJsonObject categoryToJson(const Category &category);
-    Category jsonToCategory(const QJsonObject &obj);
     QString encryptPassword(const QString &password);
     QString decryptPassword(const QString &encrypted);
     QString generateTaskId();

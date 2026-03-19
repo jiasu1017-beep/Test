@@ -1253,12 +1253,15 @@ app.post('/api/config/tasks/sync', authenticateToken, (req, res) => {
     }
 
     // 批量插入或更新工作日志
+    // 使用客户端发送的 updatedAt，如果为空则使用服务器时间
     const stmt = userDbConn.prepare(`INSERT OR REPLACE INTO user_tasks
         (task_id, title, description, category_id, priority, status, work_duration, completion_time, tags, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`);
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 
     let inserted = 0;
     tasks.forEach(task => {
+        // 优先使用客户端发送的 updatedAt，否则使用当前时间
+        const updatedAt = task.updatedAt || new Date().toISOString();
         stmt.run(
             task.id || '',
             task.title || '',
@@ -1269,6 +1272,7 @@ app.post('/api/config/tasks/sync', authenticateToken, (req, res) => {
             task.workDuration || 0,
             task.completionTime || '',
             JSON.stringify(task.tags || []),
+            updatedAt,
             function(err) {
                 if (!err) inserted++;
             }
@@ -1303,7 +1307,8 @@ app.get('/api/config/tasks/get', authenticateToken, (req, res) => {
             status: row.status,
             workDuration: row.work_duration,
             completionTime: row.completion_time,
-            tags: JSON.parse(row.tags || '[]')
+            tags: JSON.parse(row.tags || '[]'),
+            updatedAt: row.updated_at
         }));
 
         res.json({ success: true, tasks: tasks });
