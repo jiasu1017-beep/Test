@@ -98,15 +98,45 @@ bool Database::saveData()
     rootObject["nextSnapshotId"] = nextSnapshotId;
 
     QJsonDocument doc(rootObject);
-    QFile file(dataFilePath);
-    if (!file.open(QIODevice::WriteOnly)) {
-        qWarning("Cannot save data file: %s", qPrintable(file.errorString()));
+
+    // 原子写入：先写临时文件，再重命名
+    QString tempFilePath = dataFilePath + ".tmp";
+    QFile tempFile(tempFilePath);
+    if (!tempFile.open(QIODevice::WriteOnly)) {
+        qWarning("Cannot create temp file: %s", qPrintable(tempFile.errorString()));
         return false;
     }
-    
-    file.write(doc.toJson(QJsonDocument::Indented));
-    file.close();
-    
+
+    if (tempFile.write(doc.toJson(QJsonDocument::Indented)) == -1) {
+        qWarning("Failed to write temp file: %s", qPrintable(tempFile.errorString()));
+        tempFile.close();
+        QFile::remove(tempFilePath);
+        return false;
+    }
+    tempFile.close();
+
+    // 先备份原文件
+    QString backupFilePath = dataFilePath + ".bak";
+    if (QFile::exists(dataFilePath)) {
+        QFile::remove(backupFilePath);
+        if (!QFile::copy(dataFilePath, backupFilePath)) {
+            qWarning("Failed to create backup, continuing anyway...");
+        }
+    }
+
+    // 重命名临时文件为目标文件（原子操作）
+    if (!QFile::rename(tempFilePath, dataFilePath)) {
+        qWarning("Failed to rename temp file: %s", qPrintable(tempFile.errorString()));
+        // 尝试恢复备份
+        if (QFile::exists(backupFilePath) && !QFile::exists(dataFilePath)) {
+            QFile::copy(backupFilePath, dataFilePath);
+        }
+        return false;
+    }
+
+    // 写入成功后删除备份
+    QFile::remove(backupFilePath);
+
     return true;
 }
 

@@ -161,20 +161,39 @@ void ApiClient::onReplyFinished() {
         return;
     }
 
-    if (reply->error() != QNetworkReply::NoError) {
-        qDebug() << "[API 响应] 网络错误:" << reply->errorString();
-        writeHttpLog(httpMethod, endpoint, requestBody, statusCode, QString(), reply->errorString());
-        emit requestFailed(endpoint, statusCode, reply->errorString());
-    } else {
-        QString error = responseBody;
-        if (error.isEmpty()) {
-            error = "HTTP " + QString::number(statusCode);
-        }
-        qDebug() << "[API 响应] HTTP 错误:" << error;
-        writeHttpLog(httpMethod, endpoint, requestBody, statusCode, QString(), error);
-        emit requestFailed(endpoint, statusCode, error);
+    // JSON解析失败处理
+    if (data.isEmpty()) {
+        qDebug() << "[API 响应] 响应为空";
+        writeHttpLog(httpMethod, endpoint, requestBody, statusCode, QString(), "Empty response");
+        emit requestFailed(endpoint, statusCode, "Empty response");
+        reply->deleteLater();
+        return;
     }
 
+    // 网络错误处理（超时、连接失败等）
+    if (reply->error() != QNetworkReply::NoError) {
+        qDebug() << "[API 响应] 网络错误:" << reply->errorString();
+        writeHttpLog(httpMethod, endpoint, requestBody, statusCode, responseBody, reply->errorString());
+        emit requestFailed(endpoint, statusCode, reply->errorString());
+        reply->deleteLater();
+        return;
+    }
+
+    // HTTP错误处理（非2xx状态码）
+    if (statusCode < 200 || statusCode >= 300) {
+        QString error = responseBody.isEmpty() ? QString("HTTP %1").arg(statusCode) : responseBody;
+        qDebug() << "[API 响应] HTTP 错误:" << error;
+        writeHttpLog(httpMethod, endpoint, requestBody, statusCode, responseBody, error);
+        emit requestFailed(endpoint, statusCode, error);
+        reply->deleteLater();
+        return;
+    }
+
+    // JSON格式错误处理（HTTP 200但JSON无效）
+    qDebug() << "[API 响应] JSON 解析失败，响应内容:" << responseBody.left(200);
+    QString jsonError = "Invalid JSON response";
+    writeHttpLog(httpMethod, endpoint, requestBody, statusCode, responseBody, jsonError);
+    emit requestFailed(endpoint, statusCode, jsonError);
     reply->deleteLater();
 }
 
