@@ -11,6 +11,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QMutex>
+#include <QHash>
 #include <windows.h>
 #include "database.h"
 
@@ -77,6 +79,11 @@ private:
     static void parseChromeBookmarkFolder(const QJsonObject &folder, QList<AppInfo> &bookmarks, const QString &source);
     static void parseFirefoxBookmarks(const QString &dbPath, QList<AppInfo> &bookmarks);
     static QString getProcessPath(DWORD processID);
+    static QIcon loadIconFromFile(const QString &iconPath);
+
+    // 线程安全的图标缓存
+    static QMutex iconMutex;
+    static QHash<QString, QIcon> iconCache;
 
     Database *m_db;
 };

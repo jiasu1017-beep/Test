@@ -26,15 +26,15 @@ void AppIconDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
 {
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
-    
+
     QRect rect = option.rect;
-    
+
     if (option.state & QStyle::State_Selected) {
         QLinearGradient gradient(rect.topLeft(), rect.bottomLeft());
         gradient.setColorAt(0, QColor(66, 165, 245, 100));
         gradient.setColorAt(1, QColor(30, 136, 229, 100));
         painter->fillRect(rect, gradient);
-        
+
         painter->setPen(QColor(33, 150, 243));
         painter->setBrush(Qt::NoBrush);
         painter->drawRoundedRect(rect.adjusted(2, 2, -2, -2), 8, 8);
@@ -43,46 +43,57 @@ void AppIconDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
         hoverGradient.setColorAt(0, QColor(66, 165, 245, 40));
         hoverGradient.setColorAt(1, QColor(30, 136, 229, 25));
         painter->fillRect(rect, hoverGradient);
-        
+
         painter->setPen(QColor(66, 165, 245, 80));
         painter->setBrush(Qt::NoBrush);
         painter->drawRoundedRect(rect.adjusted(2, 2, -2, -2), 8, 8);
     }
-    
+
     int iconSize = 72;
     int textHeight = 24;
     int padding = 8;
-    
+
     int totalHeight = iconSize + textHeight + padding * 3;
     int startY = rect.top() + (rect.height() - totalHeight) / 2;
-    
-    QRect iconRect(rect.left() + (rect.width() - iconSize) / 2, 
-                   startY + padding, 
+
+    QRect iconRect(rect.left() + (rect.width() - iconSize) / 2,
+                   startY + padding,
                    iconSize, iconSize);
-    
+
     QPainterPath path;
     path.addRoundedRect(iconRect, 16, 16);
-    
+
     QLinearGradient iconGradient(iconRect.topLeft(), iconRect.bottomRight());
     iconGradient.setColorAt(0, QColor(255, 255, 255));
     iconGradient.setColorAt(1, QColor(245, 245, 245));
     painter->fillPath(path, iconGradient);
-    
+
     painter->setPen(QColor(220, 220, 220));
     painter->drawPath(path);
-    
-    QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
-    QPixmap pixmap = icon.pixmap(QSize(56, 56));
+
+    // 使用缓存的pixmap，避免每次paint都调用icon.pixmap()
+    QString iconPath = index.data(Role_IconPath).toString();
+    QPixmap pixmap;
+    if (!iconPath.isEmpty() && pixmapCache.contains(iconPath)) {
+        pixmap = pixmapCache.value(iconPath);
+    } else {
+        QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
+        pixmap = icon.pixmap(QSize(56, 56));
+        if (!iconPath.isEmpty()) {
+            pixmapCache.insert(iconPath, pixmap);
+        }
+    }
+
     QRect pixmapRect(iconRect.left() + (iconSize - 56) / 2,
                     iconRect.top() + (iconSize - 56) / 2,
                     56, 56);
     painter->drawPixmap(pixmapRect, pixmap);
-    
+
     QRect textRect(rect.left() + padding,
                    iconRect.bottom() + padding,
                    rect.width() - padding * 2,
                    textHeight);
-    
+
     QString text = index.data(Qt::DisplayRole).toString();
     QFont font = painter->font();
     font.setPixelSize(12);
@@ -90,7 +101,7 @@ void AppIconDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     painter->setFont(font);
     painter->setPen(QColor(51, 51, 51));
     painter->drawText(textRect, Qt::AlignCenter | Qt::TextWordWrap, text);
-    
+
     painter->restore();
 }
 
@@ -105,9 +116,9 @@ void AppListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
 {
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
-    
+
     QRect rect = option.rect;
-    
+
     if (option.state & QStyle::State_Selected) {
         QLinearGradient gradient(rect.topLeft(), rect.bottomRight());
         gradient.setColorAt(0, QColor(66, 165, 245, 60));
@@ -119,16 +130,28 @@ void AppListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
         hoverGradient.setColorAt(1, QColor(30, 136, 229, 15));
         painter->fillRect(rect, hoverGradient);
     }
-    
+
+    // 使用Qt::UserRole获取AppInfo，避免大对象拷贝
     AppInfo app = index.data(Qt::UserRole + 1).value<AppInfo>();
-    
-    QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
-    if (!icon.isNull()) {
-        QPixmap pixmap = icon.pixmap(QSize(32, 32));
+
+    // 使用缓存的pixmap
+    QString iconPath = index.data(Role_IconPath).toString();
+    QPixmap pixmap;
+    if (!iconPath.isEmpty() && pixmapCache.contains(iconPath)) {
+        pixmap = pixmapCache.value(iconPath);
+    } else {
+        QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
+        pixmap = icon.pixmap(QSize(32, 32));
+        if (!iconPath.isEmpty()) {
+            pixmapCache.insert(iconPath, pixmap);
+        }
+    }
+
+    if (!pixmap.isNull()) {
         int iconY = rect.top() + (rect.height() - 32) / 2;
         painter->drawPixmap(QRect(rect.left() + 10, iconY, 32, 32), pixmap);
     }
-    
+
     QString typeText;
     switch (app.type) {
         case AppType_Executable: typeText = "应用程序"; break;
@@ -138,44 +161,44 @@ void AppListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
         case AppType_RemoteDesktop: typeText = "远程桌面"; break;
         default: typeText = "未知"; break;
     }
-    
+
     QString infoText = QString("%1 | %2").arg(typeText, app.path);
     if (app.useCount > 0) {
         infoText += QString(" | 使用次数: %1").arg(app.useCount);
     }
-    
+
     QString nameText = index.data(Qt::DisplayRole).toString();
-    
+
     QFont nameFont = painter->font();
     nameFont.setPixelSize(13);
     nameFont.setBold(true);
     painter->setFont(nameFont);
     painter->setPen(QColor(51, 51, 51));
-    
+
     QRect nameRect(rect.left() + 52, rect.top() + 8, rect.width() - 140, 20);
     painter->drawText(nameRect, Qt::AlignLeft | Qt::AlignVCenter, nameText);
-    
+
     QFont infoFont = painter->font();
     infoFont.setPixelSize(10);
     infoFont.setBold(false);
     painter->setFont(infoFont);
     painter->setPen(QColor(149, 165, 166));
-    
+
     QRect infoRect(rect.left() + 52, rect.top() + 28, rect.width() - 140, 18);
     QString elidedInfo = painter->fontMetrics().elidedText(infoText, Qt::ElideMiddle, infoRect.width());
     painter->drawText(infoRect, Qt::AlignLeft | Qt::AlignVCenter, elidedInfo);
-    
+
     if (app.isFavorite) {
         QRect favRect(rect.right() - 28, rect.top() + (rect.height() - 14) / 2, 14, 14);
         painter->setPen(Qt::NoPen);
         painter->setBrush(QColor(241, 196, 15));
-        
+
         QPainterPath starPath;
         QPointF center = favRect.center();
         qreal outerRadius = 7;
         qreal innerRadius = 3;
         const int points = 5;
-        
+
         for (int i = 0; i < points * 2; ++i) {
             qreal radius = (i % 2 == 0) ? outerRadius : innerRadius;
             qreal angle = i * M_PI / points - M_PI / 2;
@@ -190,7 +213,7 @@ void AppListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
         starPath.closeSubpath();
         painter->drawPath(starPath);
     }
-    
+
     painter->restore();
 }
 
@@ -556,8 +579,6 @@ void AppManagerWidget::saveAppOrder()
 
 void AppManagerWidget::refreshAppList()
 {
-    appModel->clear();
-
     allApps = db->getAllApps();
 
     // 根据当前排序模式排序
@@ -607,19 +628,7 @@ void AppManagerWidget::refreshAppList()
         break;
     }
 
-    for (const AppInfo &app : allApps) {
-        QStandardItem *item = new QStandardItem(app.name);
-        item->setData(app.id, Qt::UserRole);
-        item->setData(QVariant::fromValue(app), Qt::UserRole + 1);
-        item->setIcon(getAppIcon(app));
-
-        if (app.isFavorite) {
-            item->setBackground(QColor(255, 249, 196));
-        }
-
-        appModel->appendRow(item);
-    }
-
+    // 直接调用 filterAppsByCategory，统一处理模型清空、过滤和图标加载
     filterAppsByCategory(currentCategory);
 }
 
@@ -673,30 +682,35 @@ void AppManagerWidget::loadCategories()
 
 void AppManagerWidget::filterAppsByCategory(const QString &category)
 {
+    bool wasBlocked = appModel->blockSignals(true);
     appModel->clear();
-    
+
     for (const AppInfo &app : allApps) {
-        bool matchCategory = category.isEmpty() || category == "全部" || 
+        bool matchCategory = category.isEmpty() || category == "全部" ||
                            app.category == category.trimmed();
-        
+
         bool matchType = true;
         if (currentType >= 0) {
             matchType = (app.type == currentType);
         }
-        
+
         if (matchCategory && matchType) {
             QStandardItem *item = new QStandardItem(app.name);
             item->setData(app.id, Qt::UserRole);
             item->setData(QVariant::fromValue(app), Qt::UserRole + 1);
+            item->setData(app.iconPath, Role_IconPath);  // 用于Delegate缓存
             item->setIcon(getAppIcon(app));
-            
+
             if (app.isFavorite) {
                 item->setBackground(QColor(255, 249, 196));
             }
-            
+
             appModel->appendRow(item);
         }
     }
+
+    appModel->blockSignals(wasBlocked);
+    appModel->layoutChanged();  // 一次性通知视图更新
 }
 
 QIcon AppManagerWidget::getAppIcon(const AppInfo &app)

@@ -19,6 +19,10 @@
 #include <shlobj.h>
 #include <processthreadsapi.h>
 
+// 初始化静态成员
+QMutex ApplicationManager::iconMutex;
+QHash<QString, QIcon> ApplicationManager::iconCache;
+
 ApplicationManager::ApplicationManager(Database *db, QObject *parent)
     : QObject(parent), m_db(db)
 {
@@ -304,9 +308,31 @@ QIcon ApplicationManager::getFileIcon(const QString &filePath)
         return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
     }
 
+    // 使用文件路径作为缓存key
+    {
+        QMutexLocker locker(&iconMutex);
+        if (iconCache.contains(filePath)) {
+            return iconCache.value(filePath);
+        }
+    }
+
     QFileInfo fileInfo(filePath);
     QFileIconProvider provider;
-    return provider.icon(fileInfo);
+    QIcon icon = provider.icon(fileInfo);
+
+    {
+        QMutexLocker locker(&iconMutex);
+        iconCache.insert(filePath, icon);
+    }
+    return icon;
+}
+
+QIcon ApplicationManager::loadIconFromFile(const QString &iconPath)
+{
+    if (iconPath.isEmpty() || !QFile::exists(iconPath)) {
+        return QIcon();
+    }
+    return QIcon(iconPath);
 }
 
 QIcon ApplicationManager::getAppIcon(const AppInfo &app)
@@ -315,9 +341,21 @@ QIcon ApplicationManager::getAppIcon(const AppInfo &app)
         return QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
     }
 
-    if (!app.iconPath.isEmpty() && QFile::exists(app.iconPath)) {
-        QIcon icon(app.iconPath);
+    if (!app.iconPath.isEmpty()) {
+        // 缩小锁粒度：先尝试从缓存读取
+        {
+            QMutexLocker locker(&iconMutex);
+            if (iconCache.contains(app.iconPath)) {
+                return iconCache.value(app.iconPath);
+            }
+        }
+
+        // 锁外加载（耗时IO），允许并发
+        QIcon icon = loadIconFromFile(app.iconPath);
         if (!icon.isNull()) {
+            // 锁只保护写入
+            QMutexLocker locker(&iconMutex);
+            iconCache.insert(app.iconPath, icon);
             return icon;
         }
     }

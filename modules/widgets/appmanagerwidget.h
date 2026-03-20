@@ -24,6 +24,8 @@
 #include <QFont>
 #include <QPainterPath>
 #include <QtMath>
+#include <QHash>
+#include <QPixmap>
 #include "modules/core/database.h"
 #include "modules/core/applicationmanager.h"
 #include "modules/dialogs/batchimportdialog.h"
@@ -33,22 +35,35 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class AppManagerWidget; }
 QT_END_NAMESPACE
 
+// 自定义角色，用于存储和获取数据
+enum AppManagerRoles {
+    Role_IconPath = Qt::UserRole + 2
+};
+
 class AppIconDelegate : public QStyledItemDelegate
 {
 public:
     explicit AppIconDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
-    
+
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+
+private:
+    // 缓存pixmap，使用iconPath作为key（稳定key）
+    mutable QHash<QString, QPixmap> pixmapCache;
 };
 
 class AppListDelegate : public QStyledItemDelegate
 {
 public:
     explicit AppListDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
-    
+
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+
+private:
+    // 缓存pixmap，使用iconPath作为key（稳定key）
+    mutable QHash<QString, QPixmap> pixmapCache;
 };
 
 class AppManagerWidget : public QWidget
