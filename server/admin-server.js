@@ -217,27 +217,104 @@ const authenticateToken = (req, res, next) => {
 
 app.get('/api/admin/stats', authenticateAdmin, (req, res) => {
     const stats = {};
-    
+
     db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
         stats.totalUsers = row?.count || 0;
-        
+
         db.get("SELECT COUNT(*) as count FROM users WHERE status = 'active'", (err, row) => {
             stats.activeUsers = row?.count || 0;
-            
+
             db.get("SELECT COUNT(*) as count FROM login_logs WHERE created_at > datetime('now', '-24 hours')", (err, row) => {
                 stats.logins24h = row?.count || 0;
-                
+
                 // 修复：统计有效的在线用户（未过期的 session）
                 db.get("SELECT COUNT(DISTINCT user_id) as count FROM user_sessions WHERE expires_at > datetime('now')", (err, row) => {
                     stats.onlineUsers = row?.count || 0;
-                    
+
                     db.get("SELECT COUNT(*) as count FROM app_collections", (err, row) => {
                         stats.totalCollections = row?.count || 0;
-                        
+
                         res.json({ success: true, stats });
                     });
                 });
             });
+        });
+    });
+});
+
+// 获取所有用户的FRPC端口使用情况
+app.get('/api/admin/frpc/ports', authenticateAdmin, (req, res) => {
+    // 先获取所有用户
+    db.all("SELECT id, username, email FROM users WHERE status = 'active'", [], (err, users) => {
+        if (err) {
+            return res.status(500).json({ success: false, error: '获取用户列表失败: ' + err.message });
+        }
+
+        if (!users || users.length === 0) {
+            return res.json({ success: true, ports: [] });
+        }
+
+        // 遍历每个用户，查询其数据库中的FRPC配置
+        let processed = 0;
+        const frpcPorts = [];
+
+        users.forEach(user => {
+            try {
+                const userDbConn = userDb.getUserDb(user.id);
+                userDbConn.get("SELECT value, updated_at FROM user_configs WHERE key = 'frpc'", [], (err, row) => {
+                    let frpcConfig = {};
+                    let updatedAt = null;
+
+                    if (row) {
+                        try {
+                            if (row.value) {
+                                frpcConfig = JSON.parse(row.value);
+                            }
+                            updatedAt = row.updated_at;
+                        } catch (e) {
+                            console.error('Parse FRPC config error:', e);
+                        }
+                    }
+
+                    frpcPorts.push({
+                        user_id: user.id,
+                        username: user.username,
+                        email: user.email,
+                        remote_port: frpcConfig.remotePort || null,
+                        device_name: frpcConfig.deviceName || null,
+                        server_addr: frpcConfig.serverAddr || '8.163.37.74',
+                        is_enabled: frpcConfig.isEnabled || false,
+                        last_updated: updatedAt
+                    });
+
+                    processed++;
+                    if (processed === users.length) {
+                        // 按最后更新时间排序
+                        frpcPorts.sort((a, b) => {
+                            if (!a.last_updated) return 1;
+                            if (!b.last_updated) return -1;
+                            return new Date(b.last_updated) - new Date(a.last_updated);
+                        });
+                        res.json({ success: true, ports: frpcPorts });
+                    }
+                });
+            } catch (e) {
+                console.error('Error getting user db for user', user.id, e);
+                frpcPorts.push({
+                    user_id: user.id,
+                    username: user.username,
+                    email: user.email,
+                    remote_port: null,
+                    device_name: null,
+                    server_addr: '8.163.37.74',
+                    is_enabled: false,
+                    last_updated: null
+                });
+                processed++;
+                if (processed === users.length) {
+                    res.json({ success: true, ports: frpcPorts });
+                }
+            }
         });
     });
 });
@@ -1076,6 +1153,50 @@ app.post('/api/config/save', authenticateToken, (req, res) => {
 
         res.json({ success: true, message: '配置保存成功' });
     });
+});
+
+// ===== FRPC配置API =====
+
+// 获取FRPC配置
+app.get('/api/config/frpc/get', authenticateToken, (req, res) => {
+    const userDbConn = userDb.getUserDb(req.userId);
+
+    userDbConn.get("SELECT value FROM user_configs WHERE key = 'frpc'", [], (err, row) => {
+        if (err) {
+            return res.status(500).json({ success: false, error: '获取FRPC配置失败' });
+        }
+
+        if (row && row.value) {
+            try {
+                const frpcConfig = JSON.parse(row.value);
+                res.json({ success: true, frpc: frpcConfig });
+            } catch (e) {
+                res.json({ success: true, frpc: {} });
+            }
+        } else {
+            res.json({ success: true, frpc: {} });
+        }
+    });
+});
+
+// 保存FRPC配置
+app.post('/api/config/frpc/save', authenticateToken, (req, res) => {
+    const { frpc } = req.body;
+
+    if (!frpc) {
+        return res.status(400).json({ success: false, error: 'FRPC配置不能为空' });
+    }
+
+    const userDbConn = userDb.getUserDb(req.userId);
+    const frpcStr = JSON.stringify(frpc);
+
+    userDbConn.run(`INSERT OR REPLACE INTO user_configs (key, value, updated_at) VALUES ('frpc', ?, CURRENT_TIMESTAMP)`,
+        [frpcStr], (err) => {
+            if (err) {
+                return res.status(500).json({ success: false, error: '保存FRPC配置失败' });
+            }
+            res.json({ success: true, message: 'FRPC配置保存成功' });
+        });
 });
 
 // 用户获取配置列表（不含详细数据，用于列表展示）

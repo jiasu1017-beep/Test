@@ -4,6 +4,7 @@
 #include <QSettings>
 #include <QCoreApplication>
 #include <QDebug>
+#include <QHostInfo>
 #include <algorithm>
 
 #ifdef QT_DEBUG
@@ -124,7 +125,12 @@ bool Database::saveData()
         }
     }
 
-    // 重命名临时文件为目标文件（原子操作）
+    // 先删除已存在的目标文件（Windows上rename不能覆盖已存在的文件）
+    if (QFile::exists(dataFilePath)) {
+        QFile::remove(dataFilePath);
+    }
+
+    // 重命名临时文件为目标文件
     if (!QFile::rename(tempFilePath, dataFilePath)) {
         qWarning("Failed to rename temp file: %s", qPrintable(tempFile.errorString()));
         // 尝试恢复备份
@@ -1055,6 +1061,75 @@ QList<RemoteDesktopConnection> Database::searchRemoteDesktops(const QString &key
     }
     
     return connections;
+}
+
+// FRPC配置方法实现
+QJsonObject frpcConfigToJson(const FRPCConfig &config)
+{
+    QJsonObject obj;
+    obj["id"] = config.id;
+    obj["userId"] = config.userId;
+    obj["serverAddr"] = config.serverAddr;
+    obj["serverPort"] = config.serverPort;
+    obj["localPort"] = config.localPort;
+    obj["remotePort"] = config.remotePort;
+    obj["isEnabled"] = config.isEnabled;
+    obj["deviceName"] = config.deviceName;
+    obj["createdTime"] = config.createdTime.toString(Qt::ISODate);
+    obj["lastUsedTime"] = config.lastUsedTime.toString(Qt::ISODate);
+    return obj;
+}
+
+FRPCConfig jsonToFRPCConfig(const QJsonObject &obj)
+{
+    FRPCConfig config;
+    config.id = obj["id"].toInt();
+    config.userId = obj["userId"].toInt(0);
+    config.serverAddr = obj["serverAddr"].toString("8.163.37.74");
+    config.serverPort = obj["serverPort"].toInt(7000);
+    config.localPort = obj["localPort"].toInt(3389);
+    config.remotePort = obj["remotePort"].toInt(0);
+    config.isEnabled = obj["isEnabled"].toBool(false);
+    config.deviceName = obj["deviceName"].toString();
+    config.createdTime = QDateTime::fromString(obj["createdTime"].toString(), Qt::ISODate);
+    config.lastUsedTime = QDateTime::fromString(obj["lastUsedTime"].toString(), Qt::ISODate);
+    return config;
+}
+
+bool Database::saveFRPCConfig(const FRPCConfig &config)
+{
+    FRPCConfig cfg = config;
+    if (cfg.id == 0) {
+        cfg.id = 1;  // 只有一个FRPC配置
+    }
+    rootObject["frpcConfig"] = frpcConfigToJson(cfg);
+    return saveData();
+}
+
+FRPCConfig Database::getFRPCConfig()
+{
+    FRPCConfig config;
+    if (rootObject.contains("frpcConfig")) {
+        config = jsonToFRPCConfig(rootObject["frpcConfig"].toObject());
+    } else {
+        // 返回默认配置
+        config.serverAddr = "8.163.37.74";
+        config.serverPort = 7000;
+        config.localPort = 3389;
+        config.remotePort = 0;
+        config.isEnabled = false;
+        config.deviceName = QHostInfo::localHostName();
+    }
+    return config;
+}
+
+bool Database::deleteFRPCConfig()
+{
+    if (rootObject.contains("frpcConfig")) {
+        rootObject.remove("frpcConfig");
+        return saveData();
+    }
+    return true;
 }
 
 QJsonObject Database::taskToJson(const Task &task)

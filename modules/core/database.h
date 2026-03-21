@@ -108,6 +108,22 @@ struct RemoteDesktopConnection {
     QDateTime lastUsedTime;
 };
 
+struct FRPCConfig {
+    int id;
+    int userId;              // 用户ID，用于区分不同用户
+    QString serverAddr;
+    int serverPort;
+    int localPort;
+    int remotePort;
+    bool isEnabled;
+    QString deviceName;
+    QDateTime createdTime;
+    QDateTime lastUsedTime;
+
+    FRPCConfig() : id(0), userId(0), serverPort(7000), localPort(3389),
+                  remotePort(0), isEnabled(false) {}
+};
+
 struct ShortcutStat {
     QString shortcut;
     int useCount;
@@ -245,6 +261,11 @@ public:
     QList<RemoteDesktopConnection> getFavoriteRemoteDesktops();
     RemoteDesktopConnection getRemoteDesktopById(int id);
     QList<RemoteDesktopConnection> searchRemoteDesktops(const QString &keyword);
+
+    // FRPC配置方法
+    bool saveFRPCConfig(const FRPCConfig &config);
+    FRPCConfig getFRPCConfig();
+    bool deleteFRPCConfig();
 
     bool addSnapshot(const SnapshotInfo &snapshot);
     bool updateSnapshot(const SnapshotInfo &snapshot);

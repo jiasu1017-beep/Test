@@ -20,7 +20,12 @@
 #include <QPropertyAnimation>
 #include <QFile>
 #include <QIODevice>
+#include <QInputDialog>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QHostInfo>
 #include <algorithm>
+#include "modules/user/userapi.h"
 
 void RemoteDesktopWidget::launchRemoteDesktop(const RemoteDesktopConnection &conn, Database *db)
 {
@@ -174,6 +179,122 @@ void RemoteDesktopWidget::setupUI()
     buttonLayout->addWidget(moveDownButton);
 
     mainLayout->addLayout(buttonLayout);
+
+    // 添加FRPC控制区域
+    setupFRPCUI(mainLayout);
+}
+
+void RemoteDesktopWidget::setupFRPCUI(QVBoxLayout *mainLayout)
+{
+    // 初始化FRPC管理器
+    frpcManager = FRPCManager::instance();
+    frpcManager->initialize(db);
+
+    // 设置用户ID用于生成唯一端口
+    FRPCConfig initConfig = frpcManager->getConfig();
+    initConfig.userId = UserManager::instance()->currentUser().id;
+    frpcManager->setConfig(initConfig);
+
+    frpcGroupBox = new QGroupBox("FRPC 远程桌面中继");
+    frpcGroupBox->setStyleSheet("QGroupBox { font-weight: bold; }");
+
+    QVBoxLayout *frpcLayout = new QVBoxLayout();
+
+    // 设备名称行
+    QHBoxLayout *deviceNameLayout = new QHBoxLayout();
+    QLabel *deviceNameLabel = new QLabel("设备名称:");
+    frpcDeviceNameEdit = new QLineEdit();
+    frpcDeviceNameEdit->setText(frpcManager->getConfig().deviceName);
+    frpcDeviceNameEdit->setPlaceholderText("输入设备名称，用于标识这台电脑");
+    deviceNameLayout->addWidget(deviceNameLabel);
+    deviceNameLayout->addWidget(frpcDeviceNameEdit);
+    frpcLayout->addLayout(deviceNameLayout);
+
+    // 状态显示行
+    QHBoxLayout *statusLayout = new QHBoxLayout();
+    QLabel *statusTitleLabel = new QLabel("连接状态:");
+    frpcStatusLabel = new QLabel("未连接");
+    frpcStatusLabel->setStyleSheet("color: #888; font-weight: bold;");
+    QLabel *portTitleLabel = new QLabel("远程端口:");
+    frpcPortLabel = new QLabel("--");
+    frpcPortLabel->setStyleSheet("font-weight: bold; color: #2196F3;");
+    statusLayout->addWidget(statusTitleLabel);
+    statusLayout->addWidget(frpcStatusLabel);
+    statusLayout->addSpacing(30);
+    statusLayout->addWidget(portTitleLabel);
+    statusLayout->addWidget(frpcPortLabel);
+    statusLayout->addStretch();
+    frpcLayout->addLayout(statusLayout);
+
+    // 按钮行
+    QHBoxLayout *buttonRowLayout = new QHBoxLayout();
+    frpcQuickSetupButton = new QPushButton("一键设置");
+    frpcQuickSetupButton->setToolTip("启动FRPC并生成RDP文件");
+    frpcQuickSetupButton->setStyleSheet("font-weight: bold;");
+    connect(frpcQuickSetupButton, &QPushButton::clicked, this, &RemoteDesktopWidget::onFRPCQuickSetup);
+
+    frpcStartButton = new QPushButton("开启");
+    frpcStartButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_MediaPlay));
+    connect(frpcStartButton, &QPushButton::clicked, this, &RemoteDesktopWidget::onFRPCStart);
+
+    frpcStopButton = new QPushButton("关闭");
+    frpcStopButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_MediaStop));
+    frpcStopButton->setEnabled(false);
+    connect(frpcStopButton, &QPushButton::clicked, this, &RemoteDesktopWidget::onFRPCStop);
+
+    frpcExportButton = new QPushButton("导出RDP文件");
+    frpcExportButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_DialogSaveButton));
+    connect(frpcExportButton, &QPushButton::clicked, this, &RemoteDesktopWidget::onFRPCExportRDP);
+
+    frpcSettingsButton = new QPushButton("参数设置");
+    frpcSettingsButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView));
+    connect(frpcSettingsButton, &QPushButton::clicked, this, &RemoteDesktopWidget::onFRPCSettings);
+
+    frpcAddToListButton = new QPushButton("添加到列表");
+    frpcAddToListButton->setIcon(QApplication::style()->standardIcon(QStyle::SP_DirLinkIcon));
+    frpcAddToListButton->setEnabled(false);
+    connect(frpcAddToListButton, &QPushButton::clicked, this, &RemoteDesktopWidget::onFRPCAddToList);
+
+    buttonRowLayout->addWidget(frpcQuickSetupButton);
+    buttonRowLayout->addWidget(frpcStartButton);
+    buttonRowLayout->addWidget(frpcStopButton);
+    buttonRowLayout->addWidget(frpcExportButton);
+    buttonRowLayout->addWidget(frpcAddToListButton);
+    buttonRowLayout->addWidget(frpcSettingsButton);
+    buttonRowLayout->addStretch();
+    frpcLayout->addLayout(buttonRowLayout);
+
+    frpcGroupBox->setLayout(frpcLayout);
+    mainLayout->addWidget(frpcGroupBox);
+
+    // 连接FRPC信号
+    connect(frpcManager, &FRPCManager::statusChanged, this, &RemoteDesktopWidget::onFRPCStatusChanged);
+    connect(frpcManager, &FRPCManager::errorOccurred, this, &RemoteDesktopWidget::onFRPCError);
+    connect(frpcManager, &FRPCManager::remotePortChanged, this, &RemoteDesktopWidget::onFRPCPortChanged);
+
+    // 连接ConfigSync信号用于FRPC配置同步
+    ConfigSync *configSync = ConfigSync::instance();
+    connect(configSync, &ConfigSync::frpcConfigLoaded, this, [this](const QJsonObject &frpcConfig) {
+        // 从云端加载FRPC配置
+        FRPCConfig config;
+        config.userId = UserManager::instance()->currentUser().id;
+        config.serverAddr = frpcConfig["serverAddr"].toString("8.163.37.74");
+        config.serverPort = frpcConfig["serverPort"].toInt(7000);
+        config.localPort = frpcConfig["localPort"].toInt(3389);
+        config.remotePort = frpcConfig["remotePort"].toInt(0);
+        config.deviceName = frpcConfig["deviceName"].toString();
+        config.isEnabled = frpcConfig["isEnabled"].toBool(false);
+        frpcManager->setConfig(config);
+        frpcDeviceNameEdit->setText(config.deviceName);
+    });
+
+    // 如果已登录，自动同步FRPC配置
+    if (UserManager::instance()->isLoggedIn()) {
+        configSync->loadFRPCConfig();
+    }
+
+    // 更新初始状态
+    updateFRPCStatus();
 }
 
 void RemoteDesktopWidget::refreshConnectionList()
@@ -1319,3 +1440,296 @@ void RemoteDesktopWidget::onAddToAppList()
 void RemoteDesktopWidget::onAddToCollection()
 {
 }
+
+// FRPC相关槽函数实现
+void RemoteDesktopWidget::onFRPCQuickSetup()
+{
+    // 保存设备名称
+    FRPCConfig config = frpcManager->getConfig();
+    config.deviceName = frpcDeviceNameEdit->text();
+    if (config.deviceName.isEmpty()) {
+        config.deviceName = FRPCManager::getLocalUsername();
+        frpcDeviceNameEdit->setText(config.deviceName);
+    }
+    frpcManager->setConfig(config);
+
+    // 启动FRPC
+    if (!frpcManager->isRunning()) {
+        bool started = frpcManager->startFRPC();
+        if (!started) {
+            QMessageBox::warning(this, "错误", "FRPC启动失败！");
+            return;
+        }
+    }
+
+    QMessageBox::information(this, "调试", "FRPC已启动");
+}
+
+void RemoteDesktopWidget::onFRPCStart()
+{
+    // 保存设备名称
+    FRPCConfig config = frpcManager->getConfig();
+    config.deviceName = frpcDeviceNameEdit->text();
+    if (config.deviceName.isEmpty()) {
+        config.deviceName = FRPCManager::getLocalUsername();
+        frpcDeviceNameEdit->setText(config.deviceName);
+    }
+    frpcManager->setConfig(config);
+
+    // 同步配置到云端
+    if (UserManager::instance()->isLoggedIn()) {
+        QJsonObject frpcJson;
+        frpcJson["serverAddr"] = config.serverAddr;
+        frpcJson["serverPort"] = config.serverPort;
+        frpcJson["localPort"] = config.localPort;
+        frpcJson["remotePort"] = config.remotePort;
+        frpcJson["deviceName"] = config.deviceName;
+        frpcJson["isEnabled"] = config.isEnabled;
+        ConfigSync::instance()->saveFRPCConfig(frpcJson);
+    }
+
+    if (!frpcManager->startFRPC()) {
+        QMessageBox::warning(this, "错误", "FRPC启动失败！");
+    }
+}
+
+void RemoteDesktopWidget::onFRPCStop()
+{
+    frpcManager->stopFRPC();
+}
+
+void RemoteDesktopWidget::onFRPCExportRDP()
+{
+    // 获取远程端口，如果为0则让用户手动输入
+    int remotePort = frpcManager->getRemotePort();
+
+    if (remotePort == 0) {
+        bool ok;
+        QString portStr = QInputDialog::getText(this, "输入端口",
+                                                "请输入服务器分配的远程端口号（在服务器日志中查看）:",
+                                                QLineEdit::Normal, "", &ok);
+        if (!ok || portStr.isEmpty()) {
+            return;
+        }
+        remotePort = portStr.toInt();
+        if (remotePort <= 0) {
+            QMessageBox::warning(this, "错误", "端口号无效！");
+            return;
+        }
+    }
+
+    // 获取当前Windows用户名
+    QString username = FRPCManager::getLocalUsername();
+
+    // 弹出对话框让用户输入密码（可选）
+    bool ok;
+    QString password = QInputDialog::getText(this, "导出RDP文件",
+                                            "请输入Windows登录密码（可选，用于自动登录）:",
+                                            QLineEdit::Password, "", &ok);
+    if (!ok) {
+        return;
+    }
+
+    // 生成RDP文件，传入端口号
+    int port = remotePort;
+    QString rdpFilePath = frpcManager->generateRDPFile(username, password, port, 1920, false);
+    if (rdpFilePath.isEmpty()) {
+        QMessageBox::warning(this, "错误", "生成RDP文件失败！");
+        return;
+    }
+
+    // 询问用户是否打开文件
+    int ret = QMessageBox::question(this, "成功",
+                                   QString("RDP文件已生成！\n\n文件路径: %1\n\n是否打开文件？").arg(rdpFilePath),
+                                   QMessageBox::Yes | QMessageBox::No);
+
+    if (ret == QMessageBox::Yes) {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(rdpFilePath));
+    }
+}
+
+void RemoteDesktopWidget::onFRPCAddToList()
+{
+    // 获取FRPC配置
+    FRPCConfig config = frpcManager->getConfig();
+    int remotePort = frpcManager->getRemotePort();
+
+    if (remotePort == 0) {
+        QMessageBox::warning(this, "错误", "FRPC未连接，无法添加到列表");
+        return;
+    }
+
+    // 获取服务器地址（默认使用 FRPS 地址）
+    QString serverAddr = config.serverAddr;
+    if (serverAddr.isEmpty()) {
+        serverAddr = "8.163.37.74";
+    }
+
+    // 创建设置连接
+    RemoteDesktopConnection conn;
+    conn.id = 0;
+    conn.name = config.deviceName.isEmpty() ? QHostInfo::localHostName() : config.deviceName;
+    conn.hostAddress = serverAddr;
+    conn.port = remotePort;
+    conn.username = FRPCManager::getLocalUsername();
+    conn.password = "";
+    conn.domain = "";
+    conn.displayName = conn.name;
+    conn.screenWidth = 1920;
+    conn.screenHeight = 1080;
+    conn.fullScreen = true;
+    conn.useAllMonitors = false;
+    conn.enableAudio = false;
+    conn.enableClipboard = true;
+    conn.enablePrinter = false;
+    conn.enableDrive = false;
+    conn.notes = "";
+    conn.category = "";
+    conn.sortOrder = 0;
+    conn.isFavorite = false;
+
+    // 保存到数据库
+    qDebug() << "Adding remote desktop:" << conn.name << conn.hostAddress << conn.port;
+    bool addResult = db->addRemoteDesktop(conn);
+    qDebug() << "Add result:" << addResult;
+
+    if (addResult) {
+        // 同步到云端
+        if (UserManager::instance()->isLoggedIn()) {
+            // 获取所有远程桌面连接
+            QList<RemoteDesktopConnection> allConnections = db->getAllRemoteDesktops();
+            QJsonArray rdsArray;
+            for (const RemoteDesktopConnection &c : allConnections) {
+                QJsonObject obj;
+                obj["id"] = c.id;
+                obj["name"] = c.name;
+                obj["hostAddress"] = c.hostAddress;
+                obj["port"] = c.port;
+                obj["username"] = c.username;
+                // 密码不保存到云端
+                obj["displayName"] = c.displayName;
+                obj["screenWidth"] = c.screenWidth;
+                obj["screenHeight"] = c.screenHeight;
+                obj["fullScreen"] = c.fullScreen;
+                obj["enableClipboard"] = c.enableClipboard;
+                rdsArray.append(obj);
+            }
+            // 直接保存数组格式
+            QJsonObject syncData;
+            syncData["remoteDesktops"] = rdsArray;
+            ConfigSync::instance()->saveAllConfig(syncData);
+        }
+
+        // 刷新列表
+        refreshConnectionList();
+        QMessageBox::information(this, "成功", QString("已将 [%1] 添加到远程桌面列表\n\n在其他电脑登录同一账号即可远程控制本机")
+            .arg(conn.name));
+    } else {
+        QMessageBox::warning(this, "错误", QString("添加到列表失败\n\n名称: %1\n地址: %2:%3")
+            .arg(conn.name).arg(conn.hostAddress).arg(conn.port));
+    }
+}
+
+void RemoteDesktopWidget::onFRPCSettings()
+{
+    // 弹出FRPC设置对话框
+    QDialog settingsDialog(this);
+    settingsDialog.setWindowTitle("FRPC 参数设置");
+    settingsDialog.setMinimumWidth(400);
+
+    QVBoxLayout *layout = new QVBoxLayout();
+
+    QFormLayout *form = new QFormLayout();
+
+    QLineEdit *serverAddrEdit = new QLineEdit(frpcManager->getConfig().serverAddr);
+    QSpinBox *serverPortSpin = new QSpinBox();
+    serverPortSpin->setRange(1, 65535);
+    serverPortSpin->setValue(frpcManager->getConfig().serverPort);
+    QSpinBox *localPortSpin = new QSpinBox();
+    localPortSpin->setRange(1, 65535);
+    localPortSpin->setValue(frpcManager->getConfig().localPort);
+    localPortSpin->setToolTip("本地RDP端口，通常为3389");
+
+    form->addRow("FRPS服务器地址:", serverAddrEdit);
+    form->addRow("FRPS服务器端口:", serverPortSpin);
+    form->addRow("本地RDP端口:", localPortSpin);
+
+    layout->addLayout(form);
+
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    QPushButton *saveButton = new QPushButton("保存");
+    QPushButton *cancelButton = new QPushButton("取消");
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(saveButton);
+    buttonLayout->addWidget(cancelButton);
+    layout->addLayout(buttonLayout);
+
+    settingsDialog.setLayout(layout);
+
+    connect(saveButton, &QPushButton::clicked, &settingsDialog, &QDialog::accept);
+    connect(cancelButton, &QPushButton::clicked, &settingsDialog, &QDialog::reject);
+
+    if (settingsDialog.exec() == QDialog::Accepted) {
+        FRPCConfig config = frpcManager->getConfig();
+        config.serverAddr = serverAddrEdit->text();
+        config.serverPort = serverPortSpin->value();
+        config.localPort = localPortSpin->value();
+        config.deviceName = frpcDeviceNameEdit->text();
+        frpcManager->setConfig(config);
+
+        // 同步配置到云端
+        if (UserManager::instance()->isLoggedIn()) {
+            QJsonObject frpcJson;
+            frpcJson["serverAddr"] = config.serverAddr;
+            frpcJson["serverPort"] = config.serverPort;
+            frpcJson["localPort"] = config.localPort;
+            frpcJson["remotePort"] = config.remotePort;
+            frpcJson["deviceName"] = config.deviceName;
+            frpcJson["isEnabled"] = config.isEnabled;
+            ConfigSync::instance()->saveFRPCConfig(frpcJson);
+        }
+    }
+}
+
+void RemoteDesktopWidget::onFRPCStatusChanged(FRPCManager::ConnectionStatus status)
+{
+    updateFRPCStatus();
+}
+
+void RemoteDesktopWidget::onFRPCError(const QString &error)
+{
+    QMessageBox::warning(this, "FRPC错误", error);
+    updateFRPCStatus();
+}
+
+void RemoteDesktopWidget::onFRPCPortChanged(int port)
+{
+    frpcPortLabel->setText(port > 0 ? QString::number(port) : "--");
+    frpcExportButton->setEnabled(port > 0);
+}
+
+void RemoteDesktopWidget::updateFRPCStatus()
+{
+    bool isRunning = frpcManager->isRunning();
+    int port = frpcManager->getRemotePort();
+
+    if (isRunning) {
+        if (port > 0) {
+            frpcStatusLabel->setText("已连接");
+            frpcStatusLabel->setStyleSheet("color: #4CAF50; font-weight: bold;");
+        } else {
+            frpcStatusLabel->setText("连接中...");
+            frpcStatusLabel->setStyleSheet("color: #FF9800; font-weight: bold;");
+        }
+    } else {
+        frpcStatusLabel->setText("未连接");
+        frpcStatusLabel->setStyleSheet("color: #888; font-weight: bold;");
+    }
+
+    frpcPortLabel->setText(port > 0 ? QString::number(port) : "--");
+    frpcStartButton->setEnabled(!isRunning);
+    frpcStopButton->setEnabled(isRunning);
+    frpcExportButton->setEnabled(port > 0);
+    frpcAddToListButton->setEnabled(port > 0);
+}
+

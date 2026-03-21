@@ -122,23 +122,29 @@ class ConfigSync : public QObject {
     Q_OBJECT
 public:
     static ConfigSync* instance();
-    
+
     void syncSettings();
     void loadSettings();
     void fetchConfig();
     void saveConfig(const QString& key, const QJsonObject& config);
     void saveAllConfig(const QJsonObject& configs);
-    
+
+    // FRPC配置同步
+    void saveFRPCConfig(const QJsonObject& frpcConfig);
+    void loadFRPCConfig();
+
 signals:
     void configLoaded(const QJsonObject& configs);
     void configSaved();
     void syncFailed(const QString& error);
-    
+    void frpcConfigLoaded(const QJsonObject& frpcConfig);
+
 private slots:
     void onConfigLoaded(const QString& endpoint, const QJsonDocument& response);
     void onConfigSaved(const QString& endpoint, const QJsonDocument& response);
+    void onFRPCConfigLoaded(const QString& endpoint, const QJsonDocument& response);
     void onRequestFailed(const QString& endpoint, int errorCode, const QString& error);
-    
+
 private:
     ConfigSync();
     bool m_isSyncing;

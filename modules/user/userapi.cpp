@@ -618,6 +618,7 @@ ConfigSync::ConfigSync() : QObject(), m_isSyncing(false) {
     ApiClient* client = ApiClient::instance();
     connect(client, &ApiClient::requestSuccess, this, &ConfigSync::onConfigLoaded);
     connect(client, &ApiClient::requestSuccess, this, &ConfigSync::onConfigSaved);
+    connect(client, &ApiClient::requestSuccess, this, &ConfigSync::onFRPCConfigLoaded);
     connect(client, &ApiClient::requestFailed, this, &ConfigSync::onRequestFailed);
 }
 
@@ -700,10 +701,49 @@ void ConfigSync::onConfigSaved(const QString& endpoint, const QJsonDocument& res
 }
 
 void ConfigSync::onRequestFailed(const QString& endpoint, int errorCode, const QString& error) {
-    if (endpoint == "/api/config/get" || endpoint == "/api/config/save") {
+    if (endpoint == "/api/config/get" || endpoint == "/api/config/save" ||
+        endpoint == "/api/config/frpc/get" || endpoint == "/api/config/frpc/save") {
         m_isSyncing = false;
         emit syncFailed(error);
         qDebug() << "Config sync failed:" << error;
+    }
+}
+
+void ConfigSync::saveFRPCConfig(const QJsonObject& frpcConfig) {
+    if (!UserManager::instance()->isLoggedIn()) {
+        emit syncFailed("Not logged in");
+        return;
+    }
+
+    QJsonObject data;
+    data["frpc"] = frpcConfig;
+
+    ApiClient::instance()->post("/api/config/frpc/save", data);
+}
+
+void ConfigSync::loadFRPCConfig() {
+    if (!UserManager::instance()->isLoggedIn()) {
+        emit syncFailed("Not logged in");
+        return;
+    }
+
+    ApiClient::instance()->get("/api/config/frpc/get");
+}
+
+void ConfigSync::onFRPCConfigLoaded(const QString& endpoint, const QJsonDocument& response) {
+    if (endpoint != "/api/config/frpc/get") return;
+
+    m_isSyncing = false;
+
+    QJsonObject obj = response.object();
+    if (obj["success"].toBool()) {
+        QJsonObject frpcConfig = obj["frpc"].toObject();
+        emit frpcConfigLoaded(frpcConfig);
+        qDebug() << "FRPC config loaded successfully";
+    } else {
+        QString error = obj["error"].toString();
+        emit syncFailed(error);
+        qDebug() << "FRPC config load failed:" << error;
     }
 }
 

@@ -21,8 +21,10 @@
 #include <QTextStream>
 #include <QFile>
 #include <QIODevice>
+#include <QGroupBox>
 #include "modules/core/database.h"
 #include "modules/core/applicationmanager.h"
+#include "modules/core/frpcmanager.h"
 
 struct RDPConnectionInfo {
     QString serverAddress;
@@ -76,6 +78,19 @@ private slots:
     void importFromRDPFile(const QString &filePath);
     void importFromJSONFile(const QString &filePath);
 
+    // FRPC相关槽函数
+    void onFRPCStart();
+    void onFRPCStop();
+    void onFRPCQuickSetup();
+    void onFRPCExportRDP();
+    void onFRPCSettings();
+    void onFRPCAddToList();
+    void onFRPCStatusChanged(FRPCManager::ConnectionStatus status);
+    void onFRPCError(const QString &error);
+    void onFRPCPortChanged(int port);
+    void updateFRPCStatus();
+    void setupFRPCUI(QVBoxLayout *mainLayout);
+
 private:
     void setupUI();
     void loadConnections(const QList<RemoteDesktopConnection> &connections);
@@ -100,6 +115,20 @@ private:
     QPushButton *moveUpButton;
     QPushButton *moveDownButton;
     QComboBox *categoryFilter;
+
+    // FRPC相关控件
+    QGroupBox *frpcGroupBox;
+    QLineEdit *frpcDeviceNameEdit;
+    QLabel *frpcStatusLabel;
+    QLabel *frpcPortLabel;
+    QPushButton *frpcQuickSetupButton;
+    QPushButton *frpcStartButton;
+    QPushButton *frpcStopButton;
+    QPushButton *frpcExportButton;
+    QPushButton *frpcSettingsButton;
+    QPushButton *frpcAddToListButton;
+
+    FRPCManager *frpcManager;
 };
 
 class RemoteDesktopDialog : public QDialog

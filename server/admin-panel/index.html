@@ -242,6 +242,9 @@
                         <a class="nav-link" href="#" data-page="config">
                             <i class="bi bi-sliders"></i> 系统配置
                         </a>
+                        <a class="nav-link" href="#" data-page="frpc-ports">
+                            <i class="bi bi-plug"></i> 远程桌面端口
+                        </a>
                         <a class="nav-link" href="#" onclick="logout()">
                             <i class="bi bi-box-arrow-right"></i> 退出登录
                         </a>
@@ -485,6 +488,32 @@
                             </button>
                         </div>
                     </div>
+
+                    <div id="frpcPortsPage" style="display: none;">
+                        <h4 class="mb-4"><i class="bi bi-plug"></i> 远程桌面端口</h4>
+                        <div class="table-container">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>用户ID</th>
+                                        <th>用户名</th>
+                                        <th>邮箱</th>
+                                        <th>设备名称</th>
+                                        <th>远程端口</th>
+                                        <th>服务器地址</th>
+                                        <th>状态</th>
+                                        <th>最后更新</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="frpcPortsTableBody">
+                                    <tr><td colspan="8" class="text-center">加载中...</td></tr>
+                                </tbody>
+                            </table>
+                            <button class="btn btn-primary" onclick="loadFrpcPorts()">
+                                <i class="bi bi-arrow-clockwise"></i> 刷新
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -566,6 +595,25 @@
                                         <tr><td><strong>操作记录:</strong></td><td id="detailOperationCount">-</td></tr>
                                         <tr><td><strong>创建收藏:</strong></td><td id="detailCollectionsCount">-</td></tr>
                                         <tr><td><strong>当前状态:</strong></td><td id="detailOnlineStatus">-</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FRPC端口信息 -->
+                    <div class="row mb-4" id="frpcPortRow" style="display: none;">
+                        <div class="col-md-12">
+                            <div class="card border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0"><i class="bi bi-plug"></i> 远程桌面端口</h6>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-borderless">
+                                        <tr><td><strong>设备名称:</strong></td><td id="detailDeviceName">-</td></tr>
+                                        <tr><td><strong>远程端口:</strong></td><td id="detailRemotePort">-</td></tr>
+                                        <tr><td><strong>服务器:</strong></td><td id="detailServerAddr">-</td></tr>
+                                        <tr><td><strong>状态:</strong></td><td id="detailFrpcStatus">-</td></tr>
                                     </table>
                                 </div>
                             </div>
@@ -804,6 +852,7 @@
                 case 'logs': loadLogs(); break;
                 case 'collections': loadCollections(); break;
                 case 'config': loadConfig(); break;
+                case 'frpc-ports': loadFrpcPorts(); break;
             }
         }
 
@@ -974,6 +1023,9 @@
                     document.getElementById('detailOnlineStatus').innerHTML = user.isOnline
                         ? '<span class="badge bg-success">在线</span>'
                         : '<span class="badge bg-secondary">离线</span>';
+
+                    // 加载FRPC端口信息
+                    loadUserFrpcPort(user.id);
 
                     // 加载日志
                     loadUserLogs('all', 1);
@@ -1200,6 +1252,38 @@
             } catch (err) {
                 document.getElementById('userCloudConfigsTable').innerHTML =
                     '<div class="text-center text-danger py-3">加载配置失败</div>';
+            }
+        }
+
+        // 加载用户的FRPC端口信息
+        async function loadUserFrpcPort(userId) {
+            try {
+                const res = await fetch('/api/admin/frpc/ports', {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+
+                const frpcRow = document.getElementById('frpcPortRow');
+                if (data.success && data.ports && data.ports.length > 0) {
+                    // 找到当前用户的端口信息
+                    const userPort = data.ports.find(p => p.user_id === userId);
+                    if (userPort && userPort.device_name) {
+                        document.getElementById('detailDeviceName').textContent = userPort.device_name || '-';
+                        document.getElementById('detailRemotePort').textContent = userPort.remote_port || '未分配';
+                        document.getElementById('detailServerAddr').textContent = userPort.server_addr || '-';
+                        document.getElementById('detailFrpcStatus').innerHTML = userPort.is_enabled
+                            ? '<span class="badge bg-success">已启用</span>'
+                            : '<span class="badge bg-secondary">未启用</span>';
+                        frpcRow.style.display = 'flex';
+                    } else {
+                        frpcRow.style.display = 'none';
+                    }
+                } else {
+                    frpcRow.style.display = 'none';
+                }
+            } catch (err) {
+                console.error('加载FRPC端口失败:', err);
+                document.getElementById('frpcPortRow').style.display = 'none';
             }
         }
 
@@ -1780,6 +1864,47 @@
                             <i class="bi bi-pencil"></i>
                         </button>
                     </td>
+                </tr>
+            `).join('');
+        }
+
+        // 加载FRPC端口信息
+        async function loadFrpcPorts() {
+            try {
+                const res = await fetch('/api/admin/frpc/ports', {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    renderFrpcPortsTable(data.ports);
+                } else {
+                    showToast('加载端口信息失败: ' + (data.error || '未知错误'), 'danger');
+                }
+            } catch (err) {
+                showToast('加载端口信息失败', 'danger');
+            }
+        }
+
+        function renderFrpcPortsTable(ports) {
+            const tbody = document.getElementById('frpcPortsTableBody');
+            if (!ports || ports.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">暂无端口使用记录</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = ports.map(p => `
+                <tr>
+                    <td>${p.user_id || '-'}</td>
+                    <td><strong>${p.username || '-'}</strong></td>
+                    <td>${p.email || '-'}</td>
+                    <td>${p.device_name || '-'}</td>
+                    <td><span class="badge bg-primary">${p.remote_port || '未分配'}</span></td>
+                    <td>${p.server_addr || '-'}</td>
+                    <td>${p.is_enabled ?
+                        '<span class="badge bg-success">已启用</span>' :
+                        '<span class="badge bg-secondary">未启用</span>'}</td>
+                    <td>${formatDate(p.last_updated)}</td>
                 </tr>
             `).join('');
         }

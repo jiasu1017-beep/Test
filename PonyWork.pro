@@ -16,6 +16,7 @@ SOURCES += main.cpp \
            modules/core/logger.cpp \
            modules/core/applicationmanager.cpp \
            modules/core/networkmonitor.cpp \
+           modules/core/frpcmanager.cpp \
            modules/user/userapi.cpp \
            modules/user/userlogindialog.cpp \
            modules/user/usermenuwidget.cpp \
@@ -50,6 +51,7 @@ HEADERS  += mainwindow.h \
             modules/core/logger.h \
             modules/core/applicationmanager.h \
             modules/core/networkmonitor.h \
+            modules/core/frpcmanager.h \
             modules/user/userapi.h \
             modules/user/userlogindialog.h \
             modules/user/usermenuwidget.h \

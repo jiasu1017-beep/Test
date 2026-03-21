@@ -442,7 +442,19 @@ void UserWidget::onSyncConfigLoaded(const QJsonObject &configs)
 
     // 处理远程桌面配置
     if (configs.contains("remoteDesktops") && m_db) {
-        QJsonArray cloudDesktops = configs["remoteDesktops"].toArray();
+        // 支持两种格式：直接是数组，或嵌套在对象中
+        QJsonValue rdValue = configs["remoteDesktops"];
+        QJsonArray cloudDesktops;
+        if (rdValue.isArray()) {
+            cloudDesktops = rdValue.toArray();
+        } else if (rdValue.isObject()) {
+            // 可能是 { "remoteDesktops": { "remoteDesktops": [...] } }
+            QJsonObject rdObj = rdValue.toObject();
+            if (rdObj.contains("remoteDesktops")) {
+                cloudDesktops = rdObj["remoteDesktops"].toArray();
+            }
+        }
+
         QList<RemoteDesktopConnection> localDesktops = m_db->getAllRemoteDesktops();
         QSet<QString> localDesktopNames;
         for (const RemoteDesktopConnection &rd : localDesktops) {

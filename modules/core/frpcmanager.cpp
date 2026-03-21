@@ -1,0 +1,542 @@
+#include "frpcmanager.h"
+#include <QDebug>
+#include <QCoreApplication>
+#include <QDir>
+#include <QCryptographicHash>
+#include <QHash>
+
+FRPCManager* FRPCManager::s_instance = nullptr;
+
+FRPCManager::FRPCManager()
+    : m_db(nullptr)
+    , m_process(nullptr)
+    , m_status(StatusDisconnected)
+    , m_isRunning(false)
+    , m_stopping(false)
+    , m_remotePort(0)
+{
+    m_process = new QProcess(this);
+    m_heartbeatTimer = new QTimer(this);
+
+    connect(m_process, &QProcess::started, this, &FRPCManager::onProcessStarted);
+    connect(m_process, QOverload<QProcess::ProcessError>::of(&QProcess::errorOccurred),
+            this, &FRPCManager::onProcessError);
+    connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, &FRPCManager::onProcessFinished);
+    connect(m_process, &QProcess::readyReadStandardOutput, this, &FRPCManager::onReadOutput);
+    connect(m_process, &QProcess::readyReadStandardError, this, &FRPCManager::onReadOutput);
+
+    connect(m_heartbeatTimer, &QTimer::timeout, this, &FRPCManager::onHeartbeatTimeout);
+}
+
+FRPCManager::~FRPCManager()
+{
+    stopFRPC();
+}
+
+FRPCManager* FRPCManager::instance()
+{
+    if (!s_instance) {
+        s_instance = new FRPCManager();
+    }
+    return s_instance;
+}
+
+void FRPCManager::initialize(Database *db)
+{
+    m_db = db;
+    if (m_db) {
+        m_config = m_db->getFRPCConfig();
+    }
+}
+
+QString FRPCManager::getFRPCExecutablePath()
+{
+    // 优先使用程序目录下的frpc.exe
+    QString appDir = QCoreApplication::applicationDirPath();
+    qDebug() << "App directory:" << appDir;
+
+    // 检查多个可能的位置
+    QStringList searchPaths = {
+        appDir + "/frpc.exe",
+        appDir + "/../release/frpc.exe",
+        "F:/00AI/Test/release/frpc.exe",
+        "F:/00AI/Test/build/Desktop_Qt_5_15_2_MinGW_64_bit-Release/release/frpc.exe"
+    };
+
+    // 标准化路径并检查
+    for (const QString &path : searchPaths) {
+        QString normalizedPath = QDir::cleanPath(path);
+        qDebug() << "Checking FRPC path:" << normalizedPath << "exists:" << QFile::exists(normalizedPath);
+        if (QFile::exists(normalizedPath)) {
+            return normalizedPath;
+        }
+    }
+
+    // 如果都找不到，返回release下的路径
+    QString defaultPath = QDir::cleanPath(appDir + "/../release/frpc.exe");
+    qDebug() << "Using default FRPC path:" << defaultPath;
+    return defaultPath;
+}
+
+QString FRPCManager::getConfigFilePath()
+{
+    QString configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    QDir().mkpath(configDir);
+    return configDir + "/frpc.ini";
+}
+
+bool FRPCManager::writeConfigFile()
+{
+    QString configPath = getConfigFilePath();
+    QFile file(configPath);
+
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qDebug() << "Cannot open config file for writing:" << configPath;
+        return false;
+    }
+
+    QTextStream out(&file);
+    out.setCodec("UTF-8");
+
+    out << "[common]\n";
+    out << "server_addr = " << m_config.serverAddr << "\n";
+    out << "server_port = " << m_config.serverPort << "\n";
+    out << "protocol = tcp\n";
+    out << "pool_count = 1\n";
+    out << "tcp_mux = true\n";
+    out << "token = ponywork2024\n";
+    // 不写入日志文件，让日志输出到stdout供程序读取
+    // out << "log_file = ./frpc.log\n";
+    out << "log_level = debug\n";
+    out << "\n";
+
+    // RDP端口映射
+    // 使用固定端口，便于程序自动获取
+    // 端口范围: 20000-50000 (服务器允许)
+    // 每个用户+设备组合使用不同端口: 根据 userId + deviceName 生成
+    QString deviceName = QHostInfo::localHostName();
+    QString combined = QString::number(m_config.userId) + "_" + deviceName;
+    int hash = qHash(combined) % 30000;
+    int fixedPort = 20000 + qAbs(hash);
+
+    out << "[rdp_" << deviceName << "]\n";
+    out << "type = tcp\n";
+    out << "local_ip = 127.0.0.1\n";
+    out << "local_port = " << m_config.localPort << "\n";
+    out << "remote_port = " << fixedPort << "\n";
+
+    // 刷新并关闭
+    out.flush();
+    file.close();
+
+    qDebug() << "Config file written to:" << configPath;
+
+    // 读取并打印配置内容
+    if (file.open(QIODevice::ReadOnly)) {
+        qDebug() << "FRPC Config file content:\n" << file.readAll();
+        file.close();
+    }
+
+    return true;
+}
+
+bool FRPCManager::startFRPC()
+{
+    qDebug() << "[FRPC] startFRPC called";
+
+    if (m_isRunning) {
+        qDebug() << "[FRPC] already running, returning true";
+        return true;
+    }
+
+    if (!writeConfigFile()) {
+        QString err = "无法创建FRPC配置文件";
+        qDebug() << "[FRPC]" << err;
+        emit errorOccurred(err);
+        return false;
+    }
+
+    QString frpcPath = getFRPCExecutablePath();
+    QString configPath = getConfigFilePath();
+
+    qDebug() << "[FRPC] Starting FRPC:" << frpcPath << "-c" << configPath;
+
+    // 检查文件是否存在
+    if (!QFile::exists(frpcPath)) {
+        QString error = QString("frpc.exe不存在: %1").arg(frpcPath);
+        qDebug() << "[FRPC]" << error;
+        emit errorOccurred(error);
+        return false;
+    }
+
+    // 使用QProcess启动
+    m_process->setProgram(frpcPath);
+    m_process->setArguments(QStringList() << "-c" << configPath);
+
+    // 设置工作目录
+    QFileInfo fi(frpcPath);
+    m_process->setWorkingDirectory(fi.absolutePath());
+
+    // 不设置日志文件，让日志输出到stdout
+    // 注意：这需要修改配置文件，临时禁用日志文件
+
+    qDebug() << "[FRPC] Starting process...";
+    m_process->start();
+
+    // 等待启动
+    if (!m_process->waitForStarted(5000)) {
+        QString err = "FRPC进程启动失败";
+        qDebug() << "[FRPC]" << err;
+        emit errorOccurred(err);
+        return false;
+    }
+
+    qDebug() << "[FRPC] Process started, state:" << m_process->state();
+    m_isRunning = true;
+    m_status = StatusConnecting;
+    emit statusChanged(m_status);
+
+    qDebug() << "[FRPC] Process started successfully";
+    return true;
+}
+
+void FRPCManager::stopFRPC()
+{
+    qDebug() << "[FRPC] stopFRPC called, m_isRunning:" << m_isRunning;
+
+    if (!m_isRunning) {
+        qDebug() << "[FRPC] stopFRPC: not running, returning";
+        return;
+    }
+
+    // 标记为主动停止
+    m_stopping = true;
+    qDebug() << "[FRPC] stopFRPC: m_stopping set to true";
+
+    if (m_process->state() == QProcess::Running) {
+        qDebug() << "[FRPC] stopFRPC: terminating process";
+        m_process->terminate();
+        if (!m_process->waitForFinished(3000)) {
+            qDebug() << "[FRPC] stopFRPC: killing process";
+            m_process->kill();
+        }
+    }
+
+    m_isRunning = false;
+    m_status = StatusDisconnected;
+    m_remotePort = 0;
+    m_heartbeatTimer->stop();
+
+    emit statusChanged(m_status);
+    emit remotePortChanged(0);
+
+    qDebug() << "[FRPC] stopFRPC: completed";
+}
+
+void FRPCManager::onProcessStarted()
+{
+    qDebug() << "[FRPC] onProcessStarted called, process state:" << m_process->state();
+    m_isRunning = true;
+
+    // 使用固定端口，无需等待解析
+    // 每个用户+设备组合使用不同端口
+    QString deviceName = QHostInfo::localHostName();
+    QString combined = QString::number(m_config.userId) + "_" + deviceName;
+    int hash = qHash(combined) % 30000;
+    int fixedPort = 20000 + qAbs(hash);
+    m_remotePort = fixedPort;
+
+    m_status = StatusConnected;
+    emit statusChanged(m_status);
+    emit remotePortChanged(m_remotePort);
+    emit errorOccurred(QString("FRPC已启动，远程端口: %1").arg(m_remotePort));
+
+    // 保存配置
+    m_config.remotePort = m_remotePort;
+    m_config.isEnabled = true;
+    m_config.lastUsedTime = QDateTime::currentDateTime();
+    if (m_db) {
+        m_db->saveFRPCConfig(m_config);
+    }
+
+    // 启动心跳定时器
+    m_heartbeatTimer->start(30000);  // 30秒
+}
+
+void FRPCManager::onProcessError(QProcess::ProcessError error)
+{
+    qDebug() << "[FRPC] onProcessError called, error:" << error << "m_stopping:" << m_stopping;
+
+    // 保存停止标志，因为后面的处理可能会重置它
+    bool wasStopping = m_stopping;
+
+    // 如果是主动停止的，不发送错误消息
+    if (wasStopping || m_stopping) {
+        qDebug() << "[FRPC] onProcessError: 主动停止，忽略错误";
+        m_isRunning = false;
+        m_status = StatusDisconnected;
+        m_stopping = false;  // 重置标志
+        emit statusChanged(m_status);
+        return;
+    }
+
+    QString errorStr;
+    switch(error) {
+        case QProcess::FailedToStart: errorStr = "启动失败"; break;
+        case QProcess::Crashed: errorStr = "崩溃"; break;
+        case QProcess::Timedout: errorStr = "超时"; break;
+        case QProcess::WriteError: errorStr = "写入错误"; break;
+        case QProcess::ReadError: errorStr = "读取错误"; break;
+        default: errorStr = "未知错误";
+    }
+    qDebug() << "[FRPC] process error:" << error << errorStr;
+    m_isRunning = false;
+    m_status = StatusError;
+    emit errorOccurred(QString("FRPC错误: %1").arg(errorStr));
+    emit statusChanged(m_status);
+}
+
+void FRPCManager::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
+{
+    qDebug() << "[FRPC] onProcessFinished called, exitCode:" << exitCode << "exitStatus:" << exitStatus << "m_stopping:" << m_stopping;
+
+    // 保存停止标志
+    bool wasStopping = m_stopping;
+
+    // 如果是主动停止的，不发送错误消息
+    if (wasStopping || m_stopping) {
+        qDebug() << "[FRPC] onProcessFinished: 主动停止，忽略退出";
+        m_isRunning = false;
+        m_status = StatusDisconnected;
+        m_remotePort = 0;
+        m_heartbeatTimer->stop();
+        m_stopping = false;  // 重置标志
+        emit statusChanged(m_status);
+        emit remotePortChanged(0);
+        return;
+    }
+
+    m_isRunning = false;
+    m_status = StatusDisconnected;
+    m_remotePort = 0;
+    m_heartbeatTimer->stop();
+
+    // 只有在进程异常退出时才显示错误（正常退出码为0不显示）
+    if (exitCode != 0 || exitStatus == QProcess::CrashExit) {
+        qDebug() << "[FRPC] onProcessFinished: 异常退出，发送错误信号";
+        emit errorOccurred(QString("FRPC进程异常退出，退出码: %1").arg(exitCode));
+    }
+
+    emit statusChanged(m_status);
+    emit remotePortChanged(0);
+}
+
+void FRPCManager::onReadOutput()
+{
+    QString output = m_process->readAll();
+    qDebug() << "FRPC output:" << output;
+
+    parseFRPCOutput(output);
+}
+
+void FRPCManager::parseFRPCOutput(const QString &output)
+{
+    qDebug() << "[FRPC] parseFRPCOutput received:" << output;
+
+    // 解析FRPC输出，获取分配的远程端口
+    int port = parseRemotePort(output);
+    if (port > 0 && port != m_remotePort) {
+        m_remotePort = port;
+        m_status = StatusConnected;
+        emit remotePortChanged(port);
+        emit statusChanged(m_status);
+
+        // 更新配置
+        m_config.remotePort = port;
+        m_config.isEnabled = true;
+        m_config.lastUsedTime = QDateTime::currentDateTime();
+        if (m_db) {
+            m_db->saveFRPCConfig(m_config);
+        }
+    }
+
+    // 如果看到 "start proxy success"，说明代理已建立
+    if (output.contains("start proxy success") && m_status != StatusConnected) {
+        m_status = StatusConnected;
+        emit statusChanged(m_status);
+    }
+}
+
+int FRPCManager::parseRemotePort(const QString &output)
+{
+    qDebug() << "[FRPC] parseRemotePort checking:" << output;
+
+    // FRPC输出格式示例:
+    // [rdp_PC-NAME] start proxy success
+    // [rdp_PC-NAME] proxy listen on port 36123
+    // port has been allocated: 36123
+
+    // 尝试解析 "proxy listen on port"
+    QRegularExpression regex1("proxy listen on port (\\d+)");
+    QRegularExpressionMatch match1 = regex1.match(output);
+    if (match1.hasMatch()) {
+        return match1.captured(1).toInt();
+    }
+
+    // 尝试解析 "port has been allocated:"
+    QRegularExpression regex2("port has been allocated: (\\d+)");
+    QRegularExpressionMatch match2 = regex2.match(output);
+    if (match2.hasMatch()) {
+        return match2.captured(1).toInt();
+    }
+
+    // 尝试解析 "remote_port ="
+    QRegularExpression regex3("remote_port.*?(\\d{5})");
+    QRegularExpressionMatch match3 = regex3.match(output);
+    if (match3.hasMatch()) {
+        return match3.captured(1).toInt();
+    }
+
+    // 如果看到 "start proxy success"，说明代理已建立但端口未知
+    if (output.contains("start proxy success")) {
+        qDebug() << "[FRPC] Proxy started but port unknown";
+        return 0;
+    }
+
+    return 0;
+}
+
+void FRPCManager::onHeartbeatTimeout()
+{
+    if (m_isRunning && m_process->state() == QProcess::Running) {
+        // FRPC会自动发送心跳，这里只检查进程状态
+    }
+}
+
+void FRPCManager::setConfig(const FRPCConfig &config)
+{
+    m_config = config;
+    if (m_db) {
+        m_db->saveFRPCConfig(config);
+    }
+}
+
+QString FRPCManager::generateRDPFile(const QString &username, const QString &password,
+                                      int screenWidth, int screenHeight, bool fullScreen)
+{
+    if (m_remotePort == 0) {
+        emit errorOccurred("FRPC未连接，无法生成RDP文件");
+        return QString();
+    }
+
+    QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    QString rdpFilePath = tempDir + "/PonyWork_RDP_" + QHostInfo::localHostName() + ".rdp";
+
+    QFile rdpFile(rdpFilePath);
+    if (!rdpFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        emit errorOccurred("无法创建RDP文件");
+        return QString();
+    }
+
+    QTextStream out(&rdpFile);
+    out.setCodec("UTF-8");
+
+    // RDP文件内容
+    out << "full address:s:" << m_config.serverAddr << ":" << m_remotePort << "\n";
+    out << "username:s:" << username << "\n";
+
+    if (!password.isEmpty()) {
+        // 密码需要特殊处理
+        out << "password 51:b:" << password.toUtf8().toBase64() << "\n";
+    }
+
+    out << "screen mode id:i:" << (fullScreen ? 2 : 1) << "\n";
+    out << "use multimon:i:0\n";
+    out << "desktopwidth:i:" << screenWidth << "\n";
+    out << "desktopheight:i:" << screenHeight << "\n";
+    out << "session bpp:i:32\n";
+    out << "compression:i:1\n";
+    out << "keyboardhook:i:2\n";
+    out << "audiomode:i:0\n";
+    out << "redirectprinters:i:0\n";
+    out << "redirectcomports:i:0\n";
+    out << "redirectsmartcards:i:0\n";
+    out << "redirectclipboard:i:1\n";
+    out << "redirectposdevices:i:0\n";
+    out << "autoreconnection enabled:i:1\n";
+    out << "authentication level:i:2\n";
+    out << "prompt for credentials:i:0\n";
+    out << "negotiate security layer:i:1\n";
+
+    rdpFile.close();
+
+    qDebug() << "RDP file generated:" << rdpFilePath;
+    return rdpFilePath;
+}
+
+// 重载版本：接受远程端口参数
+QString FRPCManager::generateRDPFile(const QString &username, const QString &password, int remotePort)
+{
+    if (remotePort == 0) {
+        emit errorOccurred("端口号无效");
+        return QString();
+    }
+
+    QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    QString rdpFilePath = tempDir + "/PonyWork_RDP_" + QHostInfo::localHostName() + ".rdp";
+
+    QFile rdpFile(rdpFilePath);
+    if (!rdpFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        emit errorOccurred("无法创建RDP文件");
+        return QString();
+    }
+
+    QTextStream out(&rdpFile);
+    out.setCodec("UTF-8");
+
+    // RDP文件内容
+    out << "full address:s:" << m_config.serverAddr << ":" << remotePort << "\n";
+    out << "username:s:" << username << "\n";
+
+    if (!password.isEmpty()) {
+        // 密码需要特殊处理
+        out << "password 51:b:" << password.toUtf8().toBase64() << "\n";
+    }
+
+    out << "screen mode id:i:2\n";
+    out << "use multimon:i:0\n";
+    out << "desktopwidth:i:1920\n";
+    out << "desktopheight:i:1080\n";
+    out << "session bpp:i:32\n";
+    out << "compression:i:1\n";
+    out << "keyboardhook:i:2\n";
+    out << "audiomode:i:0\n";
+    out << "redirectprinters:i:0\n";
+    out << "redirectcomports:i:0\n";
+    out << "redirectsmartcards:i:0\n";
+    out << "redirectclipboard:i:1\n";
+    out << "redirectposdevices:i:0\n";
+    out << "autoreconnection enabled:i:1\n";
+    out << "authentication level:i:2\n";
+    out << "prompt for credentials:i:0\n";
+    out << "negotiate security layer:i:1\n";
+
+    rdpFile.close();
+
+    qDebug() << "RDP file generated with port:" << remotePort << "path:" << rdpFilePath;
+    return rdpFilePath;
+}
+
+QString FRPCManager::getLocalUsername()
+{
+    // 获取Windows用户名
+    QString username = qgetenv("USERNAME");
+    if (username.isEmpty()) {
+        username = qgetenv("USER");
+    }
+    if (username.isEmpty()) {
+        username = QHostInfo::localHostName();
+    }
+    return username;
+}
