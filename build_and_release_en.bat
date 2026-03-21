@@ -112,6 +112,30 @@ if exist "dll\libcrypto-1_1-x64.dll" copy "dll\libcrypto-1_1-x64.dll" "deploy\" 
 if exist "dll\libssl-1_1-x64.dll" copy "dll\libssl-1_1-x64.dll" "deploy\" >nul 2>&1
 if exist "img" xcopy "img" "deploy\img\" /s /y /i >nul 2>&1
 
+echo Copy FRPC executable...
+set FRPC_FOUND=0
+if exist "release\frpc.exe" (
+    copy "release\frpc.exe" "deploy\" >nul 2>&1
+    set FRPC_FOUND=1
+)
+if exist "frpc.exe" (
+    if !FRPC_FOUND! EQU 0 (
+        copy "frpc.exe" "deploy\" >nul 2>&1
+        set FRPC_FOUND=1
+    )
+)
+if exist "dll\frpc.exe" (
+    if !FRPC_FOUND! EQU 0 (
+        copy "dll\frpc.exe" "deploy\" >nul 2>&1
+        set FRPC_FOUND=1
+    )
+)
+if !FRPC_FOUND! EQU 1 (
+    echo [OK] frpc.exe copied to deploy folder
+) else (
+    echo [WARNING] frpc.exe not found, remote desktop relay may not work
+)
+
 echo Copy app_icons folder...
 if exist "app_icons" xcopy "app_icons" "deploy\app_icons\" /s /y /i >nul 2>&1
 
