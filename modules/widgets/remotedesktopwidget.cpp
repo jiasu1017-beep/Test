@@ -195,6 +195,9 @@ void RemoteDesktopWidget::setupFRPCUI(QVBoxLayout *mainLayout)
     initConfig.userId = UserManager::instance()->currentUser().id;
     frpcManager->setConfig(initConfig);
 
+    // 检测是否有已运行的 frpc.exe 进程
+    frpcManager->checkExistingProcess();
+
     frpcGroupBox = new QGroupBox("FRPC 远程桌面中继");
     frpcGroupBox->setStyleSheet("QGroupBox { font-weight: bold; }");
 

@@ -525,3 +525,76 @@ QString FRPCManager::getLocalUsername()
     }
     return username;
 }
+
+bool FRPCManager::checkExistingProcess()
+{
+    qDebug() << "[FRPC] checkExistingProcess: checking for existing frpc.exe process";
+
+    // 使用 tasklist 获取 frpc.exe 进程信息
+    QProcess tasklistProcess;
+    tasklistProcess.start("tasklist", QStringList() << "/FI" << "IMAGENAME eq frpc.exe" << "/NH");
+    tasklistProcess.waitForFinished(3000);
+
+    QString tasklistOutput = tasklistProcess.readAllStandardOutput();
+    qDebug() << "[FRPC] tasklist output:" << tasklistOutput;
+
+    // 检查输出中是否包含 frpc.exe
+    if (!tasklistOutput.contains("frpc.exe", Qt::CaseInsensitive)) {
+        qDebug() << "[FRPC] No existing frpc.exe process found";
+        return false;
+    }
+
+    // 获取本程序应使用的端口（基于配置）
+    QString deviceName = QHostInfo::localHostName();
+    QString combined = QString::number(m_config.userId) + "_" + deviceName;
+    int hash = qHash(combined) % 30000;
+    int expectedPort = 20000 + qAbs(hash);
+    qDebug() << "[FRPC] Expected port for this user/device:" << expectedPort;
+
+    // 使用 netstat 查找所有与 frpc 相关的监听端口
+    QProcess netstatProcess;
+    netstatProcess.start("netstat", QStringList() << "-ano");
+    netstatProcess.waitForFinished(3000);
+
+    QString netstatOutput = netstatProcess.readAllStandardOutput();
+    qDebug() << "[FRPC] netstat output:" << netstatOutput;
+
+    // 检查是否有端口在监听（LISTENING）
+    // 格式类似: TCP    0.0.0.0:20000   ...   LISTENING   12345
+    QStringList lines = netstatOutput.split("\n");
+    bool foundOurPort = false;
+
+    for (const QString &line : lines) {
+        if (line.contains("LISTENING") && line.contains("frpc")) {
+            // 从输出中提取端口
+            QRegularExpression portRegex("(\\d+)\\.");
+            QRegularExpressionMatchIterator it = portRegex.globalMatch(line);
+            while (it.hasNext()) {
+                QRegularExpressionMatch match = it.next();
+                int port = match.captured(1).toInt();
+                // 检查端口是否在预期范围内 (20000-50000)
+                if (port >= 20000 && port <= 50000) {
+                    qDebug() << "[FRPC] Found frpc listening on port:" << port;
+                    if (port == expectedPort) {
+                        foundOurPort = true;
+                        m_remotePort = port;
+                    }
+                }
+            }
+        }
+    }
+
+    // 如果找到了我们预期的端口，说明是本程序启动的
+    if (foundOurPort) {
+        qDebug() << "[FRPC] Found our frpc process with expected port:" << m_remotePort;
+        m_isRunning = true;
+        m_status = StatusConnected;
+        emit statusChanged(m_status);
+        emit remotePortChanged(m_remotePort);
+        return true;
+    }
+
+    // 如果有 frpc 进程但端口不是我们的，可能是其他程序启动的
+    qDebug() << "[FRPC] frpc.exe exists but not our process (port mismatch)";
+    return false;
+}

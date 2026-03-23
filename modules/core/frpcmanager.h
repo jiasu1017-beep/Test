@@ -31,6 +31,9 @@ public:
     bool startFRPC();
     void stopFRPC();
     bool isRunning() const { return m_isRunning; }
+
+    // 检测已运行的frpc进程（程序启动时调用）
+    bool checkExistingProcess();
     ConnectionStatus status() const { return m_status; }
 
     // 配置
