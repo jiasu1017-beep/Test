@@ -13,6 +13,7 @@
 #include "modules/update/updatedialog.h"
 #include "modules/update/updateprogressdialog.h"
 #include "modules/widgets/remotedesktopwidget.h"
+#include "modules/core/frpcmanager.h"
 #include <QApplication>
 #include <QStyle>
 #include <QStandardPaths>
@@ -173,6 +174,16 @@ void MainWindow::setupUI()
     settingsWidget = new SettingsWidget(db, this);
     settingsWidget->setUpdateManager(updateManager);
     settingsWidget->setMainWindow(this);
+
+    // 自动启动远程桌面（如果配置了自动启动）
+    if (db->getRemoteDesktopAutoStart()) {
+        FRPCConfig config = FRPCManager::instance()->getConfig();
+        if (config.isEnabled && !FRPCManager::instance()->isRunning()) {
+            if (!FRPCManager::instance()->startFRPC()) {
+                statusBar()->showMessage("自动启动远程桌面失败", 5000);
+            }
+        }
+    }
 
     // 创建用户中心界面
     userWidget = new UserWidget(db, this);
@@ -482,6 +493,14 @@ void MainWindow::onExitApp()
 {
     HWND hwnd = reinterpret_cast<HWND>(winId());
     UnregisterHotKey(hwnd, 1);
+
+    // 处理FRPC停止逻辑（与closeEvent相同的逻辑）
+    if (db->getRemoteDesktopAutoStop()) {
+        FRPCManager::instance()->stopFRPC();
+    } else {
+        FRPCManager::instance()->setAutoStopOnExit(false);
+    }
+
     QApplication::quit();
 }
 
@@ -634,6 +653,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     bool minimizeToTray = db->getMinimizeToTray();
     bool showPrompt = db->getShowClosePrompt();
+    bool shouldStopFRPC = false;
     
     if (!showPrompt) {
         if (minimizeToTray) {
@@ -648,6 +668,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
             );
             event->ignore();
         } else {
+            shouldStopFRPC = true;
             // 直接退出时保存并上传任务数据
             if (UserManager::instance()->isLoggedIn()) {
                 db->saveTaskData();
@@ -716,6 +737,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
             if (dontShowAgain->isChecked()) {
                 db->setShowClosePrompt(false);
             }
+            shouldStopFRPC = true;
             // 保存并上传当前用户任务数据
             if (UserManager::instance()->isLoggedIn()) {
                 db->saveTaskData();
@@ -729,6 +751,16 @@ void MainWindow::closeEvent(QCloseEvent *event)
             event->accept();
         } else {
             event->ignore();
+        }
+    }
+
+    // 自动停止远程桌面
+    if (shouldStopFRPC) {
+        if (db->getRemoteDesktopAutoStop()) {
+            FRPCManager::instance()->stopFRPC();
+        } else {
+            // 用户未勾选自动停止，禁止析构函数自动停止
+            FRPCManager::instance()->setAutoStopOnExit(false);
         }
     }
 }

@@ -80,6 +80,7 @@ private:
     QWidget* createStartupPage();
     QWidget* createUpdatePage();
     QWidget* createAboutPage();
+    QWidget* createRemoteDesktopPage();
     bool isShortcutConflict(const QString &shortcut);
     void loadAISettings();
     QString loadSavedAPIKey();
@@ -97,6 +98,8 @@ private:
     QCheckBox *showClosePromptCheck;
     QCheckBox *showBottomAppBarCheck;
     QCheckBox *autoCheckUpdateCheck;
+    QCheckBox *remoteDesktopAutoStartCheck;
+    QCheckBox *remoteDesktopAutoStopCheck;
     QPushButton *checkUpdateButton;
     QLabel *statusLabel;
     QProgressDialog *progressDialog;

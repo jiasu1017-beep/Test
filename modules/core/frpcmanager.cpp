@@ -13,6 +13,7 @@ FRPCManager::FRPCManager()
     , m_status(StatusDisconnected)
     , m_isRunning(false)
     , m_stopping(false)
+    , m_autoStopOnExit(true)
     , m_remotePort(0)
 {
     m_process = new QProcess(this);
@@ -31,7 +32,14 @@ FRPCManager::FRPCManager()
 
 FRPCManager::~FRPCManager()
 {
-    stopFRPC();
+    if (m_autoStopOnExit) {
+        stopFRPC();
+    }
+}
+
+void FRPCManager::setAutoStopOnExit(bool enabled)
+{
+    m_autoStopOnExit = enabled;
 }
 
 FRPCManager* FRPCManager::instance()

@@ -550,6 +550,36 @@ bool Database::getAutoCheckUpdate()
     return settingsObj["auto_check_update"].toString("1") == "1";
 }
 
+bool Database::setRemoteDesktopAutoStart(bool enabled)
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    settingsObj["remote_desktop_auto_start"] = enabled ? "1" : "0";
+    rootObject["settings"] = settingsObj;
+
+    return saveData();
+}
+
+bool Database::getRemoteDesktopAutoStart()
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    return settingsObj["remote_desktop_auto_start"].toString("0") == "1";
+}
+
+bool Database::setRemoteDesktopAutoStop(bool enabled)
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    settingsObj["remote_desktop_auto_stop"] = enabled ? "1" : "0";
+    rootObject["settings"] = settingsObj;
+
+    return saveData();
+}
+
+bool Database::getRemoteDesktopAutoStop()
+{
+    QJsonObject settingsObj = rootObject["settings"].toObject();
+    return settingsObj["remote_desktop_auto_stop"].toString("1") == "1";
+}
+
 bool Database::setShowBottomAppBar(bool show)
 {
     QJsonObject settingsObj = rootObject["settings"].toObject();

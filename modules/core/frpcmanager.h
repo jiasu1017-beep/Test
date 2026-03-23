@@ -25,6 +25,9 @@ public:
 
     static FRPCManager* instance();
 
+    void setAutoStopOnExit(bool enabled);
+    bool autoStopOnExit() const { return m_autoStopOnExit; }
+
     void initialize(Database *db);
 
     // FRPC控制
@@ -81,6 +84,7 @@ private:
     ConnectionStatus m_status;
     bool m_isRunning;
     bool m_stopping;  // 是否主动停止
+    bool m_autoStopOnExit;  // 退出时是否自动停止
     int m_remotePort;
     QTimer *m_heartbeatTimer;
 };

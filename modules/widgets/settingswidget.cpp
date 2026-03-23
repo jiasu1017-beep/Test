@@ -119,9 +119,12 @@ void SettingsWidget::setupUI()
     
     QListWidgetItem *updateItem = new QListWidgetItem("🔄 检查更新", listWidget);
     updateItem->setData(Qt::UserRole, 4);
-    
+
+    QListWidgetItem *remoteDesktopItem = new QListWidgetItem("🖥️ 远程桌面", listWidget);
+    remoteDesktopItem->setData(Qt::UserRole, 5);
+
     QListWidgetItem *aboutItem = new QListWidgetItem("ℹ️ 关于", listWidget);
-    aboutItem->setData(Qt::UserRole, 5);
+    aboutItem->setData(Qt::UserRole, 6);
 
     listWidget->setCurrentRow(0);
     leftLayout->addWidget(listWidget);
@@ -136,6 +139,7 @@ void SettingsWidget::setupUI()
     QWidget *aiPage = createAIPage();
     QWidget *startupPage = createStartupPage();
     QWidget *updatePage = createUpdatePage();
+    QWidget *remoteDesktopPage = createRemoteDesktopPage();
     QWidget *aboutPage = createAboutPage();
 
     stackWidget->addWidget(generalPage);
@@ -143,6 +147,7 @@ void SettingsWidget::setupUI()
     stackWidget->addWidget(aiPage);
     stackWidget->addWidget(startupPage);
     stackWidget->addWidget(updatePage);
+    stackWidget->addWidget(remoteDesktopPage);
     stackWidget->addWidget(aboutPage);
 
     connect(listWidget, &QListWidget::currentRowChanged, stackWidget, &QStackedWidget::setCurrentIndex);
@@ -2603,6 +2608,54 @@ QWidget *SettingsWidget::createUpdatePage()
     channelLayout->addWidget(channelHint);
 
     layout->addWidget(updateChannelGroup);
+
+    layout->addStretch();
+    return page;
+}
+
+QWidget *SettingsWidget::createRemoteDesktopPage()
+{
+    QWidget *page = new QWidget();
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(30, 30, 30, 30);
+    layout->setSpacing(20);
+
+    QLabel *title = new QLabel("远程桌面", page);
+    title->setStyleSheet("font-size: 24px; font-weight: bold; color: #333;");
+    layout->addWidget(title);
+
+    QFrame *line = new QFrame(page);
+    line->setFrameShape(QFrame::HLine);
+    line->setStyleSheet("color: #e0e0e0;");
+    layout->addWidget(line);
+
+    QGroupBox *autoControlGroup = new QGroupBox("自动控制", page);
+    QVBoxLayout *autoControlLayout = new QVBoxLayout(autoControlGroup);
+    autoControlLayout->setSpacing(15);
+
+    remoteDesktopAutoStartCheck = new QCheckBox("自动启动", page);
+    remoteDesktopAutoStartCheck->setChecked(db->getRemoteDesktopAutoStart());
+    connect(remoteDesktopAutoStartCheck, &QCheckBox::stateChanged, this, [this](int state) {
+        db->setRemoteDesktopAutoStart(state == Qt::Checked);
+    });
+
+    QLabel *autoStartLabel = new QLabel("随软件启动自动连接远程桌面", page);
+    autoStartLabel->setStyleSheet("color: #666; font-size: 12px; padding-left: 24px;");
+    autoControlLayout->addWidget(remoteDesktopAutoStartCheck);
+    autoControlLayout->addWidget(autoStartLabel);
+
+    remoteDesktopAutoStopCheck = new QCheckBox("自动停止", page);
+    remoteDesktopAutoStopCheck->setChecked(db->getRemoteDesktopAutoStop());
+    connect(remoteDesktopAutoStopCheck, &QCheckBox::stateChanged, this, [this](int state) {
+        db->setRemoteDesktopAutoStop(state == Qt::Checked);
+    });
+
+    QLabel *autoStopLabel = new QLabel("随软件关闭自动断开远程桌面", page);
+    autoStopLabel->setStyleSheet("color: #666; font-size: 12px; padding-left: 24px;");
+    autoControlLayout->addWidget(remoteDesktopAutoStopCheck);
+    autoControlLayout->addWidget(autoStopLabel);
+
+    layout->addWidget(autoControlGroup);
 
     layout->addStretch();
     return page;

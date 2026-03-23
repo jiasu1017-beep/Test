@@ -243,7 +243,13 @@ public:
     
     bool setAutoCheckUpdate(bool enabled);
     bool getAutoCheckUpdate();
-    
+
+    bool setRemoteDesktopAutoStart(bool enabled);
+    bool getRemoteDesktopAutoStart();
+
+    bool setRemoteDesktopAutoStop(bool enabled);
+    bool getRemoteDesktopAutoStop();
+
     bool setShortcutKey(const QString &key);
     QString getShortcutKey();
     
