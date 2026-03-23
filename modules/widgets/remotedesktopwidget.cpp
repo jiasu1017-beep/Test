@@ -271,6 +271,7 @@ void RemoteDesktopWidget::setupFRPCUI(QVBoxLayout *mainLayout)
     connect(frpcManager, &FRPCManager::statusChanged, this, &RemoteDesktopWidget::onFRPCStatusChanged);
     connect(frpcManager, &FRPCManager::errorOccurred, this, &RemoteDesktopWidget::onFRPCError);
     connect(frpcManager, &FRPCManager::remotePortChanged, this, &RemoteDesktopWidget::onFRPCPortChanged);
+    connect(frpcManager, &FRPCManager::stopped, this, &RemoteDesktopWidget::onFRPCStopped);
 
     // 连接ConfigSync信号用于FRPC配置同步
     ConfigSync *configSync = ConfigSync::instance();
@@ -1457,12 +1458,24 @@ void RemoteDesktopWidget::onFRPCQuickSetup()
     if (!frpcManager->isRunning()) {
         bool started = frpcManager->startFRPC();
         if (!started) {
-            QMessageBox::warning(this, "错误", "FRPC启动失败！");
+            QMessageBox::warning(this, "启动失败",
+                "无法启动远程桌面服务。\n\n"
+                "请检查:\n"
+                "1. frpc.exe 文件是否存在\n"
+                "2. 网络连接是否正常\n"
+                "3. 服务器是否可达");
             return;
         }
     }
 
-    QMessageBox::information(this, "调试", "FRPC已启动");
+    QMessageBox::information(this, "成功",
+        QString("远程桌面服务已启动！\n\n"
+                "服务器: %1\n"
+                "端口: %2\n\n"
+                "状态显示\"已连接\"后，您可以使用以下功能：\n"
+                "• 导出RDP文件 - 在其他电脑使用\n"
+                "• 添加到列表 - 同步到云端在其他设备使用")
+        .arg(config.serverAddr).arg(frpcManager->getRemotePort()));
 }
 
 void RemoteDesktopWidget::onFRPCStart()
@@ -1489,7 +1502,12 @@ void RemoteDesktopWidget::onFRPCStart()
     }
 
     if (!frpcManager->startFRPC()) {
-        QMessageBox::warning(this, "错误", "FRPC启动失败！");
+        QMessageBox::warning(this, "启动失败",
+            "无法启动远程桌面服务。\n\n"
+            "请检查:\n"
+            "1. frpc.exe 文件是否存在\n"
+            "2. 网络连接是否正常\n"
+            "3. 服务器是否可达");
     }
 }
 
@@ -1506,14 +1524,14 @@ void RemoteDesktopWidget::onFRPCExportRDP()
     if (remotePort == 0) {
         bool ok;
         QString portStr = QInputDialog::getText(this, "输入端口",
-                                                "请输入服务器分配的远程端口号（在服务器日志中查看）:",
+                                                "请输入远程桌面端口号:",
                                                 QLineEdit::Normal, "", &ok);
         if (!ok || portStr.isEmpty()) {
             return;
         }
         remotePort = portStr.toInt();
         if (remotePort <= 0) {
-            QMessageBox::warning(this, "错误", "端口号无效！");
+            QMessageBox::warning(this, "端口无效", "请输入有效的端口号（20000-50000）");
             return;
         }
     }
@@ -1534,13 +1552,19 @@ void RemoteDesktopWidget::onFRPCExportRDP()
     int port = remotePort;
     QString rdpFilePath = frpcManager->generateRDPFile(username, password, port, 1920, false);
     if (rdpFilePath.isEmpty()) {
-        QMessageBox::warning(this, "错误", "生成RDP文件失败！");
+        QMessageBox::warning(this, "生成失败", "无法生成RDP文件，请重试");
         return;
     }
 
     // 询问用户是否打开文件
-    int ret = QMessageBox::question(this, "成功",
-                                   QString("RDP文件已生成！\n\n文件路径: %1\n\n是否打开文件？").arg(rdpFilePath),
+    int ret = QMessageBox::question(this, "RDP文件已生成",
+                                   QString("文件已生成: %1\n\n"
+                                           "使用方法:\n"
+                                           "1. 将RDP文件复制到其他电脑\n"
+                                           "2. 双击打开，输入Windows账号密码\n"
+                                           "3. 即可远程控制本机\n\n"
+                                           "提示: 在其他电脑登录同一账号，可在远程桌面列表中直接访问\n\n"
+                                           "是否打开文件？").arg(rdpFilePath),
                                    QMessageBox::Yes | QMessageBox::No);
 
     if (ret == QMessageBox::Yes) {
@@ -1555,7 +1579,10 @@ void RemoteDesktopWidget::onFRPCAddToList()
     int remotePort = frpcManager->getRemotePort();
 
     if (remotePort == 0) {
-        QMessageBox::warning(this, "错误", "FRPC未连接，无法添加到列表");
+        QMessageBox::warning(this, "未连接",
+            "远程桌面服务未启动或未连接。\n\n"
+            "请先点击\"开启\"按钮启动服务，"
+            "等待状态显示\"已连接\"后再尝试添加到列表。");
         return;
     }
 
@@ -1622,10 +1649,17 @@ void RemoteDesktopWidget::onFRPCAddToList()
 
         // 刷新列表
         refreshConnectionList();
-        QMessageBox::information(this, "成功", QString("已将 [%1] 添加到远程桌面列表\n\n在其他电脑登录同一账号即可远程控制本机")
-            .arg(conn.name));
+        QMessageBox::information(this, "添加成功",
+            QString("已将 [%1] 添加到远程桌面列表\n\n"
+                    "服务器: %2\n端口: %3\n用户名: %4\n\n"
+                    "在其他电脑登录同一账号后，远程桌面列表中将显示本机，"
+                    "双击即可远程控制，无需手动输入地址和端口。")
+            .arg(conn.name).arg(conn.hostAddress).arg(conn.port).arg(conn.username));
     } else {
-        QMessageBox::warning(this, "错误", QString("添加到列表失败\n\n名称: %1\n地址: %2:%3")
+        QMessageBox::warning(this, "添加失败",
+            QString("添加到列表失败\n\n"
+                    "名称: %1\n"
+                    "地址: %2:%3")
             .arg(conn.name).arg(conn.hostAddress).arg(conn.port));
     }
 }
@@ -1698,7 +1732,12 @@ void RemoteDesktopWidget::onFRPCStatusChanged(FRPCManager::ConnectionStatus stat
 
 void RemoteDesktopWidget::onFRPCError(const QString &error)
 {
-    QMessageBox::warning(this, "FRPC错误", error);
+    QMessageBox::warning(this, "连接错误",
+        QString("远程桌面连接出错: %1\n\n"
+                "请检查:\n"
+                "1. 网络连接是否正常\n"
+                "2. 服务器是否可达\n"
+                "3. 可以尝试关闭后重新开启").arg(error));
     updateFRPCStatus();
 }
 
@@ -1706,6 +1745,13 @@ void RemoteDesktopWidget::onFRPCPortChanged(int port)
 {
     frpcPortLabel->setText(port > 0 ? QString::number(port) : "--");
     frpcExportButton->setEnabled(port > 0);
+}
+
+void RemoteDesktopWidget::onFRPCStopped()
+{
+    // 关闭成功，提示用户
+    QMessageBox::information(this, "已关闭", "远程桌面服务已停止");
+    updateFRPCStatus();
 }
 
 void RemoteDesktopWidget::updateFRPCStatus()

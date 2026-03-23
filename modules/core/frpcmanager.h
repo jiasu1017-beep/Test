@@ -51,6 +51,7 @@ signals:
     void statusChanged(ConnectionStatus status);
     void errorOccurred(const QString &error);
     void remotePortChanged(int port);
+    void stopped();
 
 private slots:
     void onProcessStarted();

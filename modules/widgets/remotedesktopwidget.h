@@ -88,6 +88,7 @@ private slots:
     void onFRPCStatusChanged(FRPCManager::ConnectionStatus status);
     void onFRPCError(const QString &error);
     void onFRPCPortChanged(int port);
+    void onFRPCStopped();
     void updateFRPCStatus();
     void setupFRPCUI(QVBoxLayout *mainLayout);
 

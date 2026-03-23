@@ -230,6 +230,7 @@ void FRPCManager::stopFRPC()
 
     emit statusChanged(m_status);
     emit remotePortChanged(0);
+    emit stopped();
 
     qDebug() << "[FRPC] stopFRPC: completed";
 }
@@ -250,7 +251,6 @@ void FRPCManager::onProcessStarted()
     m_status = StatusConnected;
     emit statusChanged(m_status);
     emit remotePortChanged(m_remotePort);
-    emit errorOccurred(QString("FRPC已启动，远程端口: %1").arg(m_remotePort));
 
     // 保存配置
     m_config.remotePort = m_remotePort;
@@ -281,19 +281,11 @@ void FRPCManager::onProcessError(QProcess::ProcessError error)
         return;
     }
 
-    QString errorStr;
-    switch(error) {
-        case QProcess::FailedToStart: errorStr = "启动失败"; break;
-        case QProcess::Crashed: errorStr = "崩溃"; break;
-        case QProcess::Timedout: errorStr = "超时"; break;
-        case QProcess::WriteError: errorStr = "写入错误"; break;
-        case QProcess::ReadError: errorStr = "读取错误"; break;
-        default: errorStr = "未知错误";
-    }
-    qDebug() << "[FRPC] process error:" << error << errorStr;
+    // 非主动停止的情况（可能是手动关闭进程或其他外部原因）
+    // 不显示错误对话框，只更新状态为未连接
+    qDebug() << "[FRPC] process error:" << error;
     m_isRunning = false;
-    m_status = StatusError;
-    emit errorOccurred(QString("FRPC错误: %1").arg(errorStr));
+    m_status = StatusDisconnected;
     emit statusChanged(m_status);
 }
 
@@ -301,11 +293,8 @@ void FRPCManager::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatu
 {
     qDebug() << "[FRPC] onProcessFinished called, exitCode:" << exitCode << "exitStatus:" << exitStatus << "m_stopping:" << m_stopping;
 
-    // 保存停止标志
-    bool wasStopping = m_stopping;
-
-    // 如果是主动停止的，不发送错误消息
-    if (wasStopping || m_stopping) {
+    // 如果是主动停止的，不发送任何错误消息
+    if (m_stopping) {
         qDebug() << "[FRPC] onProcessFinished: 主动停止，忽略退出";
         m_isRunning = false;
         m_status = StatusDisconnected;
@@ -317,16 +306,12 @@ void FRPCManager::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatu
         return;
     }
 
+    // 非主动停止的情况（进程意外退出/手动关闭）
+    // 不显示错误对话框，只更新状态为未连接
     m_isRunning = false;
     m_status = StatusDisconnected;
     m_remotePort = 0;
     m_heartbeatTimer->stop();
-
-    // 只有在进程异常退出时才显示错误（正常退出码为0不显示）
-    if (exitCode != 0 || exitStatus == QProcess::CrashExit) {
-        qDebug() << "[FRPC] onProcessFinished: 异常退出，发送错误信号";
-        emit errorOccurred(QString("FRPC进程异常退出，退出码: %1").arg(exitCode));
-    }
 
     emit statusChanged(m_status);
     emit remotePortChanged(0);
