@@ -495,10 +495,12 @@ void MainWindow::onExitApp()
     UnregisterHotKey(hwnd, 1);
 
     // 处理FRPC停止逻辑（与closeEvent相同的逻辑）
+    qDebug() << "[MainWindow] onExitApp: autoStop=" << db->getRemoteDesktopAutoStop();
     if (db->getRemoteDesktopAutoStop()) {
         FRPCManager::instance()->stopFRPC();
     } else {
         FRPCManager::instance()->setAutoStopOnExit(false);
+        FRPCManager::instance()->detachProcess();
     }
 
     QApplication::quit();
@@ -755,12 +757,15 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
 
     // 自动停止远程桌面
+    qDebug() << "[MainWindow] closeEvent: shouldStopFRPC=" << shouldStopFRPC << ", autoStop=" << db->getRemoteDesktopAutoStop();
     if (shouldStopFRPC) {
         if (db->getRemoteDesktopAutoStop()) {
             FRPCManager::instance()->stopFRPC();
         } else {
-            // 用户未勾选自动停止，禁止析构函数自动停止
+            // 用户未勾选自动停止，将QProcess分离以防止自动终止子进程
             FRPCManager::instance()->setAutoStopOnExit(false);
+            FRPCManager::instance()->detachProcess(); // 新增：detach进程
+            qDebug() << "[MainWindow] auto stop disabled, detached process to keep FRPC running";
         }
     }
 }
